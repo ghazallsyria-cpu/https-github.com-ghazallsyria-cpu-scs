@@ -1,16 +1,9 @@
-
 export type UserRole = 'admin' | 'teacher';
 
 export interface Profile {
   id: string;
   full_name: string;
   role: UserRole;
-  created_at: string;
-}
-
-export interface TeacherDetails {
-  id: string;
-  phone: string;
   created_at: string;
 }
 

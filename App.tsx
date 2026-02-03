@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
@@ -39,7 +38,7 @@ const App: React.FC = () => {
   }, []);
 
   async function fetchProfile(uid: string) {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
+    const { data } = await supabase.from('profiles').select('*').eq('id', uid).single();
     if (data) setProfile(data);
     setLoading(false);
   }
@@ -76,7 +75,6 @@ const Sidebar = ({ profile }: { profile: Profile | null }) => {
 
   return (
     <>
-      {isOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsOpen(false)} />}
       <aside className={`fixed inset-y-0 right-0 z-50 w-64 bg-white border-l border-slate-200 transform transition-transform lg:relative lg:translate-x-0 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="h-full flex flex-col p-6">
           <div className="flex items-center gap-3 mb-10 px-2">
@@ -109,10 +107,10 @@ const SidebarLink = ({ to, icon, label, active }: any) => (
 
 const Header = ({ profile }: any) => (
   <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
-    <div className="font-black text-slate-400 lg:hidden">تتبع المعلم</div>
+    <div className="font-black text-slate-900">نظام TutorTrack Pro</div>
     <div className="flex items-center gap-3">
       <div className="text-right">
-        <p className="text-xs font-bold text-slate-400">{profile?.role === 'admin' ? 'المدير العام' : 'معلم'}</p>
+        <p className="text-xs font-bold text-slate-400">{profile?.role === 'admin' ? 'المدير' : 'معلم'}</p>
         <p className="text-sm font-black text-slate-900">{profile?.full_name}</p>
       </div>
       <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-black">

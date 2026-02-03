@@ -1,5 +1,5 @@
 {
   "name": "TutorTrack Pro",
-  "description": "A comprehensive management system for private tutors to track students, lessons, payments, and performance statistics with real-time Supabase integration.",
+  "description": "نظام شامل لإدارة الدروس الخصوصية، تتبع الطلاب، المدفوعات، والإحصائيات بربط مباشر مع Supabase.",
   "requestFramePermissions": []
 }
