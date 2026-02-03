@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase.ts';
-import { LogIn, GraduationCap, UserPlus, ShieldAlert, CheckCircle2, HelpCircle, MailWarning } from 'lucide-react';
+import { LogIn, GraduationCap, UserPlus, ShieldAlert, CheckCircle2, HelpCircle } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('ghazallsyria@gmail.com');
@@ -28,12 +28,12 @@ const Login = () => {
           }
         });
         if (error) throw error;
-        setSuccess("تم إرسال الطلب. إذا لم تصلك رسالة، يرجى إيقاف خاصية 'Confirm Email' من إعدادات Supabase Authentication.");
+        setSuccess("تم إرسال الطلب بنجاح. إذا لم تصلك رسالة تفعيل، يرجى مراجعة إعدادات Supabase.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           if (error.message.includes("Email not confirmed")) {
-            throw new Error("لم يتم تفعيل الحساب. يرجى إيقاف خيار 'Confirm Email' في إعدادات Supabase (Authentication -> Settings) لتتمكن من الدخول مباشرة.");
+            throw new Error("لم يتم تفعيل الحساب بعد. يرجى إيقاف خيار 'Confirm Email' في إعدادات Supabase Auth لتتمكن من الدخول فوراً.");
           }
           throw error;
         }
@@ -69,7 +69,7 @@ const Login = () => {
               </div>
               {error.includes("Email not confirmed") && (
                 <div className="mt-3 p-3 bg-white/50 rounded-xl text-[11px] text-rose-700 leading-relaxed">
-                  <strong>حل مشكلة البريد:</strong> ادخل لوحة تحكم Supabase -> Auth -> Settings ثم عطّل خيار <b>Confirm Email</b>.
+                  <strong>حل مشكلة البريد:</strong> ادخل لوحة تحكم Supabase &rarr; Auth &rarr; Settings ثم عطّل خيار <b>Confirm Email</b>.
                 </div>
               )}
             </div>
