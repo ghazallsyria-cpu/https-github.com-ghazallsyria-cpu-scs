@@ -28,10 +28,8 @@ const Login = () => {
     setSuccess(null);
 
     const mobileClean = formData.mobile.trim();
-    // الرقم المعتمد للمدير العام
+    // الرقم المعتمد للمدير العام (يرجى تغييره للرقم المطلوب)
     const isAdminNumber = mobileClean === '55315661';
-
-    // المعرف التقني الداخلي المشتق من رقم الموبايل لتجنب طلب الإيميل من المستخدم
     const virtualEmail = `${mobileClean}@system.local`;
 
     try {
@@ -46,16 +44,12 @@ const Login = () => {
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
           password: formData.password,
-          options: { 
-            data: { full_name: formData.fullName } 
-          }
+          options: { data: { full_name: formData.fullName } }
         });
 
         if (signUpError) throw signUpError;
 
         if (authData.user) {
-          // تعيين الصلاحيات بناءً على رقم الموبايل
-          // الرقم المحدد يكون مديراً ومفعلاً فوراً، البقية قيد الانتظار
           const { error: profileError } = await supabase.from('profiles').insert([{
             id: authData.user.id,
             full_name: formData.fullName,
@@ -68,14 +62,14 @@ const Login = () => {
           if (profileError) throw profileError;
 
           if (isAdminNumber) {
-            setSuccess("تم إنشاء حساب المدير بنجاح! يمكنك الدخول الآن ببياناتك المعتمدة.");
+            setSuccess("تم إنشاء حساب المدير بنجاح! يمكنك الدخول الآن.");
             setIsSignUp(false);
           } else {
-            setSuccess("تم إرسال طلب الانضمام بنجاح! يرجى انتظار تفعيل حسابك من قبل المدير.");
+            setSuccess("تم إرسال طلب الانضمام! أدخل كود التفعيل بعد تسجيل الدخول لتنشيط حسابك.");
+            setIsSignUp(false);
           }
         }
       } else {
-        // تسجيل الدخول العادي برقم الهاتف وكلمة السر
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: virtualEmail,
           password: formData.password
@@ -83,13 +77,13 @@ const Login = () => {
         
         if (signInError) {
           if (signInError.message.includes("Invalid login credentials")) {
-            throw new Error("رقم الموبايل أو كلمة السر غير صحيحة");
+            throw new Error("بيانات الدخول غير صحيحة");
           }
           throw signInError;
         }
       }
     } catch (err: any) {
-      setError(err.message || 'حدث خطأ غير متوقع في النظام');
+      setError(err.message || 'حدث خطأ غير متوقع');
     } finally {
       setLoading(false);
     }
@@ -128,7 +122,7 @@ const Login = () => {
                 <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
                   <User size={12} /> الاسم الكامل
                 </label>
-                <input required name="fullName" type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.fullName} onChange={handleChange} />
+                <input required name="fullName" type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none" value={formData.fullName} onChange={handleChange} />
               </div>
             )}
 
@@ -136,14 +130,14 @@ const Login = () => {
               <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
                 <Phone size={12} /> رقم الموبايل
               </label>
-              <input required name="mobile" type="tel" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="09xxxxxxxx" value={formData.mobile} onChange={handleChange} />
+              <input required name="mobile" type="tel" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold outline-none" placeholder="09xxxxxxxx" value={formData.mobile} onChange={handleChange} />
             </div>
 
             <div className="space-y-1">
               <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
                 <Lock size={12} /> كلمة المرور
               </label>
-              <input required name="password" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.password} onChange={handleChange} />
+              <input required name="password" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold outline-none" value={formData.password} onChange={handleChange} />
             </div>
 
             {isSignUp && (
@@ -151,7 +145,7 @@ const Login = () => {
                 <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
                    <Lock size={12} /> تأكيد كلمة المرور
                 </label>
-                <input required name="confirmPassword" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.confirmPassword} onChange={handleChange} />
+                <input required name="confirmPassword" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold outline-none" value={formData.confirmPassword} onChange={handleChange} />
               </div>
             )}
             
@@ -162,7 +156,7 @@ const Login = () => {
 
           <div className="mt-8 pt-6 border-t border-slate-100 text-center">
             <button onClick={() => { setIsSignUp(!isSignUp); setError(null); setSuccess(null); }} className="text-slate-500 font-bold text-sm hover:text-indigo-600 transition-colors flex items-center justify-center gap-2">
-              {isSignUp ? 'بالفعل لديك حساب؟ سجل دخولك' : 'مدرس جديد؟ أنشئ حسابك وتقدم بطلب انضمام'}
+              {isSignUp ? 'بالفعل لديك حساب؟ سجل دخولك' : 'مدرس جديد؟ أنشئ حسابك الآن'}
               <ArrowRight size={16} className={isSignUp ? 'rotate-180' : ''} />
             </button>
           </div>

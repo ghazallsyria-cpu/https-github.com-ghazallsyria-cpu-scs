@@ -1,6 +1,6 @@
 
 -- ==========================================
--- 1. إنشاء الجداول الأساسية
+-- 1. جداول النظام الأساسية
 -- ==========================================
 
 -- جدول البروفايلات (المعلمين والمديرين)
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   phone TEXT UNIQUE,
   role TEXT DEFAULT 'teacher', -- 'admin' or 'teacher'
   gender TEXT DEFAULT 'male',
-  is_approved BOOLEAN DEFAULT false,
+  is_approved BOOLEAN DEFAULT false, -- الحالة الافتراضية معلق
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -22,14 +22,14 @@ CREATE TABLE IF NOT EXISTS public.students (
   address TEXT,
   phone TEXT,
   grade TEXT,
-  agreed_amount NUMERIC DEFAULT 0, -- لطلاب الاتفاق الفصلي
-  is_hourly BOOLEAN DEFAULT false, -- هل الطالب بنظام الساعة؟
-  price_per_hour NUMERIC DEFAULT 0, -- سعر الساعة للطلاب الخارجيين
+  agreed_amount NUMERIC DEFAULT 0,
+  is_hourly BOOLEAN DEFAULT false,
+  price_per_hour NUMERIC DEFAULT 0,
   is_completed BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- جدول الدروس (الحصص)
+-- جدول الدروس
 CREATE TABLE IF NOT EXISTS public.lessons (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS public.lessons (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- جدول المدفوعات النقدية
+-- جدول المدفوعات
 CREATE TABLE IF NOT EXISTS public.payments (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.activation_codes (
 );
 
 -- ==========================================
--- 2. تفعيل الحماية والسياسات (RLS)
+-- 2. تفعيل سياسات الحماية (RLS)
 -- ==========================================
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -71,33 +71,40 @@ ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY;
 
--- وظيفة للتحقق من هوية المدير
+-- دالة التحقق من المدير
 CREATE OR REPLACE FUNCTION public.is_admin() 
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-  RETURN EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin');
+  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin');
+END; $$;
+
+-- دالة التحقق من المعلم المفعل
+CREATE OR REPLACE FUNCTION public.is_approved_teacher() 
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_approved = true);
 END; $$;
 
 -- سياسات البروفايلات
 CREATE POLICY "Profiles access" ON public.profiles FOR ALL USING (auth.uid() = id OR public.is_admin());
-CREATE POLICY "View all profiles" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Profiles view all" ON public.profiles FOR SELECT USING (true);
 
--- سياسات الطلاب (المعلم يرى طلابه، المدير يرى الجميع)
-CREATE POLICY "Students access" ON public.students FOR ALL USING (auth.uid() = teacher_id OR public.is_admin());
+-- سياسات الطلاب
+CREATE POLICY "Students security" ON public.students FOR ALL USING (
+  (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
+);
 
 -- سياسات الدروس
-CREATE POLICY "Lessons access" ON public.lessons FOR ALL USING (auth.uid() = teacher_id OR public.is_admin());
+CREATE POLICY "Lessons security" ON public.lessons FOR ALL USING (
+  (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
+);
 
 -- سياسات المدفوعات
-CREATE POLICY "Payments access" ON public.payments FOR ALL USING (auth.uid() = teacher_id OR public.is_admin());
+CREATE POLICY "Payments security" ON public.payments FOR ALL USING (
+  (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
+);
 
--- سياسات الأكواد
-CREATE POLICY "Admin codes control" ON public.activation_codes FOR ALL USING (public.is_admin());
-CREATE POLICY "Public codes view" ON public.activation_codes FOR SELECT USING (true);
-CREATE POLICY "Public codes update" ON public.activation_codes FOR UPDATE USING (true);
-
--- ==========================================
--- 3. تنصيب المدير الأساسي
--- ==========================================
--- يرجى تحديث رقم الهاتف هذا ليتطابق مع رقمك عند أول تسجيل
--- UPDATE public.profiles SET role = 'admin', is_approved = true WHERE phone = '55315661';
+-- سياسات أكواد التفعيل
+CREATE POLICY "Codes admin access" ON public.activation_codes FOR ALL USING (public.is_admin());
+CREATE POLICY "Codes teacher view" ON public.activation_codes FOR SELECT USING (true);
+CREATE POLICY "Codes teacher use" ON public.activation_codes FOR UPDATE USING (NOT is_used);
