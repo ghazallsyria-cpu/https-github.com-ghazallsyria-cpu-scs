@@ -233,7 +233,7 @@ const App: React.FC = () => {
               </div>
             )}
           </nav>
-          <button onClick={() => supabase.auth.signOut()} className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> خروج</button>
+          <button onClick={() => { if(confirm('هل تريد تسجيل الخروج؟')) supabase.auth.signOut(); }} className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> خروج</button>
         </aside>
 
         {/* Main Content */}
@@ -247,12 +247,26 @@ const App: React.FC = () => {
                 <p className="text-xs lg:text-sm font-black text-slate-900">{profile?.full_name}</p>
                 <p className="text-[9px] lg:text-[10px] font-bold text-slate-400 uppercase">{isAdmin ? 'المدير' : 'معلم'}</p>
               </div>
-              <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl lg:rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg uppercase text-sm">{profile?.full_name?.charAt(0) || 'U'}</div>
-              {isAdmin && (
-                 <Link to="/teachers" className="lg:hidden p-2 text-slate-400 hover:text-indigo-600">
-                   <ShieldCheck size={20} />
-                 </Link>
-              )}
+              <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl lg:rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg uppercase text-sm">
+                {profile?.full_name?.charAt(0) || 'U'}
+              </div>
+              
+              <div className="flex items-center gap-1">
+                {isAdmin && (
+                  <Link to="/teachers" className="lg:hidden p-2 text-slate-400 hover:text-indigo-600 transition-colors">
+                    <ShieldCheck size={20} />
+                  </Link>
+                )}
+                <button 
+                  onClick={() => {
+                    if(confirm('هل تريد فعلاً تسجيل الخروج من النظام؟')) supabase.auth.signOut();
+                  }} 
+                  className="lg:hidden p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                  title="تسجيل الخروج"
+                >
+                  <LogOut size={20} />
+                </button>
+              </div>
             </div>
           </header>
 
