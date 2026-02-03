@@ -6,7 +6,8 @@ import {
   Wallet, CheckCircle2, Clock, Plus, Search, X, CreditCard, AlertCircle
 } from 'lucide-react';
 
-const Payments: React.FC = () => {
+// Fix: Accept role and uid props to solve TS error and filter data correctly
+const Payments = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<StudentStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -18,15 +19,25 @@ const Payments: React.FC = () => {
   const fetchPaymentData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: studentsData } = await supabase.from('students').select('*');
-      const { data: paymentsData } = await supabase.from('payments').select('*');
+      let qStudents = supabase.from('students').select('*');
+      let qPayments = supabase.from('payments').select('*');
+
+      // Filter by teacher if not an admin
+      if (role === 'teacher') {
+        qStudents = qStudents.eq('teacher_id', uid);
+        qPayments = qPayments.eq('teacher_id', uid);
+      }
+
+      const { data: studentsData } = await qStudents;
+      const { data: paymentsData } = await qPayments;
+      
       const enriched = (studentsData || []).map(student => {
         const totalPaid = (paymentsData || []).filter(p => p.student_id === student.id).reduce((sum, p) => sum + Number(p.amount), 0);
         return { ...student, total_lessons: 0, total_hours: 0, total_paid: totalPaid, remaining_balance: Number(student.agreed_payment) - totalPaid };
       });
       setStudents(enriched);
     } catch (err) { console.error(err); } finally { setLoading(false); }
-  }, []);
+  }, [role, uid]);
 
   useEffect(() => { fetchPaymentData(); }, [fetchPaymentData]);
 
@@ -38,7 +49,8 @@ const Payments: React.FC = () => {
         student_id: selectedStudent.id, 
         amount: parseFloat(paymentForm.amount), 
         payment_date: paymentForm.payment_date, 
-        notes: paymentForm.notes || ''
+        notes: paymentForm.notes || '',
+        teacher_id: uid // Ensure teacher_id is saved
       }]);
       if (error) throw error;
       setIsModalOpen(false);

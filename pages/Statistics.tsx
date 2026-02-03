@@ -24,7 +24,8 @@ import {
 
 const COLORS = ['#4f46e5', '#8b5cf6', '#10b981', '#3b82f6', '#f43f5e', '#f59e0b'];
 
-const Statistics: React.FC = () => {
+// Fix: Accept role and uid props to solve TS error and filter data correctly
+const Statistics = ({ role, uid }: { role: any, uid: string }) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     dayHours: 0,
@@ -38,9 +39,20 @@ const Statistics: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { data: lessons } = await supabase.from('lessons').select('*');
-        const { data: payments } = await supabase.from('payments').select('*');
-        const { data: students } = await supabase.from('students').select('id, name');
+        let qLessons = supabase.from('lessons').select('*');
+        let qPayments = supabase.from('payments').select('*');
+        let qStudents = supabase.from('students').select('id, name');
+
+        // Apply filtering if the user is a teacher
+        if (role === 'teacher') {
+          qLessons = qLessons.eq('teacher_id', uid);
+          qPayments = qPayments.eq('teacher_id', uid);
+          qStudents = qStudents.eq('teacher_id', uid);
+        }
+
+        const { data: lessons } = await qLessons;
+        const { data: payments } = await qPayments;
+        const { data: students } = await qStudents;
 
         const now = new Date();
         const startOfDay = new Date(new Date().setHours(0,0,0,0));
@@ -88,7 +100,7 @@ const Statistics: React.FC = () => {
     };
 
     fetchData();
-  }, []);
+  }, [role, uid]);
 
   if (loading) return (
     <div className="p-20 text-center space-y-4">
