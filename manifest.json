@@ -1,0 +1,21 @@
+{
+  "name": "ادارة تحكم الطلاب في النظام الخصوصي",
+  "short_name": "تحكم الطلاب",
+  "description": "نظام شامل لإدارة الدروس الخصوصية، تتبع الطلاب، المدفوعات، والإحصائيات.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3532/3532138.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3532/3532138.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-ro
 import { supabase } from './supabase';
 import { Profile } from './types';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Menu, X, ShieldAlert 
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Menu, X, ShieldAlert, Code2 
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -13,6 +13,20 @@ import Payments from './pages/Payments';
 import Lessons from './pages/Lessons';
 import Login from './pages/Login';
 import Teachers from './pages/Teachers';
+
+const Footer: React.FC = () => (
+  <footer className="mt-auto py-8 text-center border-t border-slate-100 bg-white/50 backdrop-blur-sm rounded-t-[3rem]">
+    <div className="flex flex-col items-center justify-center gap-2">
+      <div className="flex items-center gap-2 text-indigo-600 font-black text-sm">
+        <Code2 size={16} />
+        <span>برمجة : ايهاب جمال غزال</span>
+      </div>
+      <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
+        الإصدار 1.0.0 &copy; {new Date().getFullYear()}
+      </div>
+    </div>
+  </footer>
+);
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -76,16 +90,15 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-      <p className="font-bold text-slate-600 text-lg">تحميل نظام TutorTrack...</p>
+      <p className="font-bold text-slate-600 text-lg">جاري تحميل النظام...</p>
     </div>
   );
 
   if (!session) return <Login />;
 
-  // بوابة الحسابات غير المفعلة
   if (profile && !profile.is_approved) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-['Cairo']">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-['Cairo']">
         <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-lg text-center border border-slate-100">
            <div className="bg-amber-100 w-24 h-24 rounded-full flex items-center justify-center text-amber-600 mx-auto mb-8 shadow-inner">
              <ShieldAlert size={48} />
@@ -101,6 +114,7 @@ const App: React.FC = () => {
              <LogOut size={20} /> تسجيل الخروج والانتظار
            </button>
         </div>
+        <div className="mt-10"><Footer /></div>
       </div>
     );
   }
@@ -116,10 +130,10 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100">
               < GraduationCap size={28} />
             </div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">TutorTrack</h1>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight leading-tight">ادارة تحكم الطلاب</h1>
           </div>
           
-          <nav className="flex-1 space-y-2">
+          <nav className="flex-1 space-y-2 overflow-y-auto pr-2">
             <NavItem to="/" icon={<LayoutDashboard size={20} />} label="الرئيسية" />
             <NavItem to="/students" icon={<Users size={20} />} label="الطلاب" />
             <NavItem to="/lessons" icon={<BookOpen size={20} />} label="سجل الدروس" />
@@ -153,7 +167,7 @@ const App: React.FC = () => {
               <div className="bg-indigo-600 p-2 rounded-xl text-white">
                 <GraduationCap size={24} />
               </div>
-              <h1 className="text-xl font-black text-slate-900">TutorTrack</h1>
+              <h1 className="text-lg font-black text-slate-900 leading-tight">ادارة تحكم الطلاب</h1>
             </div>
             <button onClick={() => setMobileMenuOpen(false)} className="text-slate-400"><X /></button>
           </div>
@@ -194,8 +208,8 @@ const App: React.FC = () => {
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-6 lg:p-10">
-            <div className="max-w-7xl mx-auto pb-10">
+          <div className="flex-1 overflow-y-auto p-6 lg:p-10 flex flex-col">
+            <div className="max-w-7xl mx-auto w-full flex-grow">
               <Routes>
                 <Route path="/" element={<Dashboard role={profile?.role} uid={session.user.id} />} />
                 <Route path="/students" element={<Students role={profile?.role} uid={session.user.id} />} />
@@ -206,6 +220,7 @@ const App: React.FC = () => {
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             </div>
+            <Footer />
           </div>
         </main>
       </div>

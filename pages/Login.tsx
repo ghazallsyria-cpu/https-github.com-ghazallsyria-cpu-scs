@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase.ts';
-import { GraduationCap, ShieldAlert, CheckCircle2, Phone, Lock, User, UserCircle, ArrowRight } from 'lucide-react';
+import { GraduationCap, ShieldAlert, CheckCircle2, Phone, Lock, User, UserCircle, ArrowRight, Code2 } from 'lucide-react';
 
 const Login = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -27,7 +27,6 @@ const Login = () => {
     setError(null);
     setSuccess(null);
 
-    // تحويل رقم الموبايل إلى صيغة بريد إلكتروني وهمية لمحرك Supabase
     const virtualEmail = `${formData.mobile}@tutor.app`;
 
     try {
@@ -52,14 +51,13 @@ const Login = () => {
         if (signUpError) throw signUpError;
 
         if (authData.user) {
-          // إنشاء البروفايل يدوياً لضمان حفظ البيانات الإضافية
           const { error: profileError } = await supabase.from('profiles').insert([{
             id: authData.user.id,
             full_name: formData.fullName,
             phone: formData.mobile,
             gender: formData.gender,
             role: 'teacher',
-            is_approved: false // الحساب يحتاج موافقة المدير
+            is_approved: false 
           }]);
           
           if (profileError) throw profileError;
@@ -80,8 +78,8 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-['Cairo'] selection:bg-indigo-100">
-      <div className="bg-white w-full max-w-[480px] p-8 md:p-12 rounded-[3rem] shadow-2xl shadow-slate-200 animate-in fade-in zoom-in duration-500 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-['Cairo'] selection:bg-indigo-100">
+      <div className="bg-white w-full max-w-[480px] p-8 md:p-12 rounded-[3rem] shadow-2xl shadow-slate-200 animate-in fade-in zoom-in duration-500 relative overflow-hidden mb-10">
         
         {/* Decor */}
         <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-50 rounded-full opacity-50"></div>
@@ -91,8 +89,10 @@ const Login = () => {
             <div className="bg-indigo-600 p-4 rounded-3xl text-white mb-5 shadow-2xl shadow-indigo-100 rotate-3">
               <GraduationCap size={48} />
             </div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight">TutorTrack <span className="text-indigo-600">Pro</span></h1>
-            <p className="text-slate-400 font-bold mt-2">
+            <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+              ادارة تحكم الطلاب <br/> <span className="text-indigo-600 text-lg md:text-xl">في النظام الخصوصي</span>
+            </h1>
+            <p className="text-slate-400 font-bold mt-4">
               {isSignUp ? 'انضم لنخبة المعلمين المتميزين' : 'مرحباً بك مجدداً في نظامك الإداري'}
             </p>
           </div>
@@ -167,6 +167,17 @@ const Login = () => {
               <ArrowRight size={16} className={isSignUp ? 'rotate-180' : ''} />
             </button>
           </div>
+        </div>
+      </div>
+      
+      {/* Login Footer */}
+      <div className="flex flex-col items-center justify-center gap-2 opacity-70">
+        <div className="flex items-center gap-2 text-indigo-600 font-black text-sm">
+          <Code2 size={16} />
+          <span>برمجة : ايهاب جمال غزال</span>
+        </div>
+        <div className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">
+          الإصدار 1.0.0
         </div>
       </div>
     </div>
