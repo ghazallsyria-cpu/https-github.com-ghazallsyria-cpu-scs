@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { supabase } from './supabase.ts';
-import { Profile } from './types.ts';
+import { supabase } from './supabase';
+import { Profile } from './types';
 import { 
   LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Menu, X 
 } from 'lucide-react';
 
-import Dashboard from './pages/Dashboard.tsx';
-import Students from './pages/Students.tsx';
-import Statistics from './pages/Statistics.tsx';
-import Payments from './pages/Payments.tsx';
-import Lessons from './pages/Lessons.tsx';
-import Login from './pages/Login.tsx';
-import Teachers from './pages/Teachers.tsx';
+import Dashboard from './pages/Dashboard';
+import Students from './pages/Students';
+import Statistics from './pages/Statistics';
+import Payments from './pages/Payments';
+import Lessons from './pages/Lessons';
+import Login from './pages/Login';
+import Teachers from './pages/Teachers';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
