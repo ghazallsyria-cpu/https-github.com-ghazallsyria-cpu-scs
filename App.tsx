@@ -19,15 +19,17 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 1. تحقق من الجلسة الحالية عند بدء التشغيل
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) fetchProfile(session.user.id);
+      if (session) fetchProfile(session.user.id, session.user.email);
       else setLoading(false);
     });
 
+    // 2. الاستماع لتغيرات حالة المصادقة
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) fetchProfile(session.user.id);
+      if (session) fetchProfile(session.user.id, session.user.email);
       else {
         setProfile(null);
         setLoading(false);
@@ -37,13 +39,34 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function fetchProfile(uid: string) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', uid).single();
-    if (data) setProfile(data);
-    setLoading(false);
+  async function fetchProfile(uid: string, email?: string) {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
+      
+      if (data) {
+        setProfile(data);
+      } else {
+        // إذا لم يوجد ملف شخصي (مستخدم جديد)، قم بإنشائه تلقائياً
+        const { data: newProfile, error: insertError } = await supabase.from('profiles').insert([
+          { id: uid, full_name: email?.split('@')[0] || 'معلم جديد', role: 'teacher' }
+        ]).select().single();
+        
+        if (newProfile) setProfile(newProfile);
+        if (insertError) console.error("Error creating profile:", insertError);
+      }
+    } catch (e) {
+      console.error("Profile fetch error:", e);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  if (loading) return <div className="h-screen flex items-center justify-center font-bold text-indigo-600">جاري التحقق من الجلسة...</div>;
+  if (loading) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 mb-4"></div>
+      <p className="font-bold text-indigo-600">جاري تحميل البيانات...</p>
+    </div>
+  );
 
   if (!session) return <Login />;
 
@@ -90,7 +113,7 @@ const Sidebar = ({ profile }: { profile: Profile | null }) => {
               <SidebarLink to="/teachers" icon={<ShieldCheck size={20} />} label="إدارة المعلمين" active={location.pathname === '/teachers'} />
             )}
           </nav>
-          <button onClick={() => supabase.auth.signOut()} className="mt-auto flex items-center gap-3 px-4 py-3 text-rose-600 font-bold hover:bg-rose-50 rounded-xl">
+          <button onClick={() => supabase.auth.signOut()} className="mt-auto flex items-center gap-3 px-4 py-3 text-rose-600 font-bold hover:bg-rose-50 rounded-xl transition-colors">
             <LogOut size={20} /> تسجيل الخروج
           </button>
         </div>
@@ -100,21 +123,21 @@ const Sidebar = ({ profile }: { profile: Profile | null }) => {
 };
 
 const SidebarLink = ({ to, icon, label, active }: any) => (
-  <Link to={to} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600 hover:bg-indigo-50'}`}>
+  <Link to={to} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-600 hover:bg-indigo-50'}`}>
     {icon} <span className="font-bold">{label}</span>
   </Link>
 );
 
 const Header = ({ profile }: any) => (
   <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
-    <div className="font-black text-slate-900">نظام TutorTrack Pro</div>
+    <div className="font-black text-slate-900">TutorTrack Pro</div>
     <div className="flex items-center gap-3">
       <div className="text-right">
-        <p className="text-xs font-bold text-slate-400">{profile?.role === 'admin' ? 'المدير' : 'معلم'}</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{profile?.role === 'admin' ? 'المدير' : 'معلم'}</p>
         <p className="text-sm font-black text-slate-900">{profile?.full_name}</p>
       </div>
-      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-black">
-        {profile?.full_name?.charAt(0)}
+      <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-black shadow-inner">
+        {profile?.full_name?.charAt(0).toUpperCase()}
       </div>
     </div>
   </header>
