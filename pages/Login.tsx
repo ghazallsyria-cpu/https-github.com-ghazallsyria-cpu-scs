@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { supabase } from '../supabase.ts';
-import { GraduationCap, ShieldAlert, CheckCircle2, Phone, Lock, User, UserCircle, ArrowRight, Code2 } from 'lucide-react';
+import { GraduationCap, ShieldAlert, CheckCircle2, Phone, Lock, User, ArrowRight, Code2 } from 'lucide-react';
 
 const Login = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -28,44 +27,54 @@ const Login = () => {
     setSuccess(null);
 
     const mobileClean = formData.mobile.trim();
-    
-    // التحقق من الرقم والسر إذا كان المدير (لتسهيل العملية)
-    if (mobileClean === '55315661' && !isSignUp) {
-        // إذا حاول المدير الدخول، نستخدم المعرف الخاص به
-    }
+    // الرقم المعتمد للمدير العام
+    const isAdminNumber = mobileClean === '55315661';
 
+    // المعرف التقني الداخلي المشتق من رقم الموبايل لتجنب طلب الإيميل من المستخدم
     const virtualEmail = `${mobileClean}@system.local`;
 
     try {
       if (isSignUp) {
-        if (formData.password !== formData.confirmPassword) throw new Error("كلمات المرور غير متطابقة");
-        if (mobileClean.length < 7) throw new Error("رقم الموبايل غير صحيح");
+        if (formData.password !== formData.confirmPassword) {
+          throw new Error("كلمات المرور غير متطابقة");
+        }
+        if (mobileClean.length < 7) {
+          throw new Error("رقم الموبايل غير صحيح");
+        }
 
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
           password: formData.password,
-          options: { data: { full_name: formData.fullName } }
+          options: { 
+            data: { full_name: formData.fullName } 
+          }
         });
 
         if (signUpError) throw signUpError;
 
         if (authData.user) {
-          // الرقم المحدد هو مدير تلقائياً، البقية معلمون بانتظار التفعيل
-          const isAdmin = mobileClean === '55315661';
-          
-          await supabase.from('profiles').insert([{
+          // تعيين الصلاحيات بناءً على رقم الموبايل
+          // الرقم المحدد يكون مديراً ومفعلاً فوراً، البقية قيد الانتظار
+          const { error: profileError } = await supabase.from('profiles').insert([{
             id: authData.user.id,
             full_name: formData.fullName,
             phone: mobileClean,
             gender: formData.gender,
-            role: isAdmin ? 'admin' : 'teacher',
-            is_approved: isAdmin ? true : false 
+            role: isAdminNumber ? 'admin' : 'teacher',
+            is_approved: isAdminNumber ? true : false 
           }]);
           
-          setSuccess(isAdmin ? "تم إنشاء حساب المدير! يمكنك الدخول الآن." : "تم إرسال طلب الانضمام! بانتظار تفعيل المدير.");
-          if (isAdmin) setIsSignUp(false);
+          if (profileError) throw profileError;
+
+          if (isAdminNumber) {
+            setSuccess("تم إنشاء حساب المدير بنجاح! يمكنك الدخول الآن ببياناتك المعتمدة.");
+            setIsSignUp(false);
+          } else {
+            setSuccess("تم إرسال طلب الانضمام بنجاح! يرجى انتظار تفعيل حسابك من قبل المدير.");
+          }
         }
       } else {
+        // تسجيل الدخول العادي برقم الهاتف وكلمة السر
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: virtualEmail,
           password: formData.password
@@ -79,7 +88,7 @@ const Login = () => {
         }
       }
     } catch (err: any) {
-      setError(err.message || 'حدث خطأ غير متوقع');
+      setError(err.message || 'حدث خطأ غير متوقع في النظام');
     } finally {
       setLoading(false);
     }
@@ -96,7 +105,7 @@ const Login = () => {
             <h1 className="text-2xl font-black text-slate-900 leading-tight">
               ادارة تحكم الطلاب <br/> <span className="text-indigo-600 text-lg">في النظام الخصوصي</span>
             </h1>
-            <p className="text-slate-400 font-bold mt-2">نظام الإدارة المركزي - الإصدار المستقر</p>
+            <p className="text-slate-400 font-bold mt-2">الإصدار المستقر للمدير والمعلمين</p>
           </div>
 
           {error && (

@@ -1,18 +1,21 @@
-
 import { createClient } from '@supabase/supabase-js';
 
-// دالة لجلب متغيرات البيئة بأمان من أي نظام تشغيل
+// Declare process to satisfy TypeScript compiler during build
+declare const process: any;
+
 const getEnv = (name: string): string => {
   try {
-    // محاولة الجلب من Vite
+    // 1. Try Vite's import.meta.env
     if (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env[name]) {
       return (import.meta as any).env[name];
     }
-    // محاولة الجلب من Node/Process
+    // 2. Try global process.env (for Netlify/Build environments)
     if (typeof process !== 'undefined' && process.env && process.env[name]) {
       return process.env[name] as string;
     }
-  } catch (e) {}
+  } catch (e) {
+    // Fallback if environment access is restricted
+  }
   return '';
 };
 
@@ -23,4 +26,4 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn('تنبيه: بيانات Supabase غير مكتملة في متغيرات البيئة.');
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '');
