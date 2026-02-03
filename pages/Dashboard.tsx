@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../supabase';
+import { supabase } from '../supabase.ts';
 import { Users, Calendar, Clock, DollarSign, AlertCircle } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
@@ -62,7 +62,7 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
   if (loading) return <div className="h-96 flex items-center justify-center"><div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-black text-slate-900 tracking-tight">نظرة عامة</h1>
         <p className="text-slate-500 font-bold">أهلاً بك، إليك ملخص نشاطك التعليمي.</p>
@@ -80,17 +80,11 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
         <h3 className="text-lg font-black mb-8">تحليل ساعات العمل</h3>
         <ResponsiveContainer width="100%" height="85%">
           <AreaChart data={chartData}>
-            <defs>
-              <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontWeight: 600, fontSize: 12}} dy={10} />
-            <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontWeight: 600, fontSize: 12}} />
-            <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-            <Area type="monotone" dataKey="hours" stroke="#4f46e5" fillOpacity={1} fill="url(#colorHours)" strokeWidth={3} />
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip />
+            <Area type="monotone" dataKey="hours" stroke="#4f46e5" fill="#4f46e510" strokeWidth={3} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -99,9 +93,9 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
 };
 
 const StatCard = ({ label, value, icon, color }: any) => (
-  <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-    <div className={`${color} w-10 h-10 rounded-xl flex items-center justify-center text-white mb-4 shadow-sm`}>{icon}</div>
-    <p className="text-slate-400 text-xs font-black uppercase tracking-wider">{label}</p>
+  <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+    <div className={`${color} w-10 h-10 rounded-xl flex items-center justify-center text-white mb-4`}>{icon}</div>
+    <p className="text-slate-400 text-xs font-black uppercase">{label}</p>
     <p className="text-2xl font-black text-slate-900 mt-1">{value}</p>
   </div>
 );

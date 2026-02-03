@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { supabase } from './supabase';
-import { Profile } from './types';
+import { supabase } from './supabase.ts';
+import { Profile } from './types.ts';
 import { 
   LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut 
 } from 'lucide-react';
 
-import Dashboard from './pages/Dashboard';
-import Students from './pages/Students';
-import Statistics from './pages/Statistics';
-import Payments from './pages/Payments';
-import Login from './pages/Login';
+import Dashboard from './pages/Dashboard.tsx';
+import Students from './pages/Students.tsx';
+import Statistics from './pages/Statistics.tsx';
+import Payments from './pages/Payments.tsx';
+import Login from './pages/Login.tsx';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -54,7 +54,6 @@ const App: React.FC = () => {
       if (data) {
         setProfile(data);
       } else {
-        // إنشاء ملف تلقائي إذا لم يوجد
         const { data: newProfile } = await supabase.from('profiles').insert([
           { id: uid, full_name: email?.split('@')[0] || 'معلم', role: 'teacher' }
         ]).select().single();
@@ -70,7 +69,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
       <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="font-bold text-indigo-600 animate-pulse">جاري تحضير اللوحة...</p>
+      <p className="font-bold text-indigo-600">جاري تحضير النظام...</p>
     </div>
   );
 
@@ -79,7 +78,6 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-slate-50 flex font-['Cairo']">
-        {/* Sidebar */}
         <aside className="hidden lg:flex w-64 bg-white border-l border-slate-200 flex-col p-6 sticky top-0 h-screen">
           <div className="flex items-center gap-3 mb-10 px-2">
             <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-100">
@@ -101,10 +99,9 @@ const App: React.FC = () => {
           </button>
         </aside>
 
-        {/* Content */}
         <main className="flex-1 min-w-0 overflow-auto">
-          <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
-            <div className="font-black text-slate-900 lg:block hidden">لوحة التحكم</div>
+          <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
+            <div className="font-black text-slate-900 lg:block hidden">نظام إدارة الدروس</div>
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <p className="text-sm font-black text-slate-900 leading-none">{profile?.full_name}</p>
