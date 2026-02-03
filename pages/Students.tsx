@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.ts';
 import { StudentStats } from '../types.ts';
-import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, GraduationCap, Clock, DollarSign, BookOpen, Users, X, User, AlertCircle } from 'lucide-react';
+// Fix: Added missing 'Users' import from lucide-react
+import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, GraduationCap, X, User, AlertCircle, Users } from 'lucide-react';
 
 const Students = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<(StudentStats & { profiles?: { full_name: string } })[]>([]);
@@ -18,9 +19,19 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
 
   const isAdmin = role === 'admin';
 
+  const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
+    setFeedback({ msg, type });
+    setTimeout(() => setFeedback(null), 5000);
+  };
+
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
+      // التحقق من صحة الاتصال بـ Supabase
+      if (supabase.auth.getSession === undefined) {
+        throw new Error("بيانات Supabase غير مضبوطة بشكل صحيح.");
+      }
+
       let qSt = supabase.from('students').select('*, profiles:teacher_id(full_name)');
       let qLe = supabase.from('lessons').select('*');
 
@@ -48,9 +59,11 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
     } catch (e: any) {
       console.error("Student Fetch Error:", e);
       if (e.message?.includes('recursion')) {
-        showFeedback("تنبيه: تم اكتشاف مشكلة في صلاحيات قاعدة البيانات (Recursion). يرجى تطبيق تحديث SQL.", "error");
+        showFeedback("مشكلة تقنية: تم اكتشاف تكرار في الصلاحيات. يرجى مراجعة المسؤول.", "error");
+      } else if (e.message?.includes('missing')) {
+        showFeedback("خطأ: بيانات الاتصال بقاعدة البيانات غير متوفرة.", "error");
       } else {
-        showFeedback("حدث خطأ أثناء جلب بيانات الطلاب.", "error");
+        showFeedback("فشل جلب بيانات الطلاب. تأكد من إعدادات الربط.", "error");
       }
     } finally {
       setLoading(false);
@@ -59,33 +72,23 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
-  const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
-    setFeedback({ msg, type });
-    setTimeout(() => setFeedback(null), 5000);
-  };
-
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const amount = parseFloat(form.agreed_amount) || 0;
       
-      const { data, error } = await supabase.from('students').insert([{ 
+      const { error } = await supabase.from('students').insert([{ 
         name: form.name,
         address: form.address,
         phone: form.phone,
         grade: form.grade,
         agreed_amount: amount,
         teacher_id: uid 
-      }]).select();
+      }]);
 
       if (error) {
-        console.error("Insert Error Details:", error);
-        if (error.message.includes('recursion')) {
-          throw new Error("خطأ برمجي في السياسات (Recursion). يرجى تطبيق كود SQL المحدث لحل المشكلة.");
-        }
-        if (error.code === '42501') {
-          throw new Error("ليس لديك صلاحية لإضافة طلاب. قد يكون حسابك غير مفعل بعد.");
-        }
+        if (error.message.includes('recursion')) throw new Error("خطأ في صلاحيات النظام (Recursion).");
+        if (error.code === '42501') throw new Error("ليس لديك صلاحية لإضافة طلاب. تأكد من تفعيل حسابك.");
         throw error;
       }
 
@@ -94,7 +97,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '' });
       fetchStudents();
     } catch (err: any) {
-      showFeedback(err.message || "حدث خطأ غير متوقع", 'error');
+      showFeedback(err.message || "حدث خطأ أثناء الإضافة", 'error');
     }
   };
 
@@ -182,10 +185,12 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
                  <button 
                   onClick={() => { setSelectedStudent(s); setIsLessonModalOpen(true); }}
                   className="p-3 bg-slate-50 text-slate-400 hover:bg-indigo-600 hover:text-white rounded-xl transition-all"
+                  title="تسجيل حصة"
                 ><Calendar size={18}/></button>
                 <button 
                   onClick={() => handleDeleteStudent(s.id)}
                   className="p-3 bg-slate-50 text-slate-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all"
+                  title="حذف الطالب"
                 ><Trash2 size={18}/></button>
               </div>
             </div>
@@ -217,7 +222,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         {filteredStudents.length === 0 && !loading && (
           <div className="col-span-full py-32 text-center border-2 border-dashed border-slate-200 rounded-[3rem] bg-slate-50/50">
             <Users size={64} className="mx-auto mb-6 text-slate-200" />
-            <h3 className="text-xl font-black text-slate-400">لا يوجد طلاب مطابقة</h3>
+            <h3 className="text-xl font-black text-slate-400">لا يوجد طلاب مسجلون بعد.</h3>
           </div>
         )}
       </div>

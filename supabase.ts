@@ -1,31 +1,39 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Declare process to satisfy TypeScript compiler during build
+// Declare process to satisfy TypeScript compiler
 declare const process: any;
 
 /**
- * دالة محسنة لجلب متغيرات البيئة من مصادر مختلفة (Vite, Netlify, process.env)
+ * دالة متقدمة لجلب متغيرات البيئة من كافة المصادر الممكنة
+ * (Vite, process.env, window.env)
  */
 const getEnv = (name: string): string => {
   try {
-    // 1. Vite Environment
+    // 1. Vite (import.meta.env)
     if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-      const viteVal = (import.meta as any).env[name];
-      if (viteVal) return viteVal;
+      const val = (import.meta as any).env[name];
+      if (val) return val;
     }
-    // 2. Global process.env
+    
+    // 2. Node/Generic (process.env)
     if (typeof process !== 'undefined' && process.env) {
-      const procVal = process.env[name];
-      if (procVal) return procVal;
+      const val = process.env[name];
+      if (val) return val;
       
-      // Try without VITE_ prefix if it was passed that way
-      const fallbackName = name.replace('VITE_', '');
-      const fallbackVal = process.env[fallbackName];
-      if (fallbackVal) return fallbackVal;
+      // Try without VITE_ prefix
+      const fallback = name.replace('VITE_', '');
+      const val2 = process.env[fallback];
+      if (val2) return val2;
+    }
+
+    // 3. Window Global (sometimes used in hosted environments)
+    if (typeof window !== 'undefined' && (window as any)._env_) {
+      const val = (window as any)._env_[name];
+      if (val) return val;
     }
   } catch (e) {
-    console.error(`Error accessing env var ${name}:`, e);
+    console.warn(`Warning: Could not access environment variable ${name}`);
   }
   return '';
 };
@@ -33,13 +41,17 @@ const getEnv = (name: string): string => {
 const SUPABASE_URL = getEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY');
 
-// التحقق من وجود القيم قبل المحاولة لتجنب Uncaught Error: supabaseUrl is required
+// التحقق وإصدار تحذير واضح بدلاً من انهيار التطبيق
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('خطأ: بيانات Supabase غير متوفرة. يرجى التأكد من ضبط VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY.');
+  console.error(
+    'خطأ حرج: بيانات الاتصال بـ Supabase غير موجودة.\n' +
+    'يرجى التأكد من ضبط VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY في إعدادات البيئة (Environment Variables).'
+  );
 }
 
-// تصدير العميل مع معالجة حالة القيم الفارغة لتجنب انهيار التطبيق
+// إنشاء العميل مع استخدام قيم احتياطية لمنع "Uncaught Error: supabaseUrl is required"
+// هذا يسمح للتطبيق بالتحميل وإظهار واجهة المستخدم حتى لو كان الاتصال سيفشل لاحقاً
 export const supabase = createClient(
-  SUPABASE_URL || 'https://placeholder.supabase.co', 
-  SUPABASE_ANON_KEY || 'placeholder'
+  SUPABASE_URL || 'https://missing-url.supabase.co',
+  SUPABASE_ANON_KEY || 'missing-key'
 );
