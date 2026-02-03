@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.ts';
-import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle } from 'lucide-react';
+import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User } from 'lucide-react';
 
 const Payments = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<any[]>([]);
@@ -10,12 +10,14 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
   const [paymentForm, setPaymentForm] = useState({ amount: '', payment_date: new Date().toISOString().split('T')[0], notes: '' });
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  const isAdmin = role === 'admin';
+
   const fetchFinancialData = async () => {
     setLoading(true);
-    let qStds = supabase.from('students').select('*');
+    let qStds = supabase.from('students').select('*, profiles:teacher_id(full_name)');
     let qPays = supabase.from('payments').select('*');
     
-    if (role === 'teacher') {
+    if (!isAdmin) {
       qStds = qStds.eq('teacher_id', uid);
       qPays = qPays.eq('teacher_id', uid);
     }
@@ -30,7 +32,7 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchFinancialData(); }, [uid, role]);
+  useEffect(() => { fetchFinancialData(); }, [uid, role, isAdmin]);
 
   const handleAddPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +40,7 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
 
     const { error } = await supabase.from('payments').insert([{
       student_id: selectedStudent.id,
-      teacher_id: uid,
+      teacher_id: selectedStudent.teacher_id, // استخدام المعلم المالك للطالب
       amount: parseFloat(paymentForm.amount),
       payment_date: paymentForm.payment_date,
       notes: paymentForm.notes
@@ -67,11 +69,11 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
           <div className="bg-emerald-100 p-4 rounded-2xl text-emerald-600 shadow-inner"><Wallet size={28}/></div>
           <div>
             <h1 className="text-3xl font-black text-slate-900">إدارة المدفوعات</h1>
-            <p className="text-slate-500 font-bold">تتبع مستحقاتك من الطلاب وتسجيل الدفعات.</p>
+            <p className="text-slate-500 font-bold">{isAdmin ? 'مراجعة الموقف المالي لجميع الطلاب والمعلمين.' : 'تتبع مستحقاتك من الطلاب وتسجيل الدفعات.'}</p>
           </div>
         </div>
         <div className="bg-slate-50 px-8 py-4 rounded-2xl border border-slate-100 text-center">
-          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">إجمالي الديون المعلقة</p>
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">إجمالي الديون المعلقة {isAdmin ? '(للكل)' : ''}</p>
           <p className="text-3xl font-black text-rose-600">${students.reduce((acc, s) => acc + Math.max(0, s.balance), 0).toLocaleString()}</p>
         </div>
       </div>
@@ -82,6 +84,7 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs">
                 <th className="p-6 font-black uppercase tracking-widest">الطالب</th>
+                {isAdmin && <th className="p-6 font-black uppercase tracking-widest">المعلم</th>}
                 <th className="p-6 font-black uppercase tracking-widest">الاتفاق المالي</th>
                 <th className="p-6 font-black uppercase tracking-widest">المسدد حتى الآن</th>
                 <th className="p-6 font-black uppercase tracking-widest">المتبقي (دين)</th>
@@ -95,6 +98,13 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
                     <p className="font-black text-slate-900">{s.name}</p>
                     <p className="text-xs text-slate-400 font-bold">{s.grade}</p>
                   </td>
+                  {isAdmin && (
+                    <td className="p-6">
+                      <div className="flex items-center gap-1 text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
+                        <User size={10} /> {s.profiles?.full_name}
+                      </div>
+                    </td>
+                  )}
                   <td className="p-6 font-bold text-slate-600">${Number(s.agreed_amount).toLocaleString()}</td>
                   <td className="p-6">
                     <div className="flex items-center gap-2 font-black text-emerald-600">
@@ -119,7 +129,7 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
               ))}
               {students.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={5} className="p-20 text-center font-bold text-slate-400 italic">لا يوجد طلاب مسجلين لعرض بياناتهم المالية.</td>
+                  <td colSpan={isAdmin ? 6 : 5} className="p-20 text-center font-bold text-slate-400 italic">لا يوجد طلاب مسجلين لعرض بياناتهم المالية.</td>
                 </tr>
               )}
             </tbody>

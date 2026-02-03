@@ -1,29 +1,30 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.ts';
 import { StudentStats } from '../types.ts';
-// Fixed missing imports: BookOpen, Users, X
-import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, GraduationCap, Clock, DollarSign, BookOpen, Users, X } from 'lucide-react';
+import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, GraduationCap, Clock, DollarSign, BookOpen, Users, X, User } from 'lucide-react';
 
 const Students = ({ role, uid }: { role: any, uid: string }) => {
-  const [students, setStudents] = useState<StudentStats[]>([]);
+  const [students, setStudents] = useState<(StudentStats & { profiles?: { full_name: string } })[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<StudentStats | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
   
   const [form, setForm] = useState({ name: '', address: '', phone: '', grade: '', agreed_amount: '' });
   const [lessonForm, setLessonForm] = useState({ lesson_date: new Date().toISOString().split('T')[0], hours: '1', notes: '' });
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
+  const isAdmin = role === 'admin';
+
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      let qSt = supabase.from('students').select('*');
+      // جلب الطلاب مع معلومات المعلم (profile)
+      let qSt = supabase.from('students').select('*, profiles:teacher_id(full_name)');
       let qLe = supabase.from('lessons').select('*');
 
-      if (role === 'teacher') {
+      if (!isAdmin) {
         qSt = qSt.eq('teacher_id', uid);
         qLe = qLe.eq('teacher_id', uid);
       }
@@ -46,7 +47,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
     } finally {
       setLoading(false);
     }
-  }, [uid, role]);
+  }, [uid, role, isAdmin]);
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
@@ -72,7 +73,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
     if (!selectedStudent) return;
     const { error } = await supabase.from('lessons').insert([{
       student_id: selectedStudent.id,
-      teacher_id: uid,
+      teacher_id: selectedStudent.teacher_id, // استخدام معرف المعلم المالك للطالب
       lesson_date: lessonForm.lesson_date,
       hours: parseFloat(lessonForm.hours),
       notes: lessonForm.notes
@@ -100,7 +101,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Feedback Toast */}
       {feedback && (
         <div className={`fixed top-24 right-1/2 translate-x-1/2 z-[100] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all animate-in slide-in-from-top-full ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
           <CheckCircle size={20} /> {feedback.msg}
@@ -110,7 +110,9 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">إدارة الطلاب</h1>
-          <p className="text-slate-500 font-bold mt-2">لديك {students.length} طالب مسجل حالياً.</p>
+          <p className="text-slate-500 font-bold mt-2">
+            {isAdmin ? `إجمالي الطلاب في النظام: ${students.length}` : `لديك ${students.length} طالب مسجل حالياً.`}
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
           <div className="relative flex-1 sm:w-80">
@@ -135,7 +137,13 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {filteredStudents.map(s => (
           <div key={s.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group hover:shadow-xl hover:shadow-slate-100 transition-all">
-            <div className="flex justify-between items-start mb-6">
+            {isAdmin && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-slate-500 flex items-center gap-1 border border-slate-200">
+                <User size={10} /> المعلم: {s.profiles?.full_name}
+              </div>
+            )}
+            
+            <div className="flex justify-between items-start mb-6 mt-4">
               <div className="bg-indigo-50 text-indigo-600 w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shadow-inner">
                 {s.name.charAt(0)}
               </div>
@@ -184,7 +192,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
           <div className="col-span-full py-32 text-center border-2 border-dashed border-slate-200 rounded-[3rem] bg-slate-50/50">
             <Users size={64} className="mx-auto mb-6 text-slate-200" />
             <h3 className="text-xl font-black text-slate-400">لا يوجد طلاب يطابقون البحث</h3>
-            <button onClick={() => setIsModalOpen(true)} className="mt-4 text-indigo-600 font-bold underline underline-offset-8">إضافة طالب جديد؟</button>
           </div>
         )}
       </div>
@@ -200,7 +207,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
               </div>
               <h2 className="text-3xl font-black text-slate-900">إضافة طالب جديد</h2>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-1">
                 <label className="text-xs font-black text-slate-400 uppercase mr-3">الاسم بالكامل</label>
@@ -223,7 +229,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
                 <input required placeholder="المحافظة، المنطقة، الشارع..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
               </div>
             </div>
-            
             <div className="pt-8">
               <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-3xl shadow-2xl shadow-indigo-200 hover:bg-indigo-700 transition-all hover:-translate-y-1 active:scale-95">حفظ بيانات الطالب</button>
             </div>
@@ -238,7 +243,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
             <button type="button" onClick={() => setIsLessonModalOpen(false)} className="absolute top-8 left-8 text-slate-300 hover:text-slate-600"><X /></button>
             <h2 className="text-2xl font-black text-slate-900 mb-2">تسجيل حصة جديدة</h2>
             <p className="text-indigo-600 font-bold text-sm mb-8">للطالب: {selectedStudent?.name}</p>
-            
             <div className="space-y-5">
               <div className="space-y-1">
                 <label className="text-xs font-black text-slate-400 uppercase mr-3">تاريخ الحصة</label>

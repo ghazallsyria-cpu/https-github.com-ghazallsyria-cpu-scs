@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.ts';
-import { Calendar, Clock, BookOpen, Search, Filter, Trash2, Edit } from 'lucide-react';
+import { Calendar, Clock, BookOpen, Search, Filter, Trash2, Edit, User } from 'lucide-react';
 
 const Lessons = ({ role, uid }: { role: any, uid: string }) => {
   const [lessons, setLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const isAdmin = role === 'admin';
+
   const fetchLessons = async () => {
     setLoading(true);
-    let query = supabase.from('lessons').select('*, students(name)').order('lesson_date', { ascending: false });
+    let query = supabase.from('lessons').select('*, students(name), profiles:teacher_id(full_name)').order('lesson_date', { ascending: false });
     
-    if (role === 'teacher') {
+    if (!isAdmin) {
       query = query.eq('teacher_id', uid);
     }
     
@@ -20,7 +22,7 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchLessons(); }, [uid, role]);
+  useEffect(() => { fetchLessons(); }, [uid, role, isAdmin]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا الدرس؟')) return;
@@ -39,7 +41,7 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900">سجل الدروس</h1>
-          <p className="text-slate-500 font-bold">عرض تاريخ جميع الحصص التعليمية.</p>
+          <p className="text-slate-500 font-bold">{isAdmin ? 'أنت تراجع جميع الحصص التعليمية المسجلة من قبل كافة المعلمين.' : 'عرض تاريخ جميع حصصك التعليمية.'}</p>
         </div>
         <div className="relative w-full md:w-80">
           <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -59,6 +61,7 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 text-xs">
                 <th className="p-6 font-black uppercase tracking-widest">الطالب</th>
+                {isAdmin && <th className="p-6 font-black uppercase tracking-widest">المعلم</th>}
                 <th className="p-6 font-black uppercase tracking-widest">التاريخ</th>
                 <th className="p-6 font-black uppercase tracking-widest text-center">الساعات</th>
                 <th className="p-6 font-black uppercase tracking-widest">الملاحظات</th>
@@ -71,6 +74,13 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
                   <td className="p-6">
                     <p className="font-black text-slate-900">{l.students?.name}</p>
                   </td>
+                  {isAdmin && (
+                    <td className="p-6">
+                      <div className="flex items-center gap-1 text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full w-fit">
+                        <User size={12} /> {l.profiles?.full_name}
+                      </div>
+                    </td>
+                  )}
                   <td className="p-6">
                     <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
                       <Calendar size={14} className="text-indigo-500" />
@@ -97,7 +107,7 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
               ))}
               {filteredLessons.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={5} className="p-20 text-center font-bold text-slate-400 bg-slate-50/20">
+                  <td colSpan={isAdmin ? 6 : 5} className="p-20 text-center font-bold text-slate-400 bg-slate-50/20">
                     <BookOpen size={48} className="mx-auto mb-4 opacity-10" />
                     لا توجد حصص مسجلة مطابقة للبحث.
                   </td>

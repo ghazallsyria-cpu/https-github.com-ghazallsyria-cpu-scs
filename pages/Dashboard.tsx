@@ -14,6 +14,8 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const isAdmin = role === 'admin';
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -22,7 +24,8 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
         let qLe = supabase.from('lessons').select('*').order('lesson_date', { ascending: true });
         let qPa = supabase.from('payments').select('*');
 
-        if (role === 'teacher') {
+        // إذا لم يكن مديراً، يرى فقط بياناته
+        if (!isAdmin) {
           qSt = qSt.eq('teacher_id', uid);
           qLe = qLe.eq('teacher_id', uid);
           qPa = qPa.eq('teacher_id', uid);
@@ -42,7 +45,6 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
           pendingPayments: Math.max(0, totalAgreed - totalIncome)
         });
 
-        // تجميع الساعات حسب التاريخ للرسم البياني
         const grouped = (lsns || []).reduce((acc: any, curr) => {
           const date = new Date(curr.lesson_date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
           acc[date] = (acc[date] || 0) + Number(curr.hours);
@@ -58,15 +60,15 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
       }
     };
     fetchData();
-  }, [role, uid]);
+  }, [role, uid, isAdmin]);
 
   if (loading) return <div className="h-96 flex items-center justify-center"><div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-black text-slate-900">نظرة عامة</h1>
-        <p className="text-slate-500 font-bold">ملخص شامل لأداء الدروس والمالية.</p>
+        <h1 className="text-3xl font-black text-slate-900">{isAdmin ? 'الإحصائيات العامة للنظام' : 'نظرة عامة'}</h1>
+        <p className="text-slate-500 font-bold">{isAdmin ? 'أنت تشاهد ملخصاً لجميع المعلمين والطلاب.' : 'ملخص شامل لأداء دروسك وماليتك.'}</p>
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -81,7 +83,7 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
         <div className="lg:col-span-2 bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm h-[400px]">
           <div className="flex justify-between items-center mb-8">
             <h3 className="text-lg font-black flex items-center gap-2">
-              <TrendingUp className="text-indigo-600" /> ساعات العمل الأخيرة
+              <TrendingUp className="text-indigo-600" /> ساعات العمل الأخيرة (مجمع)
             </h3>
           </div>
           <ResponsiveContainer width="100%" height="85%">
@@ -103,7 +105,7 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
 
         <div className="bg-indigo-900 p-8 rounded-[2rem] text-white shadow-xl flex flex-col justify-between">
           <div>
-            <p className="text-indigo-300 font-bold uppercase text-xs tracking-widest mb-2">إجمالي الأرباح المتوقع</p>
+            <p className="text-indigo-300 font-bold uppercase text-xs tracking-widest mb-2">إجمالي الأرباح {isAdmin ? 'للكل' : 'المتوقعة'}</p>
             <h2 className="text-5xl font-black">${stats.totalIncome + stats.pendingPayments}</h2>
           </div>
           <div className="space-y-4">
@@ -117,7 +119,7 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
                  style={{ width: `${(stats.totalIncome / (stats.totalIncome + stats.pendingPayments || 1)) * 100}%` }}
                />
              </div>
-             <p className="text-[10px] text-indigo-400 font-bold text-center">بناءً على الاتفاقيات المالية مع الطلاب</p>
+             <p className="text-[10px] text-indigo-400 font-bold text-center">بناءً على الاتفاقيات المالية النشطة</p>
           </div>
         </div>
       </div>
