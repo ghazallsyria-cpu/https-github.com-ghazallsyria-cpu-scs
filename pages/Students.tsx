@@ -26,10 +26,11 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      // جلب الطلاب مع اسم المعلم (Profile)
+      // تعديل الاستعلام لاستخدام الربط الصريح profiles:teacher_id
+      // هذا يخبر Supabase تماماً أي علاقة يستخدمها
       let query = supabase.from('students').select(`
         *,
-        profiles (
+        profiles:teacher_id (
           full_name
         )
       `);
@@ -41,12 +42,13 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       const { data: stds, error: sErr } = await query;
       if (sErr) throw sErr;
 
-      // جلب إحصائيات الدروس بشكل منفصل لتقليل تعقيد الاستعلام وتجنب الـ Recursion في السياسات
       const { data: lsns, error: lErr } = await supabase.from('lessons').select('student_id, hours');
       if (lErr) throw lErr;
 
       const enriched = (stds || []).map(s => {
         const studentLessons = (lsns || []).filter(l => l.student_id === s.id);
+        
+        // التعامل مع هيكلية البيانات المرجعة سواء كانت مصفوفة أو كائن منفرد
         const profileData = Array.isArray(s.profiles) ? s.profiles[0] : s.profiles;
         
         return {
@@ -62,7 +64,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       setStudents(enriched);
     } catch (e: any) {
       console.error("Fetch Error:", e);
-      showFeedback(e.message || "فشل جلب بيانات الطلاب. تأكد من إعدادات الربط.", "error");
+      showFeedback("فشل جلب البيانات: " + (e.message || "خطأ في الربط"), "error");
     } finally {
       setLoading(false);
     }
