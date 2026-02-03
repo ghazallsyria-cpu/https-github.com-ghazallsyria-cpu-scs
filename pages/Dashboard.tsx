@@ -1,8 +1,19 @@
-
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { Users, Calendar, Clock, DollarSign, AlertCircle, TrendingUp, UserCheck } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-100 text-right">
+        <p className="font-black text-slate-900 mb-1">{label}</p>
+        <p className="font-bold text-indigo-600">{`${payload[0].value} ساعة`}</p>
+      </div>
+    );
+  }
+  return null;
+};
 
 const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
   const [stats, setStats] = useState({
@@ -116,10 +127,7 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontWeight: 'bold'}} />
               <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontWeight: 'bold'}} />
-              <Tooltip 
-                formatter={(value: any) => [`${value} ساعة`, '']}
-                contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold', textAlign: 'right'}} 
-              />
+              <Tooltip content={<CustomTooltip />} />
               <Area type="monotone" dataKey="hours" name="ساعة" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorHours)" />
             </AreaChart>
           </ResponsiveContainer>
@@ -135,7 +143,7 @@ const StatCard = ({ label, value, icon, color }: any) => (
       {icon}
     </div>
     <p className="text-slate-400 text-sm font-bold">{label}</p>
-    <p className="text-2xl font-black text-slate-900 mt-1 tracking-tight">{value}</p>
+    <p className="text-2xl font-black text-slate-900 mt-1 tracking-tight">{String(value)}</p>
   </div>
 );
 
