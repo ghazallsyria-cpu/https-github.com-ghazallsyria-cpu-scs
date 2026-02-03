@@ -1,30 +1,25 @@
 
--- ==========================================
--- 1. تنظيف السياسات القديمة لتجنب الأخطاء
--- ==========================================
-DROP POLICY IF EXISTS "Profiles access" ON public.profiles;
-DROP POLICY IF EXISTS "Profiles view all" ON public.profiles;
-DROP POLICY IF EXISTS "Students security" ON public.students;
-DROP POLICY IF EXISTS "Lessons security" ON public.lessons;
-DROP POLICY IF EXISTS "Payments security" ON public.payments;
-DROP POLICY IF EXISTS "Codes admin access" ON public.activation_codes;
-DROP POLICY IF EXISTS "Codes teacher view" ON public.activation_codes;
-DROP POLICY IF EXISTS "Codes teacher use" ON public.activation_codes;
+-- تنظيف شامل للسياسات القديمة لتجنب أخطاء التكرار
+DO $$ 
+BEGIN
+    -- جداول السياسات
+    EXECUTE (SELECT string_agg('DROP POLICY IF EXISTS ' || quote_ident(policyname) || ' ON ' || quote_ident(schemaname) || '.' || quote_ident(tablename) || ';', ' ')
+             FROM pg_policies 
+             WHERE schemaname = 'public' AND (tablename = 'profiles' OR tablename = 'students' OR tablename = 'lessons' OR tablename = 'payments' OR tablename = 'activation_codes'));
+END $$;
 
--- ==========================================
--- 2. إنشاء الجداول الأساسية (إذا لم تكن موجودة)
--- ==========================================
-
+-- إنشاء جدول البروفايلات (إذا لم يكن موجوداً)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name TEXT,
   phone TEXT UNIQUE,
   role TEXT DEFAULT 'teacher', -- 'admin' or 'teacher'
   gender TEXT DEFAULT 'male',
-  is_approved BOOLEAN DEFAULT false, -- افتراضياً معلق
+  is_approved BOOLEAN DEFAULT false, -- الحالة الافتراضية معلق
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- إنشاء جدول أكواد التفعيل
 CREATE TABLE IF NOT EXISTS public.activation_codes (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   code TEXT UNIQUE NOT NULL,
@@ -34,50 +29,45 @@ CREATE TABLE IF NOT EXISTS public.activation_codes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================
--- 3. تفعيل سياسات الحماية (RLS)
--- ==========================================
-
+-- تفعيل الحماية على مستوى الصف
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY;
 
--- دالة التحقق من المدير
+-- دوال التحقق المتقدمة
 CREATE OR REPLACE FUNCTION public.is_admin() 
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin');
 END; $$;
 
--- دالة التحقق من المعلم المفعل
 CREATE OR REPLACE FUNCTION public.is_approved_teacher() 
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_approved = true);
 END; $$;
 
--- سياسات البروفايلات
-CREATE POLICY "Profiles access" ON public.profiles FOR ALL USING (auth.uid() = id OR public.is_admin());
-CREATE POLICY "Profiles view all" ON public.profiles FOR SELECT USING (true);
+-- إنشاء السياسات الجديدة
+CREATE POLICY "Profiles_Full_Access_Admin" ON public.profiles FOR ALL USING (public.is_admin());
+CREATE POLICY "Profiles_Self_Access" ON public.profiles FOR ALL USING (auth.uid() = id);
+CREATE POLICY "Profiles_Public_View" ON public.profiles FOR SELECT USING (true);
 
--- سياسات الطلاب (مغلقة للمعلمين غير المفعلين)
-CREATE POLICY "Students security" ON public.students FOR ALL USING (
+CREATE POLICY "Codes_Admin_Control" ON public.activation_codes FOR ALL USING (public.is_admin());
+CREATE POLICY "Codes_Select_Any" ON public.activation_codes FOR SELECT USING (true);
+CREATE POLICY "Codes_Update_Unused" ON public.activation_codes FOR UPDATE USING (NOT is_used);
+
+-- سياسات الجداول التشغيلية (الطلاب، الدروس، المدفوعات)
+-- سيتم ربطها بـ is_approved_teacher لضمان عدم ظهور بيانات للمعلم غير المفعل
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Students_Strict_Access" ON public.students FOR ALL USING (
   (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
 );
 
--- سياسات الدروس
-CREATE POLICY "Lessons security" ON public.lessons FOR ALL USING (
+ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Lessons_Strict_Access" ON public.lessons FOR ALL USING (
   (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
 );
 
--- سياسات المدفوعات
-CREATE POLICY "Payments security" ON public.payments FOR ALL USING (
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Payments_Strict_Access" ON public.payments FOR ALL USING (
   (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
 );
-
--- سياسات أكواد التفعيل
-CREATE POLICY "Codes admin access" ON public.activation_codes FOR ALL USING (public.is_admin());
-CREATE POLICY "Codes teacher view" ON public.activation_codes FOR SELECT USING (true);
-CREATE POLICY "Codes teacher use" ON public.activation_codes FOR UPDATE USING (NOT is_used);
