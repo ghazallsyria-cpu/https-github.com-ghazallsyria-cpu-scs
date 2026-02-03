@@ -24,7 +24,7 @@ const App: React.FC = () => {
     const initSession = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       setSession(currentSession);
-      if (currentSession) await fetchProfile(currentSession.user.id);
+      if (currentSession) await fetchProfile(currentSession.user.id, currentSession.user.email);
       else setLoading(false);
     };
     
@@ -32,7 +32,7 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
-      if (newSession) fetchProfile(newSession.user.id);
+      if (newSession) fetchProfile(newSession.user.id, newSession.user.email);
       else {
         setProfile(null);
         setLoading(false);
@@ -42,13 +42,28 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function fetchProfile(uid: string) {
+  async function fetchProfile(uid: string, email?: string) {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-      if (data) setProfile(data);
-      else {
+      
+      // التحقق مما إذا كان هذا هو المدير الأساسي
+      const isSuperAdmin = email === 'ghazallsyria@gmail.com';
+
+      if (data) {
+        // إذا كان المدير الأساسي ولكن دوره ليس 'admin' في القاعدة، نقوم بترقيته فوراً
+        if (isSuperAdmin && data.role !== 'admin') {
+          await supabase.from('profiles').update({ role: 'admin' }).eq('id', uid);
+          data.role = 'admin';
+        }
+        setProfile(data);
+      } else {
+        // إنشاء ملف شخصي جديد
         const { data: newProfile } = await supabase.from('profiles').insert([
-          { id: uid, full_name: 'معلم جديد', role: 'teacher' }
+          { 
+            id: uid, 
+            full_name: isSuperAdmin ? 'المدير العام' : 'معلم جديد', 
+            role: isSuperAdmin ? 'admin' : 'teacher' 
+          }
         ]).select().single();
         if (newProfile) setProfile(newProfile);
       }
@@ -77,7 +92,7 @@ const App: React.FC = () => {
         <aside className="hidden lg:flex w-72 bg-white border-l border-slate-200 flex-col p-8 sticky top-0 h-screen transition-all shadow-sm">
           <div className="flex items-center gap-3 mb-12">
             <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100">
-              <GraduationCap size={28} />
+              < GraduationCap size={28} />
             </div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">TutorTrack</h1>
           </div>
