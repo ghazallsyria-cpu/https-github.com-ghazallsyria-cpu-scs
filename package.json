@@ -1,7 +1,7 @@
 {
   "name": "tutortrack-pro",
+  "version": "1.0.0",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,16 +9,28 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "react-router-dom": "6.22.3",
-    "@supabase/supabase-js": "2.48.1",
-    "lucide-react": "0.468.0",
-    "recharts": "2.12.7"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.3",
+    "@supabase/supabase-js": "^2.48.1",
+    "lucide-react": "^0.468.0",
+    "recharts": "^2.12.7",
+    "chart.js": "^4.4.1",
+    "react-chartjs-2": "^5.2.0",
+    "firebase": "^10.8.0",
+    "html2canvas": "^1.4.1",
+    "jszip": "^3.10.1",
+    "katex": "^0.16.10",
+    "react-qr-code": "^2.0.15",
+    "animejs": "^3.2.2"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "@types/node": "^22.14.0",
+    "@types/react": "^18.2.26",
+    "@types/react-dom": "^18.2.6",
+    "@types/katex": "^0.16.7",
+    "@types/animejs": "^3.1.12",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
