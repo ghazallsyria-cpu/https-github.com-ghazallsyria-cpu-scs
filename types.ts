@@ -1,9 +1,13 @@
+
 export type UserRole = 'admin' | 'teacher';
 
 export interface Profile {
   id: string;
   full_name: string;
   role: UserRole;
+  phone: string;
+  gender?: 'male' | 'female';
+  is_approved: boolean;
   created_at: string;
 }
 

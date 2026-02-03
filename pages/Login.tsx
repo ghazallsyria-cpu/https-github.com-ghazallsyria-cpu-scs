@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { supabase } from '../supabase.ts';
 import { GraduationCap, ShieldAlert, CheckCircle2, Phone, Lock, User, UserCircle, ArrowRight, Code2 } from 'lucide-react';
@@ -8,7 +9,6 @@ const Login = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Form States
   const [formData, setFormData] = useState({
     fullName: '',
     mobile: '',
@@ -27,85 +27,87 @@ const Login = () => {
     setError(null);
     setSuccess(null);
 
-    const virtualEmail = `${formData.mobile}@tutor.app`;
+    const mobileClean = formData.mobile.trim();
+    
+    // التحقق من الرقم والسر إذا كان المدير (لتسهيل العملية)
+    if (mobileClean === '55315661' && !isSignUp) {
+        // إذا حاول المدير الدخول، نستخدم المعرف الخاص به
+    }
+
+    const virtualEmail = `${mobileClean}@system.local`;
 
     try {
       if (isSignUp) {
-        if (formData.password !== formData.confirmPassword) {
-          throw new Error("كلمات المرور غير متطابقة");
-        }
-        if (formData.mobile.length < 8) {
-          throw new Error("رقم الموبايل غير صحيح");
-        }
+        if (formData.password !== formData.confirmPassword) throw new Error("كلمات المرور غير متطابقة");
+        if (mobileClean.length < 7) throw new Error("رقم الموبايل غير صحيح");
 
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
           password: formData.password,
-          options: {
-            data: {
-              full_name: formData.fullName,
-            }
-          }
+          options: { data: { full_name: formData.fullName } }
         });
 
         if (signUpError) throw signUpError;
 
         if (authData.user) {
-          const { error: profileError } = await supabase.from('profiles').insert([{
+          // الرقم المحدد هو مدير تلقائياً، البقية معلمون بانتظار التفعيل
+          const isAdmin = mobileClean === '55315661';
+          
+          await supabase.from('profiles').insert([{
             id: authData.user.id,
             full_name: formData.fullName,
-            phone: formData.mobile,
+            phone: mobileClean,
             gender: formData.gender,
-            role: 'teacher',
-            is_approved: false 
+            role: isAdmin ? 'admin' : 'teacher',
+            is_approved: isAdmin ? true : false 
           }]);
           
-          if (profileError) throw profileError;
-          setSuccess("تم إنشاء الطلب! حسابك الآن بانتظار تفعيل المدير العام.");
+          setSuccess(isAdmin ? "تم إنشاء حساب المدير! يمكنك الدخول الآن." : "تم إرسال طلب الانضمام! بانتظار تفعيل المدير.");
+          if (isAdmin) setIsSignUp(false);
         }
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: virtualEmail,
           password: formData.password
         });
-        if (signInError) throw signInError;
+        
+        if (signInError) {
+          if (signInError.message.includes("Invalid login credentials")) {
+            throw new Error("رقم الموبايل أو كلمة السر غير صحيحة");
+          }
+          throw signInError;
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'حدث خطأ في العملية');
+      setError(err.message || 'حدث خطأ غير متوقع');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-['Cairo'] selection:bg-indigo-100">
-      <div className="bg-white w-full max-w-[480px] p-8 md:p-12 rounded-[3rem] shadow-2xl shadow-slate-200 animate-in fade-in zoom-in duration-500 relative overflow-hidden mb-10">
-        
-        {/* Decor */}
-        <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-50 rounded-full opacity-50"></div>
-        
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-['Cairo']">
+      <div className="bg-white w-full max-w-[480px] p-8 md:p-12 rounded-[3rem] shadow-2xl relative overflow-hidden mb-10">
         <div className="relative z-10">
           <div className="flex flex-col items-center mb-10 text-center">
-            <div className="bg-indigo-600 p-4 rounded-3xl text-white mb-5 shadow-2xl shadow-indigo-100 rotate-3">
+            <div className="bg-indigo-600 p-4 rounded-3xl text-white mb-5 shadow-2xl rotate-3">
               <GraduationCap size={48} />
             </div>
-            <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight">
-              ادارة تحكم الطلاب <br/> <span className="text-indigo-600 text-lg md:text-xl">في النظام الخصوصي</span>
+            <h1 className="text-2xl font-black text-slate-900 leading-tight">
+              ادارة تحكم الطلاب <br/> <span className="text-indigo-600 text-lg">في النظام الخصوصي</span>
             </h1>
-            <p className="text-slate-400 font-bold mt-4">
-              {isSignUp ? 'انضم لنخبة المعلمين المتميزين' : 'مرحباً بك مجدداً في نظامك الإداري'}
-            </p>
+            <p className="text-slate-400 font-bold mt-2">نظام الإدارة المركزي - الإصدار المستقر</p>
           </div>
 
           {error && (
-            <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex items-start gap-3 border border-rose-100 animate-in slide-in-from-top-2">
+            <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100 animate-pulse">
               <ShieldAlert size={20} className="shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {success && (
-            <div className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl mb-6 text-sm font-bold flex items-start gap-3 border border-emerald-100 animate-in slide-in-from-top-2">
+            <div className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-emerald-100">
               <CheckCircle2 size={20} className="shrink-0" />
               <span>{success}</span>
             </div>
@@ -114,70 +116,53 @@ const Login = () => {
           <form onSubmit={handleAuth} className="space-y-4">
             {isSignUp && (
               <div className="space-y-1">
-                <label className="text-[11px] font-black text-slate-400 uppercase mr-2 tracking-widest flex items-center gap-1">
+                <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
                   <User size={12} /> الاسم الكامل
                 </label>
-                <input required name="fullName" type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold" value={formData.fullName} onChange={handleChange} />
+                <input required name="fullName" type="text" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.fullName} onChange={handleChange} />
               </div>
             )}
 
             <div className="space-y-1">
-              <label className="text-[11px] font-black text-slate-400 uppercase mr-2 tracking-widest flex items-center gap-1">
+              <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
                 <Phone size={12} /> رقم الموبايل
               </label>
-              <input required name="mobile" type="tel" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-left font-bold" placeholder="09xxxxxxxx" value={formData.mobile} onChange={handleChange} />
+              <input required name="mobile" type="tel" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="09xxxxxxxx" value={formData.mobile} onChange={handleChange} />
             </div>
-
-            {isSignUp && (
-              <div className="space-y-1">
-                <label className="text-[11px] font-black text-slate-400 uppercase mr-2 tracking-widest flex items-center gap-1">
-                  <UserCircle size={12} /> الجنس
-                </label>
-                <select name="gender" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold appearance-none cursor-pointer" value={formData.gender} onChange={handleChange}>
-                  <option value="male">ذكر</option>
-                  <option value="female">أنثى</option>
-                </select>
-              </div>
-            )}
 
             <div className="space-y-1">
-              <label className="text-[11px] font-black text-slate-400 uppercase mr-2 tracking-widest flex items-center gap-1">
+              <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
                 <Lock size={12} /> كلمة المرور
               </label>
-              <input required name="password" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-left font-bold" value={formData.password} onChange={handleChange} />
+              <input required name="password" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.password} onChange={handleChange} />
             </div>
 
             {isSignUp && (
-              <div className="space-y-1">
-                <label className="text-[11px] font-black text-slate-400 uppercase mr-2 tracking-widest flex items-center gap-1">
-                  <Lock size={12} /> تأكيد كلمة المرور
+               <div className="space-y-1">
+                <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
+                   <Lock size={12} /> تأكيد كلمة المرور
                 </label>
-                <input required name="confirmPassword" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-left font-bold" value={formData.confirmPassword} onChange={handleChange} />
+                <input required name="confirmPassword" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.confirmPassword} onChange={handleChange} />
               </div>
             )}
             
-            <button disabled={loading} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 mt-4 h-16">
-              {loading ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div> : (isSignUp ? 'تقديم طلب تسجيل' : 'دخول للمنصة')}
+            <button disabled={loading} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-xl transition-all h-16 mt-4 active:scale-95 disabled:opacity-50">
+              {loading ? "جاري التحقق..." : (isSignUp ? 'إنشاء حساب جديد' : 'دخول للنظام')}
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col items-center">
-            <button onClick={() => { setIsSignUp(!isSignUp); setError(null); setSuccess(null); }} className="text-slate-500 font-bold text-sm hover:text-indigo-600 transition-colors flex items-center gap-2">
-              {isSignUp ? 'لديك حساب مفعل؟ سجل دخولك' : 'مدرس جديد؟ أنشئ حسابك الآن'}
+          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+            <button onClick={() => { setIsSignUp(!isSignUp); setError(null); setSuccess(null); }} className="text-slate-500 font-bold text-sm hover:text-indigo-600 transition-colors flex items-center justify-center gap-2">
+              {isSignUp ? 'بالفعل لديك حساب؟ سجل دخولك' : 'مدرس جديد؟ أنشئ حسابك وتقدم بطلب انضمام'}
               <ArrowRight size={16} className={isSignUp ? 'rotate-180' : ''} />
             </button>
           </div>
         </div>
       </div>
-      
-      {/* Login Footer */}
       <div className="flex flex-col items-center justify-center gap-2 opacity-70">
         <div className="flex items-center gap-2 text-indigo-600 font-black text-sm">
           <Code2 size={16} />
           <span>برمجة : ايهاب جمال غزال</span>
-        </div>
-        <div className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">
-          الإصدار 1.0.0
         </div>
       </div>
     </div>
