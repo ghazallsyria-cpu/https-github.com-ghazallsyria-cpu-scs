@@ -42,7 +42,10 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         };
       });
       setStudents(enriched);
-    } catch (e) {
+    } catch (e: any) {
+      if (e.message?.includes('infinite recursion')) {
+        showFeedback("خطأ في صلاحيات القاعدة (Recursion). يرجى تشغيل كود SQL المحدث.", "error");
+      }
       console.error(e);
     } finally {
       setLoading(false);
@@ -53,18 +56,41 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
 
   const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
     setFeedback({ msg, type });
-    setTimeout(() => setFeedback(null), 3000);
+    setTimeout(() => setFeedback(null), 7000);
   };
 
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.from('students').insert([{ ...form, agreed_amount: parseFloat(form.agreed_amount), teacher_id: uid }]);
-    if (error) showFeedback("فشل في إضافة الطالب: " + error.message, 'error');
-    else {
+    try {
+      const amount = parseFloat(form.agreed_amount) || 0;
+      const { error } = await supabase.from('students').insert([{ 
+        name: form.name,
+        address: form.address,
+        phone: form.phone,
+        grade: form.grade,
+        agreed_amount: amount,
+        teacher_id: uid 
+      }]);
+
+      if (error) {
+        if (error.message.includes('recursion')) {
+          throw new Error("خطأ برمجي في السياسات (Recursion). يرجى نسخ كود SQL الأخير وتشغيله في Supabase.");
+        }
+        if (error.message.includes('column')) {
+          throw new Error("نقص في أعمدة الجدول. يرجى تشغيل كود SQL لإنشاء عمود agreed_amount.");
+        }
+        if (error.code === '42501') {
+          throw new Error("ليس لديك صلاحية لإضافة طالب. تأكد من أن حسابك 'مفعل' من قبل المدير.");
+        }
+        throw error;
+      }
+
       showFeedback('تمت إضافة الطالب بنجاح إلى النظام');
       setIsModalOpen(false);
       setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '' });
       fetchStudents();
+    } catch (err: any) {
+      showFeedback(err.message || "حدث خطأ غير متوقع", 'error');
     }
   };
 
@@ -102,9 +128,9 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {feedback && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all animate-in slide-in-from-top-full ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
-          {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
-          {feedback.msg}
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all animate-in slide-in-from-top-full max-w-[90vw] text-center ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
+          {feedback.type === 'success' ? <CheckCircle size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />} 
+          <span>{feedback.msg}</span>
         </div>
       )}
 
