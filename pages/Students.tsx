@@ -9,6 +9,7 @@ import {
 const Students: React.FC = () => {
   const [students, setStudents] = useState<StudentStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -24,8 +25,11 @@ const Students: React.FC = () => {
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const { data: studentsData } = await supabase.from('students').select('*');
+      const { data: studentsData, error: sErr } = await supabase.from('students').select('*');
+      if (sErr) throw sErr;
+
       const { data: lessonsData } = await supabase.from('lessons').select('*');
       const { data: paymentsData } = await supabase.from('payments').select('*');
 
@@ -38,13 +42,14 @@ const Students: React.FC = () => {
           total_lessons: studentLessons.length,
           total_hours: studentLessons.reduce((sum, l) => sum + (Number(l.hours) || 0), 0),
           total_paid: studentPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
-          remaining_balance: Number(student.agreed_payment) - studentPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+          remaining_balance: Number(student.agreed_payment || 0) - studentPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
         };
       });
 
       setStudents(enriched);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Fetch error:', err);
+      setError('فشل في تحميل البيانات. يرجى التأكد من إعداد جداول Supabase بشكل صحيح.');
     } finally {
       setLoading(false);
     }
@@ -75,7 +80,6 @@ const Students: React.FC = () => {
     e.preventDefault();
     if (!selectedStudent) return;
     
-    // التحقق من صحة البيانات
     const hoursNum = parseFloat(lessonForm.hours);
     if (isNaN(hoursNum) || hoursNum <= 0) {
       alert('يرجى إدخال عدد ساعات صحيح');
@@ -90,22 +94,27 @@ const Students: React.FC = () => {
         notes: lessonForm.notes || ''
       }]);
       
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       setIsLessonModalOpen(false);
       setLessonForm({ lesson_date: new Date().toISOString().split('T')[0], hours: '', notes: '' });
       fetchStudents();
       alert('✅ تم تسجيل الحصة بنجاح!');
     } catch (err: any) { 
-      console.error('Full Error Object:', err);
-      alert(`فشل الإضافة: ${err.message || 'تأكد من إنشاء جدول lessons في Supabase بالأعمدة الصحيحة'}`);
+      alert(`فشل الإضافة: ${err.message || 'تأكد من إنشاء جدول lessons في Supabase'}`);
     }
   };
 
-  const filteredStudents = students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredStudents = students.filter(s => (s.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
+
+  if (error) return (
+    <div className="flex flex-col items-center justify-center p-20 text-center">
+      <AlertCircle size={48} className="text-rose-500 mb-4" />
+      <h2 className="text-xl font-black text-slate-900 mb-2">حدث خطأ في الاتصال</h2>
+      <p className="text-slate-500 mb-6 font-bold">{error}</p>
+      <button onClick={fetchStudents} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold">إعادة المحاولة</button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -137,7 +146,7 @@ const Students: React.FC = () => {
             <div key={student.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
               <div className="flex justify-between items-start mb-4">
                 <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 font-black text-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                  {student.name.charAt(0)}
+                  {student.name?.charAt(0) || '?'}
                 </div>
                 <button 
                   onClick={() => { setSelectedStudent(student); setIsLessonModalOpen(true); }} 
@@ -150,8 +159,8 @@ const Students: React.FC = () => {
               <p className="text-sm text-indigo-600 font-bold mb-4">{student.grade || 'بدون صف'}</p>
               
               <div className="space-y-2 mb-6 text-sm text-slate-600">
-                <div className="flex items-center gap-2 font-medium"><MapPin size={16} className="text-slate-400"/> <span className="truncate">{student.address}</span></div>
-                <div className="flex items-center gap-2 font-medium"><Phone size={16} className="text-slate-400"/> <span>{student.phone}</span></div>
+                <div className="flex items-center gap-2 font-medium"><MapPin size={16} className="text-slate-400"/> <span className="truncate">{student.address || 'لا يوجد عنوان'}</span></div>
+                <div className="flex items-center gap-2 font-medium"><Phone size={16} className="text-slate-400"/> <span>{student.phone || 'بدون هاتف'}</span></div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
@@ -174,7 +183,7 @@ const Students: React.FC = () => {
         )}
       </div>
 
-      {/* مودال إضافة طالب */}
+      {/* مودالات (الإضافة والحصة) تبقى كما هي مع التأكد من Optional Chaining */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white w-full max-w-md rounded-3xl p-8 relative animate-in zoom-in duration-200">
@@ -211,7 +220,6 @@ const Students: React.FC = () => {
         </div>
       )}
 
-      {/* مودال تسجيل حصة */}
       {isLessonModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white w-full max-w-md rounded-3xl p-8 relative animate-in zoom-in duration-200 shadow-2xl">

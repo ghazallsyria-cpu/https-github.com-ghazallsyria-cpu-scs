@@ -26,33 +26,32 @@ const Dashboard: React.FC = () => {
   });
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const studentsReq = await supabase.from('students').select('*', { count: 'exact' });
-        const lessonsReq = await supabase.from('lessons').select('*');
-        const paymentsReq = await supabase.from('payments').select('amount');
+        const { data: studentsData, error: sErr } = await supabase.from('students').select('*', { count: 'exact' });
+        if (sErr) throw sErr;
 
-        const studentsData = studentsReq.data || [];
-        const lessonsData = lessonsReq.data || [];
-        const paymentsData = paymentsReq.data || [];
+        const { data: lessonsData } = await supabase.from('lessons').select('*');
+        const { data: paymentsData } = await supabase.from('payments').select('amount');
 
-        const totalHours = lessonsData.reduce((sum, l) => sum + Number(l.hours), 0);
-        const totalIncome = paymentsData.reduce((sum, p) => sum + Number(p.amount), 0);
-        const totalAgreed = studentsData.reduce((sum, s) => sum + Number(s.agreed_payment), 0);
+        const totalHours = (lessonsData || []).reduce((sum, l) => sum + (Number(l.hours) || 0), 0);
+        const totalIncome = (paymentsData || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        const totalAgreed = (studentsData || []).reduce((sum, s) => sum + (Number(s.agreed_payment) || 0), 0);
         
         setStats({
-          totalStudents: studentsReq.count || 0,
-          totalLessons: lessonsData.length,
+          totalStudents: studentsData?.length || 0,
+          totalLessons: (lessonsData || []).length,
           totalHours,
           totalIncome,
           pendingPayments: Math.max(0, totalAgreed - totalIncome)
         });
 
         const monthlyData: any = {};
-        lessonsData.forEach(lesson => {
-          const date = new Date(lesson.lesson_date); // استخدام الاسم الجديد
+        (lessonsData || []).forEach(lesson => {
+          const date = new Date(lesson.lesson_date);
           if (isNaN(date.getTime())) return;
           const m = date.toLocaleString('ar-EG', { month: 'short' });
           monthlyData[m] = (monthlyData[m] || 0) + Number(lesson.hours);
@@ -60,7 +59,12 @@ const Dashboard: React.FC = () => {
         
         const formattedData = Object.entries(monthlyData).map(([name, hours]) => ({ name, hours }));
         setChartData(formattedData.length > 0 ? formattedData : [{ name: 'لا بيانات', hours: 0 }]);
-      } catch (err) { console.error(err); } finally { setLoading(false); }
+      } catch (err: any) { 
+        console.error('Dashboard fetch error:', err);
+        setError('تعذر الاتصال بقاعدة البيانات.');
+      } finally { 
+        setLoading(false); 
+      }
     };
     fetchData();
   }, []);
@@ -69,6 +73,14 @@ const Dashboard: React.FC = () => {
     <div className="p-20 text-center space-y-4">
       <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
       <p className="text-slate-500 font-bold">جاري تحميل لوحة التحكم...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="p-20 text-center">
+      <AlertCircle size={48} className="text-rose-500 mx-auto mb-4" />
+      <p className="text-slate-800 font-black text-xl mb-2">خطأ في التحميل</p>
+      <p className="text-slate-500 font-bold">{error}</p>
     </div>
   );
 
@@ -88,7 +100,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-        <h3 className="text-xl font-black text-slate-900 mb-8">نشاط التدريس (ساعات شهرياً)</h3>
+        <h3 className="text-xl font-black text-slate-900 mb-8 text-right">نشاط التدريس (ساعات شهرياً)</h3>
         <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
