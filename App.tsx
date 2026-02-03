@@ -59,21 +59,15 @@ const App: React.FC = () => {
 
   async function fetchProfile(uid: string) {
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
       
+      if (error) throw error;
+
       if (data) {
         setProfile(data);
       } else {
-        // إنشاء بروفايل تلقائي إذا لم يوجد
-        const { data: newProfile } = await supabase.from('profiles').insert([
-          { 
-            id: uid, 
-            full_name: 'مستخدم جديد', 
-            role: 'teacher',
-            is_approved: false
-          }
-        ]).select().single();
-        if (newProfile) setProfile(newProfile);
+        // إذا لم يوجد بروفايل (حالة نادرة)، نحاول الانتظار قليلاً أو إعادة التوجيه
+        console.warn("Profile not found for UID:", uid);
       }
     } catch (e) {
       console.error("Profile Error:", e);
@@ -91,7 +85,6 @@ const App: React.FC = () => {
 
   if (!session) return <Login />;
 
-  // إذا كان المستخدم معلماً وغير مفعل بعد، تظهر له رسالة الانتظار
   if (profile && profile.role === 'teacher' && !profile.is_approved) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-['Cairo']">
@@ -126,7 +119,7 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100">
               < GraduationCap size={28} />
             </div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight leading-tight">ادارة تحكم الطلاب</h1>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight leading-tight">ادارة الطلاب</h1>
           </div>
           
           <nav className="flex-1 space-y-2 overflow-y-auto pr-2">
@@ -152,7 +145,6 @@ const App: React.FC = () => {
           </button>
         </aside>
 
-        {/* باقي الكود المتطابق مع النسخة السابقة */}
         <main className="flex-1 min-w-0 flex flex-col relative h-screen overflow-hidden">
           <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40 flex-shrink-0">
             <div className="flex items-center gap-4">
