@@ -1,57 +1,30 @@
 
 -- ==========================================
--- 1. جداول النظام الأساسية
+-- 1. تنظيف السياسات القديمة لتجنب الأخطاء
+-- ==========================================
+DROP POLICY IF EXISTS "Profiles access" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles view all" ON public.profiles;
+DROP POLICY IF EXISTS "Students security" ON public.students;
+DROP POLICY IF EXISTS "Lessons security" ON public.lessons;
+DROP POLICY IF EXISTS "Payments security" ON public.payments;
+DROP POLICY IF EXISTS "Codes admin access" ON public.activation_codes;
+DROP POLICY IF EXISTS "Codes teacher view" ON public.activation_codes;
+DROP POLICY IF EXISTS "Codes teacher use" ON public.activation_codes;
+
+-- ==========================================
+-- 2. إنشاء الجداول الأساسية (إذا لم تكن موجودة)
 -- ==========================================
 
--- جدول البروفايلات (المعلمين والمديرين)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name TEXT,
   phone TEXT UNIQUE,
   role TEXT DEFAULT 'teacher', -- 'admin' or 'teacher'
   gender TEXT DEFAULT 'male',
-  is_approved BOOLEAN DEFAULT false, -- الحالة الافتراضية معلق
+  is_approved BOOLEAN DEFAULT false, -- افتراضياً معلق
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- جدول الطلاب
-CREATE TABLE IF NOT EXISTS public.students (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  address TEXT,
-  phone TEXT,
-  grade TEXT,
-  agreed_amount NUMERIC DEFAULT 0,
-  is_hourly BOOLEAN DEFAULT false,
-  price_per_hour NUMERIC DEFAULT 0,
-  is_completed BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- جدول الدروس
-CREATE TABLE IF NOT EXISTS public.lessons (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
-  lesson_date DATE DEFAULT CURRENT_DATE,
-  hours NUMERIC DEFAULT 1,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- جدول المدفوعات
-CREATE TABLE IF NOT EXISTS public.payments (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
-  amount NUMERIC NOT NULL,
-  payment_date DATE DEFAULT CURRENT_DATE,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- جدول أكواد التفعيل
 CREATE TABLE IF NOT EXISTS public.activation_codes (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   code TEXT UNIQUE NOT NULL,
@@ -62,7 +35,7 @@ CREATE TABLE IF NOT EXISTS public.activation_codes (
 );
 
 -- ==========================================
--- 2. تفعيل سياسات الحماية (RLS)
+-- 3. تفعيل سياسات الحماية (RLS)
 -- ==========================================
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -89,7 +62,7 @@ END; $$;
 CREATE POLICY "Profiles access" ON public.profiles FOR ALL USING (auth.uid() = id OR public.is_admin());
 CREATE POLICY "Profiles view all" ON public.profiles FOR SELECT USING (true);
 
--- سياسات الطلاب
+-- سياسات الطلاب (مغلقة للمعلمين غير المفعلين)
 CREATE POLICY "Students security" ON public.students FOR ALL USING (
   (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
 );

@@ -23,7 +23,7 @@ const Footer: React.FC = () => (
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 1.3.0 &copy; {new Date().getFullYear()}
+        الإصدار 1.3.1 &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
@@ -61,6 +61,7 @@ const App: React.FC = () => {
     setActLoading(true);
     setActError('');
     try {
+      // 1. التحقق من صحة الكود
       const { data: codeData, error: codeErr } = await supabase
         .from('activation_codes')
         .select('*')
@@ -70,12 +71,12 @@ const App: React.FC = () => {
 
       if (codeErr) throw codeErr;
       if (!codeData) {
-        setActError('كود تفعيل غير صحيح أو تم استخدامه مسبقاً');
+        setActError('كود التفعيل غير صحيح أو تم استخدامه مسبقاً');
         setActLoading(false);
         return;
       }
 
-      // تحديث البروفايل
+      // 2. تحديث البروفايل ليصبح مفعلاً
       const { error: profErr } = await supabase
         .from('profiles')
         .update({ is_approved: true })
@@ -83,15 +84,16 @@ const App: React.FC = () => {
 
       if (profErr) throw profErr;
 
-      // وسم الكود كمستخدم
+      // 3. وسم الكود كمستخدم لمنع إعادة استخدامه
       await supabase
         .from('activation_codes')
         .update({ is_used: true, used_by: session.user.id })
         .eq('id', codeData.id);
 
+      // 4. تحديث حالة البروفايل محلياً للدخول
       await fetchProfile(session.user.id);
     } catch (e: any) {
-      setActError('حدث خطأ: ' + e.message);
+      setActError('حدث خطأ أثناء التفعيل: ' + e.message);
     } finally {
       setActLoading(false);
     }
@@ -126,46 +128,47 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-      <p className="font-bold text-slate-600 text-lg">جاري تحميل النظام...</p>
+      <p className="font-bold text-slate-600 text-lg">جاري التحقق من الصلاحيات...</p>
     </div>
   );
 
   if (!session) return <Login />;
 
+  // واجهة "الحساب المعلق" للمدرسين غير المعتمدين
   if (profile && profile.role === 'teacher' && !profile.is_approved) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-['Cairo'] text-center">
         <div className="bg-white p-10 md:p-14 rounded-[3.5rem] shadow-2xl max-w-xl border border-slate-100 relative overflow-hidden group">
-           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 opacity-50 group-hover:scale-110 transition-transform"></div>
+           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 opacity-50 group-hover:scale-110 transition-transform duration-700"></div>
            
-           <div className="bg-amber-100 w-24 h-24 rounded-3xl flex items-center justify-center text-amber-600 mx-auto mb-8 shadow-inner rotate-3">
+           <div className="bg-amber-100 w-24 h-24 rounded-3xl flex items-center justify-center text-amber-600 mx-auto mb-8 shadow-inner rotate-3 transition-transform group-hover:rotate-0">
              <ShieldAlert size={48} />
            </div>
            
-           <h1 className="text-3xl font-black text-slate-900 mb-4">حسابك بانتظار التفعيل</h1>
+           <h1 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">حسابك بانتظار التنشيط</h1>
            <p className="text-slate-500 font-bold leading-relaxed mb-10">
-             مرحباً <span className="text-indigo-600">{profile.full_name}</span>. تم استلام طلبك وهو الآن قيد المراجعة. لتفعيل حسابك، يرجى إدخال **كود التفعيل** الذي استلمته من الإدارة.
+             مرحباً <span className="text-indigo-600">{profile.full_name}</span>. حسابك غير مفعل حالياً. لتشغيل النظام، يرجى إدخال **كود التفعيل** الذي أرسله إليك المدير.
            </p>
 
            <div className="space-y-4 bg-slate-50 p-8 rounded-[2.5rem] border border-slate-200 mb-8 shadow-sm">
               <div className="flex items-center gap-2 mb-2 text-indigo-600 font-black text-xs uppercase tracking-widest">
                 <KeyRound size={16} />
-                <span>إدخال كود التنشيط</span>
+                <span>أدخل الكود المستلم</span>
               </div>
               <input 
                 type="text" 
-                placeholder="أدخل الكود هنا..." 
-                className="w-full p-5 bg-white border-2 border-slate-100 rounded-2xl text-center font-black uppercase tracking-[0.3em] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all text-xl"
+                placeholder="مثال: ABC123XYZ" 
+                className="w-full p-5 bg-white border-2 border-slate-100 rounded-2xl text-center font-black uppercase tracking-[0.3em] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all text-2xl"
                 value={activationCode}
                 onChange={e => setActivationCode(e.target.value)}
               />
-              {actError && <p className="text-rose-600 text-[10px] font-black bg-rose-50 py-2 rounded-lg">{actError}</p>}
+              {actError && <p className="text-rose-600 text-[10px] font-black bg-rose-50 py-3 rounded-xl border border-rose-100">{actError}</p>}
               <button 
                 onClick={handleUseCode}
                 disabled={actLoading || !activationCode}
                 className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 active:scale-95 flex items-center justify-center gap-3"
               >
-                {actLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><CheckCircle2 size={20} /> تنشيط الحساب الآن</>}
+                {actLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><CheckCircle2 size={20} /> تفعيل الحساب الآن</>}
               </button>
            </div>
 
