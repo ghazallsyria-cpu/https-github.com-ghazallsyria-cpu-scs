@@ -1,23 +1,37 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const getEnv = (name: string): string => {
+/**
+ * دالة مساعدة للوصول الآمن لمتغيرات البيئة
+ * تحاول القراءة من Vite (import.meta.env) أو من البيئة العالمية (process.env)
+ * وتتجنب الأخطاء في حال كان الكائن غير معرف
+ */
+const safeGetEnv = (key: string): string => {
   try {
-    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-      return (import.meta as any).env[name] || '';
+    // محاولة الوصول لمتغيرات Vite
+    const metaEnv = (import.meta as any).env;
+    if (metaEnv && metaEnv[key]) {
+      return metaEnv[key];
     }
-    if (typeof process !== 'undefined' && process.env) {
-      return process.env[name] || '';
+    
+    // محاولة الوصول لمتغيرات Node/Process (لبيئات البناء أو الاختبار)
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      return process.env[key] as string;
     }
-  } catch (e) {}
+  } catch (e) {
+    // في حال حدوث خطأ في الوصول للميتا
+  }
   return '';
 };
 
-const SUPABASE_URL = getEnv('VITE_SUPABASE_URL');
-const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY');
+const SUPABASE_URL = safeGetEnv('VITE_SUPABASE_URL');
+const SUPABASE_ANON_KEY = safeGetEnv('VITE_SUPABASE_ANON_KEY');
 
+// عرض تحذير في وحدة التحكم إذا كانت البيانات مفقودة
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn('Supabase credentials missing. Check Environment Variables.');
+  console.warn(
+    'تنبيه: بيانات Supabase غير مكتملة. تأكد من ضبط VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY في متغيرات البيئة.'
+  );
 }
 
 export const supabase = createClient(
