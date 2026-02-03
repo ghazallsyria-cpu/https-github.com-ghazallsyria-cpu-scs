@@ -19,6 +19,8 @@ export interface Student {
   phone: string;
   grade: string;
   agreed_amount: number;
+  is_hourly: boolean;
+  price_per_hour: number;
   is_completed: boolean;
   created_at: string;
 }
@@ -47,5 +49,6 @@ export interface StudentStats extends Student {
   total_lessons: number;
   total_hours: number;
   total_paid: number;
+  expected_income: number;
   remaining_balance: number;
 }

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.ts';
-import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User, AlertCircle, History, Trash2, Calendar, FileText } from 'lucide-react';
+import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User, AlertCircle, History, Trash2, Calendar, FileText, Clock } from 'lucide-react';
 
 const Payments = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<any[]>([]);
@@ -25,23 +25,36 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
     try {
       let qStds = supabase.from('students').select('*, profiles:teacher_id(full_name)');
       let qPays = supabase.from('payments').select('*, students(name)');
+      let qLsns = supabase.from('lessons').select('student_id, hours');
       
       if (!isAdmin) {
         qStds = qStds.eq('teacher_id', uid);
         qPays = qPays.eq('teacher_id', uid);
+        qLsns = qLsns.eq('teacher_id', uid);
       }
       
-      const [{ data: stds }, { data: pays }] = await Promise.all([qStds, qPays]);
+      const [{ data: stds }, { data: pays }, { data: lsns }] = await Promise.all([qStds, qPays, qLsns]);
       
       setAllPayments(pays || []);
 
       const enriched = (stds || []).map(s => {
         const studentPayments = (pays || []).filter(p => p.student_id === s.id);
+        const studentLessons = (lsns || []).filter(l => l.student_id === s.id);
+        
         const totalPaid = studentPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+        const totalHours = studentLessons.reduce((acc, l) => acc + Number(l.hours), 0);
+        
+        // حساب المبلغ المتوقع بناءً على نوع الطالب
+        const expectedIncome = s.is_hourly 
+          ? (totalHours * Number(s.price_per_hour)) 
+          : Number(s.agreed_amount);
+
         return { 
           ...s, 
           totalPaid, 
-          balance: Number(s.agreed_amount) - totalPaid,
+          totalHours,
+          expectedIncome,
+          balance: expectedIncome - totalPaid,
           paymentsCount: studentPayments.length 
         };
       });
@@ -125,8 +138,9 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
               <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs">
                 <th className="p-6 font-black uppercase tracking-widest">الطالب</th>
                 {isAdmin && <th className="p-6 font-black uppercase tracking-widest">المعلم</th>}
-                <th className="p-6 font-black uppercase tracking-widest">الاتفاق المالي</th>
-                <th className="p-6 font-black uppercase tracking-widest">المسدد حتى الآن</th>
+                <th className="p-6 font-black uppercase tracking-widest">نوع المحاسبة</th>
+                <th className="p-6 font-black uppercase tracking-widest">المستحق الحالي</th>
+                <th className="p-6 font-black uppercase tracking-widest">المسدد</th>
                 <th className="p-6 font-black uppercase tracking-widest">المتبقي (دين)</th>
                 <th className="p-6 font-black uppercase tracking-widest text-center">الإجراءات</th>
               </tr>
@@ -152,7 +166,19 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
                       </div>
                     </td>
                   )}
-                  <td className="p-6 font-bold text-slate-600">${Number(s.agreed_amount).toLocaleString()}</td>
+                  <td className="p-6">
+                    <div className="flex items-center gap-2">
+                      {s.is_hourly ? (
+                        <span className="flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black"><Clock size={12}/> ساعة</span>
+                      ) : (
+                        <span className="flex items-center gap-1 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black"><Calendar size={12}/> فصلي</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-6 font-bold text-slate-600">
+                    ${s.expectedIncome.toLocaleString()}
+                    {s.is_hourly && <span className="text-[10px] block text-slate-400 font-medium">({s.totalHours} ساعة × {s.price_per_hour})</span>}
+                  </td>
                   <td className="p-6">
                     <div className="flex items-center gap-2 font-black text-emerald-600">
                       <ArrowDownRight size={14}/>
@@ -176,7 +202,7 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
               ))}
               {students.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={isAdmin ? 6 : 5} className="p-20 text-center font-bold text-slate-400 italic">لا يوجد طلاب مسجلين لعرض بياناتهم المالية.</td>
+                  <td colSpan={isAdmin ? 7 : 6} className="p-20 text-center font-bold text-slate-400 italic">لا يوجد طلاب مسجلين لعرض بياناتهم المالية.</td>
                 </tr>
               )}
             </tbody>
@@ -244,8 +270,8 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
               {/* إحصائيات مصغرة */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">إجمالي المبلغ المتفق عليه</p>
-                  <p className="text-2xl font-black text-slate-900">${selectedStudent.agreed_amount.toLocaleString()}</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">إجمالي المبلغ المستحق</p>
+                  <p className="text-2xl font-black text-slate-900">${selectedStudent.expectedIncome.toLocaleString()}</p>
                 </div>
                 <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100">
                   <p className="text-[10px] font-black text-emerald-600 uppercase mb-2 tracking-widest">المبلغ المسدد إجمالاً</p>

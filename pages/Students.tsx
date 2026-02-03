@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.ts';
 import { StudentStats } from '../types.ts';
-import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, X, AlertCircle, Users, Edit3 } from 'lucide-react';
+import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, X, AlertCircle, Users, Edit3, Clock, DollarSign } from 'lucide-react';
 
 const Students = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<(StudentStats & { profiles?: { full_name: string } })[]>([]);
@@ -13,7 +13,10 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   
-  const [form, setForm] = useState({ name: '', address: '', phone: '', grade: '', agreed_amount: '' });
+  const [form, setForm] = useState({ 
+    name: '', address: '', phone: '', grade: '', 
+    agreed_amount: '0', is_hourly: false, price_per_hour: '0' 
+  });
   const [lessonForm, setLessonForm] = useState({ lesson_date: new Date().toISOString().split('T')[0], hours: '1', notes: '' });
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
@@ -44,17 +47,26 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       const { data: lsns, error: lErr } = await supabase.from('lessons').select('student_id, hours');
       if (lErr) throw lErr;
 
+      const { data: pays, error: pErr } = await supabase.from('payments').select('student_id, amount');
+      if (pErr) throw pErr;
+
       const enriched = (stds || []).map(s => {
         const studentLessons = (lsns || []).filter(l => l.student_id === s.id);
+        const studentPayments = (pays || []).filter(p => p.student_id === s.id);
         const profileData = Array.isArray(s.profiles) ? s.profiles[0] : s.profiles;
+        
+        const totalHours = studentLessons.reduce((acc, l) => acc + Number(l.hours), 0);
+        const totalPaid = studentPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+        const expectedIncome = s.is_hourly ? (totalHours * Number(s.price_per_hour)) : Number(s.agreed_amount);
         
         return {
           ...s,
           profiles: profileData,
           total_lessons: studentLessons.length,
-          total_hours: studentLessons.reduce((acc, l) => acc + Number(l.hours), 0),
-          total_paid: 0,
-          remaining_balance: 0
+          total_hours: totalHours,
+          total_paid: totalPaid,
+          expected_income: expectedIncome,
+          remaining_balance: expectedIncome - totalPaid
         };
       });
       
@@ -77,14 +89,16 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         address: form.address,
         phone: form.phone,
         grade: form.grade,
-        agreed_amount: parseFloat(form.agreed_amount) || 0,
+        agreed_amount: form.is_hourly ? 0 : (parseFloat(form.agreed_amount) || 0),
+        is_hourly: form.is_hourly,
+        price_per_hour: form.is_hourly ? (parseFloat(form.price_per_hour) || 0) : 0,
         teacher_id: uid 
       }]);
 
       if (error) throw error;
       showFeedback('تمت إضافة الطالب بنجاح');
       setIsModalOpen(false);
-      setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '' });
+      setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '0', is_hourly: false, price_per_hour: '0' });
       fetchStudents();
     } catch (err: any) {
       showFeedback(err.message, 'error');
@@ -100,7 +114,9 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         address: form.address,
         phone: form.phone,
         grade: form.grade,
-        agreed_amount: parseFloat(form.agreed_amount) || 0
+        agreed_amount: form.is_hourly ? 0 : (parseFloat(form.agreed_amount) || 0),
+        is_hourly: form.is_hourly,
+        price_per_hour: form.is_hourly ? (parseFloat(form.price_per_hour) || 0) : 0,
       }).eq('id', selectedStudent.id);
 
       if (error) throw error;
@@ -146,7 +162,9 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       address: student.address,
       phone: student.phone,
       grade: student.grade,
-      agreed_amount: student.agreed_amount.toString()
+      agreed_amount: student.agreed_amount?.toString() || '0',
+      is_hourly: student.is_hourly,
+      price_per_hour: student.price_per_hour?.toString() || '0'
     });
     setIsEditModalOpen(true);
   };
@@ -175,13 +193,13 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
             <input 
               type="text" 
               placeholder="بحث..." 
-              className="w-full pr-12 pl-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm font-bold"
+              className="w-full pr-12 pl-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm font-bold text-slate-700"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <button 
-            onClick={() => { setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '' }); setIsModalOpen(true); }} 
+            onClick={() => { setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '0', is_hourly: false, price_per_hour: '0' }); setIsModalOpen(true); }} 
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black shadow-xl transition-all active:scale-95"
           >
             إضافة طالب
@@ -194,10 +212,16 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredStudents.map(s => (
-            <div key={s.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group hover:shadow-xl transition-all">
+            <div key={s.id} className={`bg-white p-8 rounded-[2.5rem] border transition-all relative group hover:shadow-xl ${s.is_hourly ? 'border-amber-200' : 'border-slate-200'}`}>
               {isAdmin && s.profiles && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-1 rounded-full text-[10px] font-black shadow-lg">
                   المعلم: {s.profiles.full_name}
+                </div>
+              )}
+
+              {s.is_hourly && (
+                <div className="absolute top-8 left-8 bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
+                  <Clock size={12} /> نظام ساعة
                 </div>
               )}
               
@@ -206,9 +230,9 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
                   {s.name.charAt(0)}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => openEditModal(s)} className="p-3 bg-slate-50 rounded-xl hover:bg-emerald-600 hover:text-white transition-all" title="تعديل"><Edit3 size={18}/></button>
-                  <button onClick={() => { setSelectedStudent(s); setIsLessonModalOpen(true); }} className="p-3 bg-slate-50 rounded-xl hover:bg-indigo-600 hover:text-white transition-all" title="حصة جديدة"><Calendar size={18}/></button>
-                  <button onClick={() => handleDeleteStudent(s.id)} className="p-3 bg-slate-50 rounded-xl hover:bg-rose-600 hover:text-white transition-all" title="حذف"><Trash2 size={18}/></button>
+                  <button onClick={() => openEditModal(s)} className="p-3 bg-slate-50 rounded-xl hover:bg-emerald-600 hover:text-white transition-all text-slate-400" title="تعديل"><Edit3 size={18}/></button>
+                  <button onClick={() => { setSelectedStudent(s); setIsLessonModalOpen(true); }} className="p-3 bg-slate-50 rounded-xl hover:bg-indigo-600 hover:text-white transition-all text-slate-400" title="حصة جديدة"><Calendar size={18}/></button>
+                  <button onClick={() => handleDeleteStudent(s.id)} className="p-3 bg-slate-50 rounded-xl hover:bg-rose-600 hover:text-white transition-all text-slate-400" title="حذف"><Trash2 size={18}/></button>
                 </div>
               </div>
 
@@ -230,8 +254,10 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
                    <p className="font-black text-slate-900">{s.total_hours}</p>
                  </div>
                  <div className="text-center">
-                   <p className="text-[10px] text-slate-400 font-black">الاتفاق</p>
-                   <p className="font-black text-emerald-600">${s.agreed_amount}</p>
+                   <p className="text-[10px] text-slate-400 font-black">{s.is_hourly ? 'سعر الساعة' : 'الاتفاق'}</p>
+                   <p className={`font-black ${s.is_hourly ? 'text-amber-600' : 'text-emerald-600'}`}>
+                     ${s.is_hourly ? s.price_per_hour : s.agreed_amount}
+                   </p>
                  </div>
               </div>
             </div>
@@ -250,27 +276,54 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <form onSubmit={isEditModalOpen ? handleUpdateStudent : handleAddStudent} className="bg-white w-full max-w-lg p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
             <button type="button" onClick={() => { setIsModalOpen(false); setIsEditModalOpen(false); }} className="absolute top-8 left-8 text-slate-400 hover:text-rose-500 transition-colors"><X /></button>
-            <h2 className="text-2xl font-black mb-8">{isEditModalOpen ? 'تعديل بيانات الطالب' : 'إضافة طالب جديد'}</h2>
+            <h2 className="text-2xl font-black mb-8 text-slate-900">{isEditModalOpen ? 'تعديل بيانات الطالب' : 'إضافة طالب جديد'}</h2>
+            
+            <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl mb-8 w-fit mx-auto">
+              <button 
+                type="button" 
+                onClick={() => setForm({...form, is_hourly: false})} 
+                className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${!form.is_hourly ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+              >
+                نظام الاتفاق الفصلي
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setForm({...form, is_hourly: true})} 
+                className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${form.is_hourly ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-400'}`}
+              >
+                نظام الساعة
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">الاسم الكامل</label>
-                <input required placeholder="مثال: أحمد محمد" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                <input required placeholder="الاسم" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">الصف الدراسي</label>
-                <input required placeholder="مثال: ثالث ثانوي" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})} />
+                <input required placeholder="مثال: ثالث ثانوي" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})} />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">رقم الهاتف</label>
-                <input required placeholder="09xxxxxxx" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+                <input required placeholder="09xxxxxxx" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 text-left" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">مبلغ الاتفاق ($)</label>
-                <input required type="number" placeholder="0" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} />
-              </div>
+              
+              {!form.is_hourly ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">مبلغ الاتفاق الكامل ($)</label>
+                  <input required type="number" placeholder="0" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">سعر الساعة ($)</label>
+                  <input required type="number" placeholder="0" className="w-full p-4 bg-amber-50 border border-amber-200 rounded-2xl outline-none focus:ring-2 focus:ring-amber-500 font-bold text-amber-700" value={form.price_per_hour} onChange={e => setForm({...form, price_per_hour: e.target.value})} />
+                </div>
+              )}
+
               <div className="space-y-1 md:col-span-2">
                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">العنوان</label>
-                <input required placeholder="المدينة، الشارع..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+                <input required placeholder="المدينة، الشارع..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
               </div>
             </div>
             <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl mt-8 shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
@@ -285,18 +338,18 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <form onSubmit={handleAddLesson} className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
             <button type="button" onClick={() => setIsLessonModalOpen(false)} className="absolute top-8 left-8 text-slate-400 hover:text-rose-500 transition-colors"><X /></button>
-            <h2 className="text-xl font-black mb-6">تسجيل حصة لـ {selectedStudent?.name}</h2>
+            <h2 className="text-xl font-black mb-6 text-slate-900">تسجيل حصة لـ {selectedStudent?.name}</h2>
             <div className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">تاريخ الحصة</label>
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">تاريخ الحصة</label>
                 <input required type="date" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" value={lessonForm.lesson_date} onChange={e => setLessonForm({...lessonForm, lesson_date: e.target.value})} />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">عدد الساعات</label>
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">عدد الساعات</label>
                 <input required type="number" step="0.5" placeholder="مثال: 1.5" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" value={lessonForm.hours} onChange={e => setLessonForm({...lessonForm, hours: e.target.value})} />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">ملاحظات الدرس</label>
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">ملاحظات الدرس</label>
                 <textarea placeholder="ماذا تم إنجازه؟" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold h-32" value={lessonForm.notes} onChange={e => setLessonForm({...lessonForm, notes: e.target.value})} />
               </div>
               <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl shadow-xl active:scale-95">تأكيد الحصة</button>

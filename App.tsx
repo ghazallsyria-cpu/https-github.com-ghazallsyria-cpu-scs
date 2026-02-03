@@ -4,7 +4,7 @@ import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-ro
 import { supabase } from './supabase';
 import { Profile } from './types';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Menu, X, ShieldAlert, Code2, EyeOff 
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Menu, X, ShieldAlert, Code2, EyeOff, KeyRound, CheckCircle2 
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -23,7 +23,7 @@ const Footer: React.FC = () => (
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 1.1.0 &copy; {new Date().getFullYear()}
+        الإصدار 1.2.0 &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
@@ -34,6 +34,9 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [supervisedTeacher, setSupervisedTeacher] = useState<{id: string, name: string} | null>(null);
+  const [activationCode, setActivationCode] = useState('');
+  const [actLoading, setActLoading] = useState(false);
+  const [actError, setActError] = useState('');
 
   const fetchProfile = async (uid: string) => {
     try {
@@ -50,6 +53,48 @@ const App: React.FC = () => {
       setProfile({ role: 'teacher', is_approved: false }); 
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUseCode = async () => {
+    if (!activationCode.trim() || !session) return;
+    setActLoading(true);
+    setActError('');
+    try {
+      // 1. التحقق من الكود
+      const { data: codeData, error: codeErr } = await supabase
+        .from('activation_codes')
+        .select('*')
+        .eq('code', activationCode.trim().toUpperCase())
+        .eq('is_used', false)
+        .maybeSingle();
+
+      if (codeErr) throw codeErr;
+      if (!codeData) {
+        setActError('كود تفعيل غير صحيح أو تم استخدامه مسبقاً');
+        return;
+      }
+
+      // 2. تحديث البروفايل
+      const { error: profErr } = await supabase
+        .from('profiles')
+        .update({ is_approved: true })
+        .eq('id', session.user.id);
+
+      if (profErr) throw profErr;
+
+      // 3. وسم الكود كمستخدم
+      await supabase
+        .from('activation_codes')
+        .update({ is_used: true, used_by: session.user.id })
+        .eq('id', codeData.id);
+
+      // 4. تحديث حالة التطبيق
+      await fetchProfile(session.user.id);
+    } catch (e: any) {
+      setActError('حدث خطأ أثناء التفعيل: ' + e.message);
+    } finally {
+      setActLoading(false);
     }
   };
 
@@ -91,19 +136,42 @@ const App: React.FC = () => {
   if (profile && profile.role === 'teacher' && !profile.is_approved) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-['Cairo'] text-center">
-        <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-lg border border-slate-100">
+        <div className="bg-white p-10 md:p-14 rounded-[3rem] shadow-2xl max-w-xl border border-slate-100">
            <div className="bg-amber-100 w-24 h-24 rounded-full flex items-center justify-center text-amber-600 mx-auto mb-8">
              <ShieldAlert size={48} />
            </div>
            <h1 className="text-3xl font-black text-slate-900 mb-4">حسابك قيد المراجعة</h1>
-           <p className="text-slate-500 font-bold leading-relaxed mb-10">
-             أهلاً بك يا <span className="text-indigo-600">{profile.full_name || 'أيها المعلم'}</span>. حسابك بانتظار موافقة الإدارة العامة لتتمكن من الوصول للوحة التحكم.
+           <p className="text-slate-500 font-bold leading-relaxed mb-10 px-4">
+             أهلاً بك يا <span className="text-indigo-600">{profile.full_name}</span>. حسابك بانتظار موافقة الإدارة، أو يمكنك إدخال **كود التفعيل** أدناه لتنشيط حسابك فوراً.
            </p>
+
+           <div className="space-y-4 bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-8">
+              <div className="flex items-center gap-2 mb-2 text-indigo-600 font-black text-sm">
+                <KeyRound size={16} />
+                <span>هل لديك كود تفعيل؟</span>
+              </div>
+              <input 
+                type="text" 
+                placeholder="أدخل الكود هنا (مثال: ABCD-1234)" 
+                className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-center font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                value={activationCode}
+                onChange={e => setActivationCode(e.target.value)}
+              />
+              {actError && <p className="text-rose-600 text-[10px] font-bold">{actError}</p>}
+              <button 
+                onClick={handleUseCode}
+                disabled={actLoading || !activationCode}
+                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50"
+              >
+                {actLoading ? 'جاري التحقق...' : 'تنشيط الحساب الآن'}
+              </button>
+           </div>
+
            <button 
              onClick={() => supabase.auth.signOut()} 
-             className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-rose-600 transition-all"
+             className="text-slate-400 font-bold hover:text-rose-600 transition-all flex items-center justify-center gap-2 mx-auto"
            >
-             تسجيل الخروج
+             <LogOut size={16} /> تسجيل الخروج والعودة لاحقاً
            </button>
         </div>
         <div className="mt-10"><Footer /></div>
@@ -112,16 +180,12 @@ const App: React.FC = () => {
   }
 
   const isAdmin = profile?.role === 'admin';
-  // المعرف الفعال للبيانات: إذا كان هناك إشراف، نستخدم معرف المعلم المشرف عليه، وإلا نستخدم معرف المستخدم الحالي
   const effectiveUid = supervisedTeacher ? supervisedTeacher.id : session.user.id;
-  // الدور الفعال: إذا كان هناك إشراف، نعتبر الدور 'teacher' لعرض بيانات هذا المعلم فقط
   const effectiveRole = supervisedTeacher ? 'teacher' : profile?.role;
 
   return (
     <HashRouter>
       <div className="min-h-screen bg-slate-50 flex font-['Cairo'] overflow-hidden">
-        
-        {/* Supervision Banner */}
         {supervisedTeacher && (
           <div className="fixed top-0 inset-x-0 h-12 bg-amber-500 text-white z-[100] flex items-center justify-center gap-4 px-4 shadow-lg animate-in slide-in-from-top duration-300">
             <span className="font-black text-sm">وضع الإشراف نشط: أنت تشاهد بيانات المعلم "{supervisedTeacher.name}"</span>
@@ -134,7 +198,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Desktop Sidebar */}
         <aside className={`hidden lg:flex w-72 bg-white border-l border-slate-200 flex-col p-8 sticky top-0 h-screen shadow-sm transition-all ${supervisedTeacher ? 'pt-20' : ''}`}>
           <div className="flex items-center gap-3 mb-12">
             <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100">
@@ -142,14 +205,12 @@ const App: React.FC = () => {
             </div>
             <h1 className="text-xl font-black text-slate-900 tracking-tight">إدارة الدروس</h1>
           </div>
-          
           <nav className="flex-1 space-y-2 overflow-y-auto pr-2">
             <NavItem to="/" icon={<LayoutDashboard size={20} />} label="الرئيسية" />
             <NavItem to="/students" icon={<Users size={20} />} label="الطلاب" />
             <NavItem to="/lessons" icon={<BookOpen size={20} />} label="سجل الدروس" />
             <NavItem to="/payments" icon={<Wallet size={20} />} label="المالية" />
             <NavItem to="/statistics" icon={<BarChart3 size={20} />} label="الإحصائيات" />
-            
             {isAdmin && (
               <div className="pt-6 mt-6 border-t border-slate-100">
                 <p className="text-[11px] font-black text-slate-400 uppercase px-4 mb-3">إدارة النظام</p>
@@ -157,36 +218,22 @@ const App: React.FC = () => {
               </div>
             )}
           </nav>
-          
-          <button 
-            onClick={() => supabase.auth.signOut()} 
-            className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"
-          >
-            <LogOut size={20} /> تسجيل الخروج
-          </button>
+          <button onClick={() => supabase.auth.signOut()} className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> تسجيل الخروج</button>
         </aside>
 
         <main className="flex-1 min-w-0 flex flex-col h-screen">
           <header className={`h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 z-40 transition-all ${supervisedTeacher ? 'mt-12' : ''}`}>
-            <div className="flex items-center gap-4">
-              <div className="font-black text-slate-900 text-lg">
-                {supervisedTeacher ? `إحصائيات: ${supervisedTeacher.name}` : (isAdmin ? 'الإدارة العامة' : 'لوحة تحكم المعلم')}
-              </div>
+            <div className="font-black text-slate-900 text-lg">
+              {supervisedTeacher ? `إحصائيات: ${supervisedTeacher.name}` : (isAdmin ? 'الإدارة العامة' : 'لوحة تحكم المعلم')}
             </div>
-            
             <div className="flex items-center gap-4">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-black text-slate-900">{profile?.full_name}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  {isAdmin ? 'المدير العام' : 'معلم معتمد'}
-                </p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isAdmin ? 'المدير العام' : 'معلم معتمد'}</p>
               </div>
-              <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg">
-                {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
-              </div>
+              <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg">{profile?.full_name?.charAt(0).toUpperCase() || 'U'}</div>
             </div>
           </header>
-
           <div className="flex-1 overflow-y-auto p-6 lg:p-10 flex flex-col">
             <div className="max-w-7xl mx-auto w-full flex-grow">
               <Routes>
