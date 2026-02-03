@@ -11,7 +11,6 @@ import {
   Clock, 
   X, 
   MoreVertical,
-  ChevronRight,
   Filter,
   Users
 } from 'lucide-react';
@@ -28,9 +27,9 @@ const Students: React.FC = () => {
   const [studentForm, setStudentForm] = useState({
     name: '',
     address: '',
-    phone_number: '',
-    grade_class: '',
-    agreed_payment_amount: ''
+    phone: '',
+    grade: '',
+    agreed_payment: ''
   });
 
   const [lessonForm, setLessonForm] = useState({
@@ -48,6 +47,7 @@ const Students: React.FC = () => {
 
       if (studentsError) throw studentsError;
 
+      // Fetch lessons and payments (handles cases where tables might be empty)
       const { data: lessonsData } = await supabase.from('lessons').select('*');
       const { data: paymentsData } = await supabase.from('payments').select('*');
 
@@ -58,9 +58,9 @@ const Students: React.FC = () => {
         return {
           ...student,
           total_lessons: studentLessons.length,
-          total_hours: studentLessons.reduce((sum, l) => sum + (l.hours || 0), 0),
-          total_paid: studentPayments.reduce((sum, p) => sum + (p.amount || 0), 0),
-          remaining_balance: student.agreed_payment_amount - studentPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
+          total_hours: studentLessons.reduce((sum, l) => sum + (Number(l.hours) || 0), 0),
+          total_paid: studentPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0),
+          remaining_balance: (Number(student.agreed_payment) || 0) - studentPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
         };
       });
 
@@ -80,15 +80,19 @@ const Students: React.FC = () => {
     e.preventDefault();
     try {
       const { error } = await supabase.from('students').insert([{
-        ...studentForm,
-        agreed_payment_amount: parseFloat(studentForm.agreed_payment_amount)
+        name: studentForm.name,
+        address: studentForm.address,
+        phone: studentForm.phone,
+        grade: studentForm.grade,
+        agreed_payment: parseFloat(studentForm.agreed_payment)
       }]);
       if (error) throw error;
       setIsModalOpen(false);
-      setStudentForm({ name: '', address: '', phone_number: '', grade_class: '', agreed_payment_amount: '' });
+      setStudentForm({ name: '', address: '', phone: '', grade: '', agreed_payment: '' });
       fetchStudents();
     } catch (err) {
-      alert('Error adding student');
+      console.error(err);
+      alert('Error adding student. Make sure all tables exist in Supabase.');
     }
   };
 
@@ -107,13 +111,14 @@ const Students: React.FC = () => {
       setLessonForm({ date: new Date().toISOString().split('T')[0], hours: '', notes: '' });
       fetchStudents();
     } catch (err) {
-      alert('Error adding lesson');
+      console.error(err);
+      alert('Error adding lesson. Ensure the "lessons" table is created.');
     }
   };
 
   const filteredStudents = students.filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.grade_class.toLowerCase().includes(searchQuery.toLowerCase())
+    s.grade?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -132,7 +137,6 @@ const Students: React.FC = () => {
         </button>
       </div>
 
-      {/* Filters & Search */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -144,13 +148,8 @@ const Students: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <button className="flex items-center space-x-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50">
-          <Filter size={18} />
-          <span>Filters</span>
-        </button>
       </div>
 
-      {/* Student List */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {loading ? (
           [...Array(6)].map((_, i) => (
@@ -174,14 +173,11 @@ const Students: React.FC = () => {
                   >
                     <Plus size={18} />
                   </button>
-                  <button className="p-2 text-slate-400 hover:text-slate-600">
-                    <MoreVertical size={18} />
-                  </button>
                 </div>
               </div>
 
               <h3 className="text-xl font-bold text-slate-900 mb-1">{student.name}</h3>
-              <p className="text-indigo-600 font-medium text-sm mb-4">{student.grade_class}</p>
+              <p className="text-indigo-600 font-medium text-sm mb-4">{student.grade}</p>
 
               <div className="space-y-3 mb-6">
                 <div className="flex items-center text-slate-500 text-sm">
@@ -190,7 +186,7 @@ const Students: React.FC = () => {
                 </div>
                 <div className="flex items-center text-slate-500 text-sm">
                   <Phone size={16} className="mr-2 shrink-0" />
-                  <span>{student.phone_number}</span>
+                  <span>{student.phone}</span>
                 </div>
               </div>
 
@@ -227,80 +223,33 @@ const Students: React.FC = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="bg-white w-full max-w-md rounded-3xl p-8 relative shadow-2xl animate-in fade-in zoom-in duration-300">
-            <button 
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full"
-            >
-              <X size={20} />
-            </button>
-            
+          <div className="bg-white w-full max-w-md rounded-3xl p-8 relative shadow-2xl">
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 rounded-full"><X size={20} /></button>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">New Student</h2>
-            <p className="text-slate-500 mb-6">Enter student details to register them.</p>
-
             <form onSubmit={handleAddStudent} className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Full Name</label>
-                <input 
-                  required
-                  type="text" 
-                  placeholder="John Doe"
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={studentForm.name}
-                  onChange={e => setStudentForm({...studentForm, name: e.target.value})}
-                />
+                <input required type="text" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={studentForm.name} onChange={e => setStudentForm({...studentForm, name: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Grade / Class</label>
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="10th Grade"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={studentForm.grade_class}
-                    onChange={e => setStudentForm({...studentForm, grade_class: e.target.value})}
-                  />
+                  <input required type="text" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={studentForm.grade} onChange={e => setStudentForm({...studentForm, grade: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Agreed Payment</label>
-                  <input 
-                    required
-                    type="number" 
-                    placeholder="1000"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={studentForm.agreed_payment_amount}
-                    onChange={e => setStudentForm({...studentForm, agreed_payment_amount: e.target.value})}
-                  />
+                  <input required type="number" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={studentForm.agreed_payment} onChange={e => setStudentForm({...studentForm, agreed_payment: e.target.value})} />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Phone Number</label>
-                <input 
-                  required
-                  type="tel" 
-                  placeholder="+1 234 567 890"
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                  value={studentForm.phone_number}
-                  onChange={e => setStudentForm({...studentForm, phone_number: e.target.value})}
-                />
+                <input required type="tel" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={studentForm.phone} onChange={e => setStudentForm({...studentForm, phone: e.target.value})} />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Address</label>
-                <textarea 
-                  required
-                  placeholder="123 Street, City..."
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none min-h-[100px]"
-                  value={studentForm.address}
-                  onChange={e => setStudentForm({...studentForm, address: e.target.value})}
-                />
+                <textarea required className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none min-h-[100px]" value={studentForm.address} onChange={e => setStudentForm({...studentForm, address: e.target.value})} />
               </div>
-              <button 
-                type="submit"
-                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
-              >
-                Create Student
-              </button>
+              <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">Create Student</button>
             </form>
           </div>
         </div>
@@ -310,57 +259,25 @@ const Students: React.FC = () => {
       {isLessonModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsLessonModalOpen(false)} />
-          <div className="bg-white w-full max-w-md rounded-3xl p-8 relative shadow-2xl animate-in fade-in zoom-in duration-300">
-            <button 
-              onClick={() => setIsLessonModalOpen(false)}
-              className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full"
-            >
-              <X size={20} />
-            </button>
-            
+          <div className="bg-white w-full max-w-md rounded-3xl p-8 relative shadow-2xl">
+            <button onClick={() => setIsLessonModalOpen(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 rounded-full"><X size={20} /></button>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Record Lesson</h2>
-            <p className="text-slate-500 mb-6">Logging for {selectedStudent?.name}</p>
-
             <form onSubmit={handleAddLesson} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Date</label>
-                  <input 
-                    required
-                    type="date" 
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={lessonForm.date}
-                    onChange={e => setLessonForm({...lessonForm, date: e.target.value})}
-                  />
+                  <input required type="date" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={lessonForm.date} onChange={e => setLessonForm({...lessonForm, date: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Hours</label>
-                  <input 
-                    required
-                    type="number" 
-                    step="0.5"
-                    placeholder="1.5"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={lessonForm.hours}
-                    onChange={e => setLessonForm({...lessonForm, hours: e.target.value})}
-                  />
+                  <input required type="number" step="0.5" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={lessonForm.hours} onChange={e => setLessonForm({...lessonForm, hours: e.target.value})} />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Optional Notes</label>
-                <textarea 
-                  placeholder="Completed Chapter 4: Fractions..."
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none min-h-[100px]"
-                  value={lessonForm.notes}
-                  onChange={e => setLessonForm({...lessonForm, notes: e.target.value})}
-                />
+                <textarea className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none min-h-[100px]" value={lessonForm.notes} onChange={e => setLessonForm({...lessonForm, notes: e.target.value})} />
               </div>
-              <button 
-                type="submit"
-                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
-              >
-                Log Lesson
-              </button>
+              <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">Log Lesson</button>
             </form>
           </div>
         </div>

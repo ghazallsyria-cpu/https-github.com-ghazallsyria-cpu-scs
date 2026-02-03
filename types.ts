@@ -4,9 +4,9 @@ export interface Student {
   created_at: string;
   name: string;
   address: string;
-  phone_number: string;
-  grade_class: string;
-  agreed_payment_amount: number;
+  phone: string; // Updated from phone_number
+  grade: string; // Updated from grade_class
+  agreed_payment: number; // Updated from agreed_payment_amount
 }
 
 export interface Lesson {
