@@ -4,15 +4,15 @@ export interface Student {
   created_at: string;
   name: string;
   address: string;
-  phone: string; // Updated from phone_number
-  grade: string; // Updated from grade_class
-  agreed_payment: number; // Updated from agreed_payment_amount
+  phone: string;
+  grade: string;
+  agreed_payment: number;
 }
 
 export interface Lesson {
   id: string;
   student_id: string;
-  date: string;
+  lesson_date: string; // تم التغيير من date
   hours: number;
   notes?: string;
   created_at: string;
@@ -22,7 +22,7 @@ export interface Payment {
   id: string;
   student_id: string;
   amount: number;
-  date: string;
+  payment_date: string; // تم التغيير من date
   notes?: string;
   created_at: string;
 }

@@ -47,9 +47,9 @@ const Statistics: React.FC = () => {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const startOfSemester = new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1);
 
-        const dHours = (lessons || []).filter(l => new Date(l.date) >= startOfDay).reduce((s, l) => s + Number(l.hours), 0);
-        const mHours = (lessons || []).filter(l => new Date(l.date) >= startOfMonth).reduce((s, l) => s + Number(l.hours), 0);
-        const sHours = (lessons || []).filter(l => new Date(l.date) >= startOfSemester).reduce((s, l) => s + Number(l.hours), 0);
+        const dHours = (lessons || []).filter(l => new Date(l.lesson_date) >= startOfDay).reduce((s, l) => s + Number(l.hours), 0);
+        const mHours = (lessons || []).filter(l => new Date(l.lesson_date) >= startOfMonth).reduce((s, l) => s + Number(l.hours), 0);
+        const sHours = (lessons || []).filter(l => new Date(l.lesson_date) >= startOfSemester).reduce((s, l) => s + Number(l.hours), 0);
         const income = (payments || []).reduce((s, p) => s + Number(p.amount), 0);
 
         setStats({ dayHours: dHours, monthHours: mHours, semesterHours: sHours, totalIncome: income });
@@ -64,7 +64,7 @@ const Statistics: React.FC = () => {
         const dailyMap: any = {};
         last7Days.forEach(day => dailyMap[day] = 0);
         lessons?.forEach(l => {
-          if (dailyMap[l.date] !== undefined) dailyMap[l.date] += Number(l.hours);
+          if (dailyMap[l.lesson_date] !== undefined) dailyMap[l.lesson_date] += Number(l.hours);
         });
 
         setDailyData(Object.entries(dailyMap).map(([date, hours]) => ({ 
@@ -121,7 +121,7 @@ const Statistics: React.FC = () => {
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
           <p className="text-slate-400 text-sm font-bold mb-1">ساعات هذا الشهر</p>
           <div className="flex items-center justify-between">
             <p className="text-3xl font-black text-slate-900">{stats.monthHours}</p>
@@ -129,7 +129,7 @@ const Statistics: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
           <p className="text-slate-400 text-sm font-bold mb-1">إجمالي الفصل الدراسي</p>
           <div className="flex items-center justify-between">
             <p className="text-3xl font-black text-slate-900">{stats.semesterHours}</p>
@@ -137,7 +137,7 @@ const Statistics: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
           <p className="text-slate-400 text-sm font-bold mb-1">إجمالي الدخل المحصل</p>
           <div className="flex items-center justify-between">
             <p className="text-3xl font-black text-slate-900">${stats.totalIncome.toLocaleString()}</p>

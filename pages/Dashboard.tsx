@@ -52,7 +52,7 @@ const Dashboard: React.FC = () => {
 
         const monthlyData: any = {};
         lessonsData.forEach(lesson => {
-          const date = new Date(lesson.date);
+          const date = new Date(lesson.lesson_date); // استخدام الاسم الجديد
           if (isNaN(date.getTime())) return;
           const m = date.toLocaleString('ar-EG', { month: 'short' });
           monthlyData[m] = (monthlyData[m] || 0) + Number(lesson.hours);
