@@ -12,7 +12,7 @@ const StatCard: React.FC<{ label: string; value: string | number; icon: React.Re
   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
     <div className="flex items-center justify-between mb-4">
       <div className={`p-3 rounded-xl ${color} bg-opacity-10`}>
-        {React.cloneElement(icon as React.ReactElement<any>, { className: color })}
+        {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { className: color }) : icon}
       </div>
     </div>
     <h3 className="text-slate-500 text-sm font-bold">{label}</h3>
@@ -52,16 +52,25 @@ const Dashboard: React.FC = () => {
 
         const monthlyData: any = {};
         lessonsData.forEach(lesson => {
-          const m = new Date(lesson.date).toLocaleString('ar-EG', { month: 'short' });
+          const date = new Date(lesson.date);
+          if (isNaN(date.getTime())) return;
+          const m = date.toLocaleString('ar-EG', { month: 'short' });
           monthlyData[m] = (monthlyData[m] || 0) + Number(lesson.hours);
         });
-        setChartData(Object.entries(monthlyData).map(([name, hours]) => ({ name, hours })));
+        
+        const formattedData = Object.entries(monthlyData).map(([name, hours]) => ({ name, hours }));
+        setChartData(formattedData.length > 0 ? formattedData : [{ name: 'لا بيانات', hours: 0 }]);
       } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchData();
   }, []);
 
-  if (loading) return <div className="p-10 text-center font-black text-slate-500">جاري تحميل البيانات...</div>;
+  if (loading) return (
+    <div className="p-20 text-center space-y-4">
+      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+      <p className="text-slate-500 font-bold">جاري تحميل لوحة التحكم...</p>
+    </div>
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -74,8 +83,8 @@ const Dashboard: React.FC = () => {
         <StatCard label="إجمالي الطلاب" value={stats.totalStudents} icon={<Users size={20} />} color="text-indigo-600" />
         <StatCard label="إجمالي الحصص" value={stats.totalLessons} icon={<Calendar size={20} />} color="text-purple-600" />
         <StatCard label="ساعات التدريس" value={stats.totalHours} icon={<Clock size={20} />} color="text-emerald-600" />
-        <StatCard label="الدخل المحصل" value={`$${stats.totalIncome}`} icon={<DollarSign size={20} />} color="text-blue-600" />
-        <StatCard label="مبالغ معلقة" value={`$${stats.pendingPayments}`} icon={<AlertCircle size={20} />} color="text-rose-600" />
+        <StatCard label="الدخل المحصل" value={`$${stats.totalIncome.toLocaleString()}`} icon={<DollarSign size={20} />} color="text-blue-600" />
+        <StatCard label="مبالغ معلقة" value={`$${stats.pendingPayments.toLocaleString()}`} icon={<AlertCircle size={20} />} color="text-rose-600" />
       </div>
 
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
@@ -87,7 +96,7 @@ const Dashboard: React.FC = () => {
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} />
               <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} />
               <Tooltip contentStyle={{borderRadius: '16px', border: 'none', textAlign: 'right', fontWeight: 'bold'}} />
-              <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={4} fill="#4f46e510" />
+              <Area type="monotone" dataKey="hours" name="ساعات" stroke="#4f46e5" strokeWidth={4} fill="#4f46e510" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
