@@ -35,20 +35,44 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const fetchProfile = async (uid: string) => {
+    try {
+      // نستخدم استعلام بسيط جداً للتأكد من تجاوز أي مشاكل RLS
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, role, full_name, is_approved')
+        .eq('id', uid)
+        .maybeSingle();
+      
+      if (error) throw error;
+      setProfile(data);
+    } catch (e) {
+      console.error("Profile Fetch Error:", e);
+      // حالة افتراضية في حال فشل الجلب
+      setProfile({ role: 'teacher', is_approved: false }); 
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const initSession = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       setSession(currentSession);
-      if (currentSession) await fetchProfile(currentSession.user.id);
-      else setLoading(false);
+      if (currentSession) {
+        await fetchProfile(currentSession.user.id);
+      } else {
+        setLoading(false);
+      }
     };
     
     initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
-      if (newSession) fetchProfile(newSession.user.id);
-      else {
+      if (newSession) {
+        fetchProfile(newSession.user.id);
+      } else {
         setProfile(null);
         setLoading(false);
       }
@@ -57,24 +81,10 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function fetchProfile(uid: string) {
-    try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
-      if (error) throw error;
-      setProfile(data);
-    } catch (e) {
-      console.error("Profile Fetch Error:", e);
-      // في حالة فشل الجلب، نحاول تسجيل الخروج لضمان عدم بقاء حالة غير مستقرة
-      if (uid) setProfile({ role: 'teacher', is_approved: false }); 
-    } finally {
-      setLoading(false);
-    }
-  }
-
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-      <p className="font-bold text-slate-600 text-lg">جاري التحقق من الصلاحيات...</p>
+      <p className="font-bold text-slate-600 text-lg">جاري تحميل النظام...</p>
     </div>
   );
 
@@ -89,13 +99,13 @@ const App: React.FC = () => {
            </div>
            <h1 className="text-3xl font-black text-slate-900 mb-4">حسابك قيد المراجعة</h1>
            <p className="text-slate-500 font-bold leading-relaxed mb-10">
-             أهلاً بك يا <span className="text-indigo-600">{profile.full_name}</span>. حسابك بانتظار موافقة الإدارة العامة لتتمكن من الوصول للوحة التحكم.
+             أهلاً بك يا <span className="text-indigo-600">{profile.full_name || 'أيها المعلم'}</span>. حسابك بانتظار موافقة الإدارة العامة لتتمكن من الوصول للوحة التحكم.
            </p>
            <button 
              onClick={() => supabase.auth.signOut()} 
              className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-rose-600 transition-all"
            >
-             تسجيل الخروج والانتظار
+             تسجيل الخروج
            </button>
         </div>
         <div className="mt-10"><Footer /></div>
@@ -155,11 +165,11 @@ const App: React.FC = () => {
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-black text-slate-900">{profile?.full_name}</p>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  {isAdmin ? 'المدير' : 'معلم'}
+                  {isAdmin ? 'المدير العام' : 'معلم معتمد'}
                 </p>
               </div>
-              <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black">
-                {profile?.full_name?.charAt(0).toUpperCase()}
+              <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg">
+                {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
               </div>
             </div>
           </header>
