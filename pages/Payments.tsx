@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.ts';
-import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User, AlertCircle } from 'lucide-react';
+import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User, AlertCircle, History, Trash2, Calendar, FileText } from 'lucide-react';
 
 const Payments = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<any[]>([]);
+  const [allPayments, setAllPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [paymentForm, setPaymentForm] = useState({ amount: '', payment_date: new Date().toISOString().split('T')[0], notes: '' });
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
@@ -20,22 +22,35 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
 
   const fetchFinancialData = async () => {
     setLoading(true);
-    let qStds = supabase.from('students').select('*, profiles:teacher_id(full_name)');
-    let qPays = supabase.from('payments').select('*');
-    
-    if (!isAdmin) {
-      qStds = qStds.eq('teacher_id', uid);
-      qPays = qPays.eq('teacher_id', uid);
+    try {
+      let qStds = supabase.from('students').select('*, profiles:teacher_id(full_name)');
+      let qPays = supabase.from('payments').select('*, students(name)');
+      
+      if (!isAdmin) {
+        qStds = qStds.eq('teacher_id', uid);
+        qPays = qPays.eq('teacher_id', uid);
+      }
+      
+      const [{ data: stds }, { data: pays }] = await Promise.all([qStds, qPays]);
+      
+      setAllPayments(pays || []);
+
+      const enriched = (stds || []).map(s => {
+        const studentPayments = (pays || []).filter(p => p.student_id === s.id);
+        const totalPaid = studentPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+        return { 
+          ...s, 
+          totalPaid, 
+          balance: Number(s.agreed_amount) - totalPaid,
+          paymentsCount: studentPayments.length 
+        };
+      });
+      setStudents(enriched);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-    
-    const [{ data: stds }, { data: pays }] = await Promise.all([qStds, qPays]);
-    
-    const enriched = (stds || []).map(s => {
-      const totalPaid = (pays || []).filter(p => p.student_id === s.id).reduce((acc, p) => acc + Number(p.amount), 0);
-      return { ...s, totalPaid, balance: Number(s.agreed_amount) - totalPaid };
-    });
-    setStudents(enriched);
-    setLoading(false);
   };
 
   useEffect(() => { fetchFinancialData(); }, [uid, role, isAdmin]);
@@ -60,6 +75,25 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
       fetchFinancialData();
     }
   };
+
+  const handleDeletePayment = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذا السجل المالي؟ سيؤدي ذلك لتغيير رصيد الطالب.')) return;
+    const { error } = await supabase.from('payments').delete().eq('id', id);
+    if (error) showFeedback("فشل الحذف", 'error');
+    else {
+      showFeedback("تم الحذف بنجاح");
+      fetchFinancialData();
+    }
+  };
+
+  const openDetails = (student: any) => {
+    setSelectedStudent(student);
+    setIsDetailModalOpen(true);
+  };
+
+  const studentSpecificPayments = selectedStudent 
+    ? allPayments.filter(p => p.student_id === selectedStudent.id).sort((a,b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
+    : [];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 relative">
@@ -101,8 +135,15 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
               {students.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="p-6">
-                    <p className="font-black text-slate-900">{s.name}</p>
-                    <p className="text-xs text-slate-400 font-bold">{s.grade}</p>
+                    <button 
+                      onClick={() => openDetails(s)}
+                      className="text-right group hover:text-indigo-600 transition-colors"
+                    >
+                      <p className="font-black text-slate-900 group-hover:text-indigo-600">{s.name}</p>
+                      <p className="text-xs text-slate-400 font-bold flex items-center gap-1">
+                        <History size={10} /> عرض السجل ({s.paymentsCount})
+                      </p>
+                    </button>
                   </td>
                   {isAdmin && (
                     <td className="p-6">
@@ -143,6 +184,7 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
         </div>
       </div>
 
+      {/* نافذة تسجيل دفعة */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl animate-in zoom-in duration-300 relative">
@@ -172,6 +214,110 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
               </div>
               <button type="submit" className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-3xl shadow-2xl shadow-indigo-100 transition-all hover:-translate-y-1">تأكيد تسجيل الدفعة</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة تفاصيل سجل الدفعات */}
+      {isDetailModalOpen && selectedStudent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[3rem] shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-300 relative">
+            
+            <div className="p-10 pb-6 border-b border-slate-100 flex justify-between items-start">
+              <div className="flex items-center gap-6">
+                <div className="bg-indigo-600 text-white w-20 h-20 rounded-3xl flex items-center justify-center font-black text-3xl shadow-xl shadow-indigo-100">
+                  {selectedStudent.name.charAt(0)}
+                </div>
+                <div>
+                  <h2 className="text-3xl font-black text-slate-900">{selectedStudent.name}</h2>
+                  <div className="flex items-center gap-4 mt-1">
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{selectedStudent.grade}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
+                    <span className="text-xs font-bold text-indigo-500 flex items-center gap-1"><Calendar size={12}/> انضم في {new Date(selectedStudent.created_at).toLocaleDateString('ar-EG')}</span>
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setIsDetailModalOpen(false)} className="bg-slate-50 p-4 rounded-2xl text-slate-400 hover:text-rose-500 transition-all"><X size={24}/></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-10 space-y-10">
+              {/* إحصائيات مصغرة */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                  <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">إجمالي المبلغ المتفق عليه</p>
+                  <p className="text-2xl font-black text-slate-900">${selectedStudent.agreed_amount.toLocaleString()}</p>
+                </div>
+                <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100">
+                  <p className="text-[10px] font-black text-emerald-600 uppercase mb-2 tracking-widest">المبلغ المسدد إجمالاً</p>
+                  <p className="text-2xl font-black text-emerald-700">${selectedStudent.totalPaid.toLocaleString()}</p>
+                </div>
+                <div className={`p-6 rounded-[2rem] border ${selectedStudent.balance > 0 ? 'bg-rose-50 border-rose-100' : 'bg-indigo-50 border-indigo-100'}`}>
+                  <p className={`text-[10px] font-black uppercase mb-2 tracking-widest ${selectedStudent.balance > 0 ? 'text-rose-600' : 'text-indigo-600'}`}>الرصيد المتبقي (الدين)</p>
+                  <p className={`text-2xl font-black ${selectedStudent.balance > 0 ? 'text-rose-700' : 'text-indigo-700'}`}>
+                    {selectedStudent.balance > 0 ? `$${selectedStudent.balance.toLocaleString()}` : 'خالص بالكامل'}
+                  </p>
+                </div>
+              </div>
+
+              {/* جدول السجل */}
+              <div>
+                <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                  <History size={20} className="text-indigo-600" /> سجل الدفعات النقدية
+                </h3>
+                {studentSpecificPayments.length > 0 ? (
+                  <div className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden">
+                    <table className="w-full text-right">
+                      <thead>
+                        <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          <th className="p-5">تاريخ الدفعة</th>
+                          <th className="p-5">المبلغ</th>
+                          <th className="p-5">الملاحظات</th>
+                          <th className="p-5 text-center">حذف</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {studentSpecificPayments.map(p => (
+                          <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="p-5">
+                              <div className="flex items-center gap-2 font-bold text-slate-600">
+                                <Calendar size={14} className="text-slate-300" />
+                                {new Date(p.payment_date).toLocaleDateString('ar-EG', { dateStyle: 'medium' })}
+                              </div>
+                            </td>
+                            <td className="p-5">
+                              <span className="font-black text-emerald-600">${p.amount.toLocaleString()}</span>
+                            </td>
+                            <td className="p-5 text-sm text-slate-500 font-medium italic">
+                              {p.notes || '-'}
+                            </td>
+                            <td className="p-5 text-center">
+                              <button 
+                                onClick={() => handleDeletePayment(p.id)}
+                                className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+                              ><Trash2 size={16}/></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-20 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-100">
+                    <FileText size={48} className="mx-auto mb-4 text-slate-200" />
+                    <p className="text-slate-400 font-bold italic">لا توجد دفعات مسجلة لهذا الطالب بعد.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-10 pt-4 border-t border-slate-100 bg-slate-50/50">
+              <button 
+                onClick={() => { setIsDetailModalOpen(false); setIsModalOpen(true); }}
+                className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3"
+              >
+                <Plus size={20}/> تسجيل دفعة جديدة الآن
+              </button>
+            </div>
           </div>
         </div>
       )}

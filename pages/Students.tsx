@@ -2,13 +2,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.ts';
 import { StudentStats } from '../types.ts';
-import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, GraduationCap, X, User, AlertCircle, Users } from 'lucide-react';
+import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, X, AlertCircle, Users, Edit3 } from 'lucide-react';
 
 const Students = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<(StudentStats & { profiles?: { full_name: string } })[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   
@@ -26,8 +27,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      // تعديل الاستعلام لاستخدام الربط الصريح profiles:teacher_id
-      // هذا يخبر Supabase تماماً أي علاقة يستخدمها
       let query = supabase.from('students').select(`
         *,
         profiles:teacher_id (
@@ -47,8 +46,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
 
       const enriched = (stds || []).map(s => {
         const studentLessons = (lsns || []).filter(l => l.student_id === s.id);
-        
-        // التعامل مع هيكلية البيانات المرجعة سواء كانت مصفوفة أو كائن منفرد
         const profileData = Array.isArray(s.profiles) ? s.profiles[0] : s.profiles;
         
         return {
@@ -64,7 +61,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       setStudents(enriched);
     } catch (e: any) {
       console.error("Fetch Error:", e);
-      showFeedback("فشل جلب البيانات: " + (e.message || "خطأ في الربط"), "error");
+      showFeedback("فشل جلب البيانات", "error");
     } finally {
       setLoading(false);
     }
@@ -85,10 +82,30 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
       }]);
 
       if (error) throw error;
-
       showFeedback('تمت إضافة الطالب بنجاح');
       setIsModalOpen(false);
       setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '' });
+      fetchStudents();
+    } catch (err: any) {
+      showFeedback(err.message, 'error');
+    }
+  };
+
+  const handleUpdateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+    try {
+      const { error } = await supabase.from('students').update({
+        name: form.name,
+        address: form.address,
+        phone: form.phone,
+        grade: form.grade,
+        agreed_amount: parseFloat(form.agreed_amount) || 0
+      }).eq('id', selectedStudent.id);
+
+      if (error) throw error;
+      showFeedback('تم تحديث بيانات الطالب بنجاح');
+      setIsEditModalOpen(false);
       fetchStudents();
     } catch (err: any) {
       showFeedback(err.message, 'error');
@@ -116,10 +133,22 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   };
 
   const handleDeleteStudent = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف الطالب؟')) return;
+    if (!confirm('هل أنت متأكد من حذف الطالب؟ سيتم حذف كافة حصصه ومدفوعاته أيضاً.')) return;
     const { error } = await supabase.from('students').delete().eq('id', id);
     if (error) showFeedback(error.message, 'error');
     else fetchStudents();
+  };
+
+  const openEditModal = (student: any) => {
+    setSelectedStudent(student);
+    setForm({
+      name: student.name,
+      address: student.address,
+      phone: student.phone,
+      grade: student.grade,
+      agreed_amount: student.agreed_amount.toString()
+    });
+    setIsEditModalOpen(true);
   };
 
   const filteredStudents = students.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -137,7 +166,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">إدارة الطلاب</h1>
           <p className="text-slate-500 font-bold mt-2">
-            {isAdmin ? "وضع الإدارة العامة: عرض كافة المعلمين والطلاب" : `أهلاً بك، لديك ${students.length} طالب مسجل.`}
+            {isAdmin ? "وضع الإدارة العامة: عرض وتعديل كافة البيانات" : `أهلاً بك، لديك ${students.length} طالب مسجل.`}
           </p>
         </div>
         <div className="flex flex-wrap gap-4 w-full md:w-auto">
@@ -146,14 +175,14 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
             <input 
               type="text" 
               placeholder="بحث..." 
-              className="w-full pr-12 pl-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+              className="w-full pr-12 pl-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm font-bold"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <button 
-            onClick={() => setIsModalOpen(true)} 
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black shadow-xl transition-all"
+            onClick={() => { setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '' }); setIsModalOpen(true); }} 
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black shadow-xl transition-all active:scale-95"
           >
             إضافة طالب
           </button>
@@ -177,8 +206,9 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
                   {s.name.charAt(0)}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { setSelectedStudent(s); setIsLessonModalOpen(true); }} className="p-3 bg-slate-50 rounded-xl hover:bg-indigo-600 hover:text-white transition-all"><Calendar size={18}/></button>
-                  <button onClick={() => handleDeleteStudent(s.id)} className="p-3 bg-slate-50 rounded-xl hover:bg-rose-600 hover:text-white transition-all"><Trash2 size={18}/></button>
+                  <button onClick={() => openEditModal(s)} className="p-3 bg-slate-50 rounded-xl hover:bg-emerald-600 hover:text-white transition-all" title="تعديل"><Edit3 size={18}/></button>
+                  <button onClick={() => { setSelectedStudent(s); setIsLessonModalOpen(true); }} className="p-3 bg-slate-50 rounded-xl hover:bg-indigo-600 hover:text-white transition-all" title="حصة جديدة"><Calendar size={18}/></button>
+                  <button onClick={() => handleDeleteStudent(s.id)} className="p-3 bg-slate-50 rounded-xl hover:bg-rose-600 hover:text-white transition-all" title="حذف"><Trash2 size={18}/></button>
                 </div>
               </div>
 
@@ -215,33 +245,61 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         </div>
       )}
 
-      {isModalOpen && (
+      {/* نافذة إضافة/تعديل طالب */}
+      {(isModalOpen || isEditModalOpen) && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <form onSubmit={handleAddStudent} className="bg-white w-full max-w-lg p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-8 left-8 text-slate-400"><X /></button>
-            <h2 className="text-2xl font-black mb-8">إضافة طالب جديد</h2>
+          <form onSubmit={isEditModalOpen ? handleUpdateStudent : handleAddStudent} className="bg-white w-full max-w-lg p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
+            <button type="button" onClick={() => { setIsModalOpen(false); setIsEditModalOpen(false); }} className="absolute top-8 left-8 text-slate-400 hover:text-rose-500 transition-colors"><X /></button>
+            <h2 className="text-2xl font-black mb-8">{isEditModalOpen ? 'تعديل بيانات الطالب' : 'إضافة طالب جديد'}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input required placeholder="الاسم" className="p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-              <input required placeholder="الصف" className="p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})} />
-              <input required placeholder="الهاتف" className="p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
-              <input required type="number" placeholder="الاتفاق ($)" className="p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} />
-              <input required placeholder="العنوان" className="p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none md:col-span-2" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">الاسم الكامل</label>
+                <input required placeholder="مثال: أحمد محمد" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">الصف الدراسي</label>
+                <input required placeholder="مثال: ثالث ثانوي" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">رقم الهاتف</label>
+                <input required placeholder="09xxxxxxx" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">مبلغ الاتفاق ($)</label>
+                <input required type="number" placeholder="0" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">العنوان</label>
+                <input required placeholder="المدينة، الشارع..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+              </div>
             </div>
-            <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl mt-8">حفظ</button>
+            <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl mt-8 shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+              {isEditModalOpen ? 'حفظ التعديلات' : 'إضافة الطالب'}
+            </button>
           </form>
         </div>
       )}
 
+      {/* نافذة إضافة حصة */}
       {isLessonModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <form onSubmit={handleAddLesson} className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
-            <button type="button" onClick={() => setIsLessonModalOpen(false)} className="absolute top-8 left-8 text-slate-400"><X /></button>
+            <button type="button" onClick={() => setIsLessonModalOpen(false)} className="absolute top-8 left-8 text-slate-400 hover:text-rose-500 transition-colors"><X /></button>
             <h2 className="text-xl font-black mb-6">تسجيل حصة لـ {selectedStudent?.name}</h2>
             <div className="space-y-4">
-              <input required type="date" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl" value={lessonForm.lesson_date} onChange={e => setLessonForm({...lessonForm, lesson_date: e.target.value})} />
-              <input required type="number" step="0.5" placeholder="عدد الساعات" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl" value={lessonForm.hours} onChange={e => setLessonForm({...lessonForm, hours: e.target.value})} />
-              <textarea placeholder="ملاحظات" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl" value={lessonForm.notes} onChange={e => setLessonForm({...lessonForm, notes: e.target.value})} />
-              <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl">تأكيد الحصة</button>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">تاريخ الحصة</label>
+                <input required type="date" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" value={lessonForm.lesson_date} onChange={e => setLessonForm({...lessonForm, lesson_date: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">عدد الساعات</label>
+                <input required type="number" step="0.5" placeholder="مثال: 1.5" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" value={lessonForm.hours} onChange={e => setLessonForm({...lessonForm, hours: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">ملاحظات الدرس</label>
+                <textarea placeholder="ماذا تم إنجازه؟" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold h-32" value={lessonForm.notes} onChange={e => setLessonForm({...lessonForm, notes: e.target.value})} />
+              </div>
+              <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl shadow-xl active:scale-95">تأكيد الحصة</button>
             </div>
           </form>
         </div>

@@ -4,7 +4,7 @@ import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-ro
 import { supabase } from './supabase';
 import { Profile } from './types';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Menu, X, ShieldAlert, Code2 
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Menu, X, ShieldAlert, Code2, EyeOff 
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -23,7 +23,7 @@ const Footer: React.FC = () => (
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 1.0.0 &copy; {new Date().getFullYear()}
+        الإصدار 1.1.0 &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
@@ -33,11 +33,10 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [supervisedTeacher, setSupervisedTeacher] = useState<{id: string, name: string} | null>(null);
 
   const fetchProfile = async (uid: string) => {
     try {
-      // نستخدم استعلام بسيط جداً للتأكد من تجاوز أي مشاكل RLS
       const { data, error } = await supabase
         .from('profiles')
         .select('id, role, full_name, is_approved')
@@ -48,7 +47,6 @@ const App: React.FC = () => {
       setProfile(data);
     } catch (e) {
       console.error("Profile Fetch Error:", e);
-      // حالة افتراضية في حال فشل الجلب
       setProfile({ role: 'teacher', is_approved: false }); 
     } finally {
       setLoading(false);
@@ -114,12 +112,30 @@ const App: React.FC = () => {
   }
 
   const isAdmin = profile?.role === 'admin';
+  // المعرف الفعال للبيانات: إذا كان هناك إشراف، نستخدم معرف المعلم المشرف عليه، وإلا نستخدم معرف المستخدم الحالي
+  const effectiveUid = supervisedTeacher ? supervisedTeacher.id : session.user.id;
+  // الدور الفعال: إذا كان هناك إشراف، نعتبر الدور 'teacher' لعرض بيانات هذا المعلم فقط
+  const effectiveRole = supervisedTeacher ? 'teacher' : profile?.role;
 
   return (
     <HashRouter>
       <div className="min-h-screen bg-slate-50 flex font-['Cairo'] overflow-hidden">
+        
+        {/* Supervision Banner */}
+        {supervisedTeacher && (
+          <div className="fixed top-0 inset-x-0 h-12 bg-amber-500 text-white z-[100] flex items-center justify-center gap-4 px-4 shadow-lg animate-in slide-in-from-top duration-300">
+            <span className="font-black text-sm">وضع الإشراف نشط: أنت تشاهد بيانات المعلم "{supervisedTeacher.name}"</span>
+            <button 
+              onClick={() => setSupervisedTeacher(null)}
+              className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded-lg text-xs font-black flex items-center gap-2 transition-all"
+            >
+              <EyeOff size={14} /> إنهاء الإشراف
+            </button>
+          </div>
+        )}
+
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex w-72 bg-white border-l border-slate-200 flex-col p-8 sticky top-0 h-screen shadow-sm">
+        <aside className={`hidden lg:flex w-72 bg-white border-l border-slate-200 flex-col p-8 sticky top-0 h-screen shadow-sm transition-all ${supervisedTeacher ? 'pt-20' : ''}`}>
           <div className="flex items-center gap-3 mb-12">
             <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100">
               < GraduationCap size={28} />
@@ -151,13 +167,10 @@ const App: React.FC = () => {
         </aside>
 
         <main className="flex-1 min-w-0 flex flex-col h-screen">
-          <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 z-40">
+          <header className={`h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 z-40 transition-all ${supervisedTeacher ? 'mt-12' : ''}`}>
             <div className="flex items-center gap-4">
-              <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 bg-slate-50 rounded-xl">
-                <Menu size={20} />
-              </button>
               <div className="font-black text-slate-900 text-lg">
-                {isAdmin ? 'الإدارة العامة' : 'لوحة تحكم المعلم'}
+                {supervisedTeacher ? `إحصائيات: ${supervisedTeacher.name}` : (isAdmin ? 'الإدارة العامة' : 'لوحة تحكم المعلم')}
               </div>
             </div>
             
@@ -177,12 +190,12 @@ const App: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-6 lg:p-10 flex flex-col">
             <div className="max-w-7xl mx-auto w-full flex-grow">
               <Routes>
-                <Route path="/" element={<Dashboard role={profile?.role} uid={session.user.id} />} />
-                <Route path="/students" element={<Students role={profile?.role} uid={session.user.id} />} />
-                <Route path="/lessons" element={<Lessons role={profile?.role} uid={session.user.id} />} />
-                <Route path="/statistics" element={<Statistics role={profile?.role} uid={session.user.id} />} />
-                <Route path="/payments" element={<Payments role={profile?.role} uid={session.user.id} />} />
-                {isAdmin && <Route path="/teachers" element={<Teachers />} />}
+                <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} />} />
+                <Route path="/students" element={<Students role={effectiveRole} uid={effectiveUid} />} />
+                <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} />} />
+                <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} />} />
+                <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} />} />
+                {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             </div>

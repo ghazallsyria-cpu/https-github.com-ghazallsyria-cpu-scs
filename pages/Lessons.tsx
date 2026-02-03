@@ -1,12 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.ts';
-import { Calendar, Clock, BookOpen, Search, Filter, Trash2, Edit, User, CheckCircle, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, BookOpen, Search, Trash2, User, CheckCircle, AlertCircle, Edit3, X } from 'lucide-react';
 
 const Lessons = ({ role, uid }: { role: any, uid: string }) => {
   const [lessons, setLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedLesson, setSelectedLesson] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ lesson_date: '', hours: '', notes: '' });
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   const isAdmin = role === 'admin';
@@ -41,6 +44,35 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
     }
   };
 
+  const openEditModal = (lesson: any) => {
+    setSelectedLesson(lesson);
+    setEditForm({
+      lesson_date: lesson.lesson_date,
+      hours: lesson.hours.toString(),
+      notes: lesson.notes || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLesson) return;
+    try {
+      const { error } = await supabase.from('lessons').update({
+        lesson_date: editForm.lesson_date,
+        hours: parseFloat(editForm.hours),
+        notes: editForm.notes
+      }).eq('id', selectedLesson.id);
+
+      if (error) throw error;
+      showFeedback("تم تحديث الحصة بنجاح");
+      setIsEditModalOpen(false);
+      fetchLessons();
+    } catch (err: any) {
+      showFeedback(err.message, 'error');
+    }
+  };
+
   const filteredLessons = lessons.filter(l => 
     l.students?.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (l.notes || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -58,14 +90,14 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900">سجل الدروس</h1>
-          <p className="text-slate-500 font-bold">{isAdmin ? 'أنت تراجع جميع الحصص التعليمية المسجلة من قبل كافة المعلمين.' : 'عرض تاريخ جميع حصصك التعليمية.'}</p>
+          <p className="text-slate-500 font-bold">{isAdmin ? 'وضع الإدارة: مراجعة وتعديل كافة الحصص.' : 'تاريخ جميع حصصك التعليمية.'}</p>
         </div>
         <div className="relative w-full md:w-80">
           <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text" 
             placeholder="بحث عن طالب أو ملاحظة..." 
-            className="w-full pr-12 pl-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+            className="w-full pr-12 pl-4 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm font-bold"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -113,12 +145,22 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
                     {l.notes || <span className="text-slate-300 italic">بدون ملاحظات</span>}
                   </td>
                   <td className="p-6 text-center">
-                    <button 
-                      onClick={() => handleDelete(l.id)}
-                      className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    <div className="flex items-center justify-center gap-2">
+                       <button 
+                        onClick={() => openEditModal(l)}
+                        className="p-2 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                        title="تعديل"
+                      >
+                        <Edit3 size={18} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(l.id)}
+                        className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="حذف"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -134,6 +176,31 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
           </table>
         </div>
       </div>
+
+      {/* نافذة تعديل الحصة */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <form onSubmit={handleUpdateLesson} className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
+            <button type="button" onClick={() => setIsEditModalOpen(false)} className="absolute top-8 left-8 text-slate-400 hover:text-rose-500 transition-colors"><X /></button>
+            <h2 className="text-xl font-black mb-6 text-slate-900">تعديل حصة: {selectedLesson?.students?.name}</h2>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">تاريخ الحصة</label>
+                <input required type="date" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500" value={editForm.lesson_date} onChange={e => setEditForm({...editForm, lesson_date: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">عدد الساعات</label>
+                <input required type="number" step="0.5" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500" value={editForm.hours} onChange={e => setEditForm({...editForm, hours: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الملاحظات</label>
+                <textarea className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold h-32 outline-none focus:ring-2 focus:ring-indigo-500" value={editForm.notes} onChange={e => setEditForm({...editForm, notes: e.target.value})} />
+              </div>
+              <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all active:scale-95">تحديث البيانات</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
