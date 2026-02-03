@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.ts';
-import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User } from 'lucide-react';
+import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User, AlertCircle } from 'lucide-react';
 
 const Payments = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<any[]>([]);
@@ -8,9 +9,14 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [paymentForm, setPaymentForm] = useState({ amount: '', payment_date: new Date().toISOString().split('T')[0], notes: '' });
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   const isAdmin = role === 'admin';
+
+  const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
+    setFeedback({ msg, type });
+    setTimeout(() => setFeedback(null), 3000);
+  };
 
   const fetchFinancialData = async () => {
     setLoading(true);
@@ -40,16 +46,15 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
 
     const { error } = await supabase.from('payments').insert([{
       student_id: selectedStudent.id,
-      teacher_id: selectedStudent.teacher_id, // استخدام المعلم المالك للطالب
+      teacher_id: selectedStudent.teacher_id,
       amount: parseFloat(paymentForm.amount),
       payment_date: paymentForm.payment_date,
       notes: paymentForm.notes
     }]);
 
-    if (error) alert("خطأ في تسجيل الدفعة: " + error.message);
+    if (error) showFeedback("فشل تسجيل الدفعة: " + error.message, 'error');
     else {
-      setFeedback('تم تسجيل الدفعة بنجاح!');
-      setTimeout(() => setFeedback(null), 3000);
+      showFeedback('تم تسجيل الدفعة النقدية بنجاح!');
       setIsModalOpen(false);
       setPaymentForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], notes: '' });
       fetchFinancialData();
@@ -59,8 +64,9 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
   return (
     <div className="space-y-8 animate-in fade-in duration-500 relative">
       {feedback && (
-        <div className="fixed top-24 right-1/2 translate-x-1/2 z-[100] px-8 py-4 bg-emerald-600 text-white rounded-2xl shadow-2xl flex items-center gap-3 font-bold animate-in slide-in-from-top-full">
-          <CheckCircle size={20} /> {feedback}
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all animate-in slide-in-from-top-full ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
+          {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
+          {feedback.msg}
         </div>
       )}
 
@@ -100,7 +106,7 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
                   </td>
                   {isAdmin && (
                     <td className="p-6">
-                      <div className="flex items-center gap-1 text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
+                      <div className="flex items-center gap-1 text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md w-fit">
                         <User size={10} /> {s.profiles?.full_name}
                       </div>
                     </td>
@@ -137,7 +143,6 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
         </div>
       </div>
 
-      {/* Modal: Add Payment */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl animate-in zoom-in duration-300 relative">

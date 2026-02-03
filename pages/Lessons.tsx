@@ -1,13 +1,20 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.ts';
-import { Calendar, Clock, BookOpen, Search, Filter, Trash2, Edit, User } from 'lucide-react';
+import { Calendar, Clock, BookOpen, Search, Filter, Trash2, Edit, User, CheckCircle, AlertCircle } from 'lucide-react';
 
 const Lessons = ({ role, uid }: { role: any, uid: string }) => {
   const [lessons, setLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   const isAdmin = role === 'admin';
+
+  const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
+    setFeedback({ msg, type });
+    setTimeout(() => setFeedback(null), 3000);
+  };
 
   const fetchLessons = async () => {
     setLoading(true);
@@ -27,8 +34,11 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا الدرس؟')) return;
     const { error } = await supabase.from('lessons').delete().eq('id', id);
-    if (error) alert(error.message);
-    else fetchLessons();
+    if (error) showFeedback("فشل الحذف: " + error.message, 'error');
+    else {
+      showFeedback("تم حذف سجل الحصة بنجاح");
+      fetchLessons();
+    }
   };
 
   const filteredLessons = lessons.filter(l => 
@@ -37,7 +47,14 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="space-y-8 animate-in fade-in duration-700 relative">
+      {feedback && (
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all animate-in slide-in-from-top-full ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
+          {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
+          {feedback.msg}
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900">سجل الدروس</h1>

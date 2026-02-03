@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.ts';
 import { ShieldCheck, Mail, Calendar, Trash2, Phone, UserCircle, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
@@ -5,14 +6,19 @@ import { ShieldCheck, Mail, Calendar, Trash2, Phone, UserCircle, CheckCircle, XC
 const Teachers = () => {
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   useEffect(() => {
     fetchTeachers();
   }, []);
 
+  const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
+    setFeedback({ msg, type });
+    setTimeout(() => setFeedback(null), 3000);
+  };
+
   async function fetchTeachers() {
     setLoading(true);
-    // جلب جميع المعلمين باستثناء السوبر أدمن
     const { data } = await supabase
       .from('profiles')
       .select('*')
@@ -29,21 +35,34 @@ const Teachers = () => {
       .update({ is_approved: !currentStatus })
       .eq('id', id);
     
-    if (error) alert("خطأ: " + error.message);
-    else fetchTeachers();
+    if (error) showFeedback("حدث خطأ: " + error.message, 'error');
+    else {
+      showFeedback(currentStatus ? "تم إلغاء تفعيل حساب المعلم" : "تم تفعيل حساب المعلم بنجاح");
+      fetchTeachers();
+    }
   };
 
   const handleDeleteTeacher = async (id: string) => {
     if (!confirm("هل أنت متأكد من حذف هذا المعلم نهائياً من النظام؟")) return;
     const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (error) alert(error.message);
-    else fetchTeachers();
+    if (error) showFeedback("فشل الحذف: " + error.message, 'error');
+    else {
+      showFeedback("تم حذف المعلم نهائياً من النظام");
+      fetchTeachers();
+    }
   };
 
   const pendingCount = teachers.filter(t => !t.is_approved).length;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 relative">
+      {feedback && (
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all animate-in slide-in-from-top-full ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
+          {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
+          {feedback.msg}
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">إدارة طلبات المعلمين</h1>

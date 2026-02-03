@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.ts';
 import { StudentStats } from '../types.ts';
-import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, GraduationCap, Clock, DollarSign, BookOpen, Users, X, User } from 'lucide-react';
+import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, GraduationCap, Clock, DollarSign, BookOpen, Users, X, User, AlertCircle } from 'lucide-react';
 
 const Students = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<(StudentStats & { profiles?: { full_name: string } })[]>([]);
@@ -20,7 +21,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      // جلب الطلاب مع معلومات المعلم (profile)
       let qSt = supabase.from('students').select('*, profiles:teacher_id(full_name)');
       let qLe = supabase.from('lessons').select('*');
 
@@ -59,9 +59,9 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase.from('students').insert([{ ...form, agreed_amount: parseFloat(form.agreed_amount), teacher_id: uid }]);
-    if (error) showFeedback(error.message, 'error');
+    if (error) showFeedback("فشل في إضافة الطالب: " + error.message, 'error');
     else {
-      showFeedback('تمت إضافة الطالب بنجاح');
+      showFeedback('تمت إضافة الطالب بنجاح إلى النظام');
       setIsModalOpen(false);
       setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '' });
       fetchStudents();
@@ -73,14 +73,14 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
     if (!selectedStudent) return;
     const { error } = await supabase.from('lessons').insert([{
       student_id: selectedStudent.id,
-      teacher_id: selectedStudent.teacher_id, // استخدام معرف المعلم المالك للطالب
+      teacher_id: selectedStudent.teacher_id,
       lesson_date: lessonForm.lesson_date,
       hours: parseFloat(lessonForm.hours),
       notes: lessonForm.notes
     }]);
-    if (error) showFeedback(error.message, 'error');
+    if (error) showFeedback("فشل في تسجيل الحصة: " + error.message, 'error');
     else {
-      showFeedback('تم تسجيل الحصة بنجاح');
+      showFeedback('تم تسجيل الحصة بنجاح في سجل الطالب');
       setIsLessonModalOpen(false);
       setLessonForm({ lesson_date: new Date().toISOString().split('T')[0], hours: '1', notes: '' });
       fetchStudents();
@@ -90,9 +90,9 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   const handleDeleteStudent = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف الطالب؟ سيتم حذف جميع دروسه ومدفوعاته أيضاً.')) return;
     const { error } = await supabase.from('students').delete().eq('id', id);
-    if (error) showFeedback(error.message, 'error');
+    if (error) showFeedback("حدث خطأ أثناء الحذف: " + error.message, 'error');
     else {
-      showFeedback('تم حذف الطالب');
+      showFeedback('تم حذف الطالب وكافة بياناته بنجاح');
       fetchStudents();
     }
   };
@@ -102,8 +102,9 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {feedback && (
-        <div className={`fixed top-24 right-1/2 translate-x-1/2 z-[100] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all animate-in slide-in-from-top-full ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
-          <CheckCircle size={20} /> {feedback.msg}
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all animate-in slide-in-from-top-full ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
+          {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
+          {feedback.msg}
         </div>
       )}
 
@@ -196,7 +197,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         )}
       </div>
 
-      {/* Modal: Add Student */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
           <form onSubmit={handleAddStudent} className="bg-white w-full max-w-lg p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
@@ -236,7 +236,6 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         </div>
       )}
 
-      {/* Modal: Add Lesson */}
       {isLessonModalOpen && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <form onSubmit={handleAddLesson} className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl animate-in zoom-in duration-300 relative">

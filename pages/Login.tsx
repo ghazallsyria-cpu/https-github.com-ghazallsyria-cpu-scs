@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { supabase } from '../supabase.ts';
 import { GraduationCap, ShieldAlert, CheckCircle2, Phone, Lock, User, ArrowRight, Code2 } from 'lucide-react';
@@ -105,7 +106,6 @@ const Login = () => {
             <h1 className="text-2xl font-black text-slate-900 leading-tight">
               ادارة تحكم الطلاب <br/> <span className="text-indigo-600 text-lg">في النظام الخصوصي</span>
             </h1>
-            <p className="text-slate-400 font-bold mt-2">الإصدار المستقر للمدير والمعلمين</p>
           </div>
 
           {error && (
