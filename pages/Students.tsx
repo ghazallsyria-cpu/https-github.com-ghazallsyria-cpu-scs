@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
-import { Student, Lesson, StudentStats } from '../types';
+import { Student, StudentStats } from '../types';
 import { 
   Plus, 
   Search, 
@@ -10,8 +10,6 @@ import {
   BookOpen, 
   Clock, 
   X, 
-  MoreVertical,
-  Filter,
   Users
 } from 'lucide-react';
 
@@ -23,7 +21,6 @@ const Students: React.FC = () => {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Form States
   const [studentForm, setStudentForm] = useState({
     name: '',
     address: '',
@@ -47,7 +44,6 @@ const Students: React.FC = () => {
 
       if (studentsError) throw studentsError;
 
-      // Fetch lessons and payments (handles cases where tables might be empty)
       const { data: lessonsData } = await supabase.from('lessons').select('*');
       const { data: paymentsData } = await supabase.from('payments').select('*');
 
@@ -92,7 +88,7 @@ const Students: React.FC = () => {
       fetchStudents();
     } catch (err) {
       console.error(err);
-      alert('Error adding student. Make sure all tables exist in Supabase.');
+      alert('Failed to add student. Please make sure the table "students" exists with correct columns.');
     }
   };
 
@@ -112,7 +108,7 @@ const Students: React.FC = () => {
       fetchStudents();
     } catch (err) {
       console.error(err);
-      alert('Error adding lesson. Ensure the "lessons" table is created.');
+      alert('Error adding lesson. Did you create the "lessons" table?');
     }
   };
 
@@ -123,161 +119,102 @@ const Students: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">Students Management</h1>
-          <p className="text-slate-500 mt-1">Manage your students and record their lessons.</p>
-        </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-semibold flex items-center justify-center space-x-2 hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
-        >
-          <Plus size={20} />
-          <span>Add New Student</span>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-slate-900">Students</h1>
+        <button onClick={() => setIsModalOpen(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-indigo-700">
+          <Plus size={18} /> New Student
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search by name or grade..." 
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+        <input 
+          type="text" 
+          placeholder="Search students..." 
+          className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading ? (
-          [...Array(6)].map((_, i) => (
-            <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 animate-pulse h-64" />
-          ))
+          <p className="col-span-full text-center py-10 text-slate-500">Loading students...</p>
         ) : filteredStudents.length > 0 ? (
           filteredStudents.map(student => (
-            <div key={student.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative">
+            <div key={student.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg">
+                <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 font-bold">
                   {student.name.charAt(0)}
                 </div>
-                <div className="flex space-x-2">
-                  <button 
-                    onClick={() => {
-                      setSelectedStudent(student);
-                      setIsLessonModalOpen(true);
-                    }}
-                    className="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
-                    title="Add Lesson"
-                  >
-                    <Plus size={18} />
-                  </button>
-                </div>
+                <button onClick={() => { setSelectedStudent(student); setIsLessonModalOpen(true); }} className="text-indigo-600 p-2 hover:bg-indigo-50 rounded-lg">
+                  <Plus size={18} />
+                </button>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">{student.name}</h3>
+              <p className="text-sm text-indigo-600 font-medium mb-3">{student.grade || 'No Grade'}</p>
+              
+              <div className="space-y-2 mb-4 text-sm text-slate-500">
+                <div className="flex items-center gap-2"><MapPin size={14} /> <span className="truncate">{student.address}</span></div>
+                <div className="flex items-center gap-2"><Phone size={14} /> <span>{student.phone}</span></div>
               </div>
 
-              <h3 className="text-xl font-bold text-slate-900 mb-1">{student.name}</h3>
-              <p className="text-indigo-600 font-medium text-sm mb-4">{student.grade}</p>
-
-              <div className="space-y-3 mb-6">
-                <div className="flex items-center text-slate-500 text-sm">
-                  <MapPin size={16} className="mr-2 shrink-0" />
-                  <span className="truncate">{student.address}</span>
-                </div>
-                <div className="flex items-center text-slate-500 text-sm">
-                  <Phone size={16} className="mr-2 shrink-0" />
-                  <span>{student.phone}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
                 <div className="text-center">
-                  <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">Lessons</p>
-                  <div className="flex items-center justify-center space-x-1">
-                    <BookOpen size={14} className="text-slate-400" />
-                    <span className="text-slate-900 font-bold">{student.total_lessons}</span>
-                  </div>
+                  <p className="text-xs text-slate-400 uppercase">Lessons</p>
+                  <div className="flex justify-center items-center gap-1 font-bold text-slate-900"><BookOpen size={12}/> {student.total_lessons}</div>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">Hours</p>
-                  <div className="flex items-center justify-center space-x-1">
-                    <Clock size={14} className="text-slate-400" />
-                    <span className="text-slate-900 font-bold">{student.total_hours}</span>
-                  </div>
+                  <p className="text-xs text-slate-400 uppercase">Hours</p>
+                  <div className="flex justify-center items-center gap-1 font-bold text-slate-900"><Clock size={12}/> {student.total_hours}</div>
                 </div>
               </div>
             </div>
           ))
         ) : (
-          <div className="col-span-full py-20 text-center">
-            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-              <Users size={32} />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900">No students found</h3>
-            <p className="text-slate-500">Try adjusting your search or add a new student.</p>
+          <div className="col-span-full text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+            <Users className="mx-auto text-slate-300 mb-2" size={48} />
+            <p className="text-slate-500">No students found.</p>
           </div>
         )}
       </div>
 
-      {/* Add Student Modal */}
+      {/* Modals */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="bg-white w-full max-w-md rounded-3xl p-8 relative shadow-2xl">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 rounded-full"><X size={20} /></button>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">New Student</h2>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 relative">
+            <h2 className="text-xl font-bold mb-4">Add Student</h2>
             <form onSubmit={handleAddStudent} className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Full Name</label>
-                <input required type="text" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={studentForm.name} onChange={e => setStudentForm({...studentForm, name: e.target.value})} />
-              </div>
+              <input required placeholder="Name" className="w-full p-2.5 border rounded-xl" value={studentForm.name} onChange={e => setStudentForm({...studentForm, name: e.target.value})} />
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Grade / Class</label>
-                  <input required type="text" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={studentForm.grade} onChange={e => setStudentForm({...studentForm, grade: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Agreed Payment</label>
-                  <input required type="number" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={studentForm.agreed_payment} onChange={e => setStudentForm({...studentForm, agreed_payment: e.target.value})} />
-                </div>
+                <input required placeholder="Grade" className="w-full p-2.5 border rounded-xl" value={studentForm.grade} onChange={e => setStudentForm({...studentForm, grade: e.target.value})} />
+                <input required type="number" placeholder="Payment" className="w-full p-2.5 border rounded-xl" value={studentForm.agreed_payment} onChange={e => setStudentForm({...studentForm, agreed_payment: e.target.value})} />
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Phone Number</label>
-                <input required type="tel" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={studentForm.phone} onChange={e => setStudentForm({...studentForm, phone: e.target.value})} />
+              <input required placeholder="Phone" className="w-full p-2.5 border rounded-xl" value={studentForm.phone} onChange={e => setStudentForm({...studentForm, phone: e.target.value})} />
+              <textarea required placeholder="Address" className="w-full p-2.5 border rounded-xl" value={studentForm.address} onChange={e => setStudentForm({...studentForm, address: e.target.value})} />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2.5 border rounded-xl font-bold">Cancel</button>
+                <button type="submit" className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl font-bold">Save</button>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Address</label>
-                <textarea required className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none min-h-[100px]" value={studentForm.address} onChange={e => setStudentForm({...studentForm, address: e.target.value})} />
-              </div>
-              <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">Create Student</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Add Lesson Modal */}
       {isLessonModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsLessonModalOpen(false)} />
-          <div className="bg-white w-full max-w-md rounded-3xl p-8 relative shadow-2xl">
-            <button onClick={() => setIsLessonModalOpen(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 rounded-full"><X size={20} /></button>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Record Lesson</h2>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 relative">
+            <h2 className="text-xl font-bold mb-4">Add Lesson for {selectedStudent?.name}</h2>
             <form onSubmit={handleAddLesson} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Date</label>
-                  <input required type="date" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={lessonForm.date} onChange={e => setLessonForm({...lessonForm, date: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Hours</label>
-                  <input required type="number" step="0.5" className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none" value={lessonForm.hours} onChange={e => setLessonForm({...lessonForm, hours: e.target.value})} />
-                </div>
+                <input required type="date" className="w-full p-2.5 border rounded-xl" value={lessonForm.date} onChange={e => setLessonForm({...lessonForm, date: e.target.value})} />
+                <input required type="number" step="0.5" placeholder="Hours" className="w-full p-2.5 border rounded-xl" value={lessonForm.hours} onChange={e => setLessonForm({...lessonForm, hours: e.target.value})} />
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Optional Notes</label>
-                <textarea className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none min-h-[100px]" value={lessonForm.notes} onChange={e => setLessonForm({...lessonForm, notes: e.target.value})} />
+              <textarea placeholder="Notes (optional)" className="w-full p-2.5 border rounded-xl" value={lessonForm.notes} onChange={e => setLessonForm({...lessonForm, notes: e.target.value})} />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setIsLessonModalOpen(false)} className="flex-1 py-2.5 border rounded-xl font-bold">Cancel</button>
+                <button type="submit" className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl font-bold">Add Lesson</button>
               </div>
-              <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">Log Lesson</button>
             </form>
           </div>
         </div>
