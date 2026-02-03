@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-ro
 import { supabase } from './supabase';
 import { Profile } from './types';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Menu, X 
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Menu, X, ShieldAlert 
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -16,7 +16,7 @@ import Teachers from './pages/Teachers';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -46,23 +46,22 @@ const App: React.FC = () => {
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
       
-      // التحقق مما إذا كان هذا هو المدير الأساسي
       const isSuperAdmin = email === 'ghazallsyria@gmail.com';
 
       if (data) {
-        // إذا كان المدير الأساسي ولكن دوره ليس 'admin' في القاعدة، نقوم بترقيته فوراً
         if (isSuperAdmin && data.role !== 'admin') {
-          await supabase.from('profiles').update({ role: 'admin' }).eq('id', uid);
+          await supabase.from('profiles').update({ role: 'admin', is_approved: true }).eq('id', uid);
           data.role = 'admin';
+          data.is_approved = true;
         }
         setProfile(data);
       } else {
-        // إنشاء ملف شخصي جديد
         const { data: newProfile } = await supabase.from('profiles').insert([
           { 
             id: uid, 
             full_name: isSuperAdmin ? 'المدير العام' : 'معلم جديد', 
-            role: isSuperAdmin ? 'admin' : 'teacher' 
+            role: isSuperAdmin ? 'admin' : 'teacher',
+            is_approved: isSuperAdmin ? true : false
           }
         ]).select().single();
         if (newProfile) setProfile(newProfile);
@@ -75,13 +74,36 @@ const App: React.FC = () => {
   }
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white">
+    <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"></div>
       <p className="font-bold text-slate-600 text-lg">تحميل نظام TutorTrack...</p>
     </div>
   );
 
   if (!session) return <Login />;
+
+  // بوابة الحسابات غير المفعلة
+  if (profile && !profile.is_approved) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-['Cairo']">
+        <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-lg text-center border border-slate-100">
+           <div className="bg-amber-100 w-24 h-24 rounded-full flex items-center justify-center text-amber-600 mx-auto mb-8 shadow-inner">
+             <ShieldAlert size={48} />
+           </div>
+           <h1 className="text-3xl font-black text-slate-900 mb-4">حسابك قيد المراجعة</h1>
+           <p className="text-slate-500 font-bold leading-relaxed mb-10">
+             أهلاً بك يا <span className="text-indigo-600">{profile.full_name}</span>. تم استلام طلب تسجيلك بنجاح، وهو الآن بانتظار موافقة المدير العام لتتمكن من الوصول لبيانات الطلاب والحصص.
+           </p>
+           <button 
+             onClick={() => supabase.auth.signOut()} 
+             className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-rose-600 transition-all flex items-center justify-center gap-3"
+           >
+             <LogOut size={20} /> تسجيل الخروج والانتظار
+           </button>
+        </div>
+      </div>
+    );
+  }
 
   const isAdmin = profile?.role === 'admin';
 
@@ -107,7 +129,7 @@ const App: React.FC = () => {
             {isAdmin && (
               <div className="pt-6 mt-6 border-t border-slate-100">
                 <p className="text-[11px] font-black text-slate-400 uppercase px-4 mb-3 tracking-widest">إدارة النظام</p>
-                <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="المعلمون" />
+                <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="المعلمون والطلبات" />
               </div>
             )}
           </nav>
@@ -120,12 +142,11 @@ const App: React.FC = () => {
           </button>
         </aside>
 
-        {/* Mobile Menu Backdrop */}
+        {/* Mobile Sidebar */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 lg:hidden" onClick={() => setMobileMenuOpen(false)}></div>
         )}
 
-        {/* Mobile Sidebar */}
         <aside className={`fixed inset-y-0 right-0 w-72 bg-white z-[60] flex flex-col p-8 transition-transform duration-300 lg:hidden ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
           <div className="flex items-center justify-between mb-10">
              <div className="flex items-center gap-3">
@@ -150,7 +171,6 @@ const App: React.FC = () => {
         </aside>
 
         <main className="flex-1 min-w-0 flex flex-col relative h-screen overflow-hidden">
-          {/* Header */}
           <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40 flex-shrink-0">
             <div className="flex items-center gap-4">
               <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 bg-slate-50 rounded-xl text-slate-600 hover:bg-slate-100">
@@ -174,7 +194,7 @@ const App: React.FC = () => {
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 lg:p-10 scroll-smooth">
+          <div className="flex-1 overflow-y-auto p-6 lg:p-10">
             <div className="max-w-7xl mx-auto pb-10">
               <Routes>
                 <Route path="/" element={<Dashboard role={profile?.role} uid={session.user.id} />} />
@@ -197,15 +217,8 @@ const NavItem = ({ to, icon, label }: any) => {
   const location = useLocation();
   const isActive = location.pathname === to;
   return (
-    <Link 
-      to={to} 
-      className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all font-bold ${
-        isActive 
-        ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 translate-x-1' 
-        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-      }`}
-    >
-      <span className={`${isActive ? 'scale-110' : 'scale-100'} transition-transform`}>{icon}</span>
+    <Link to={to} className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all font-bold ${isActive ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
+      <span>{icon}</span>
       <span className="truncate">{label}</span>
     </Link>
   );
