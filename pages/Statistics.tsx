@@ -19,7 +19,6 @@ import {
   TrendingUp, 
   DollarSign, 
   Clock,
-  ChevronDown,
   Filter,
   Download,
   Users
@@ -71,7 +70,6 @@ const Statistics = ({ role, uid }: { role: any, uid: string }) => {
 
         setStats({ dayHours: dHours, monthHours: mHours, semesterHours: sHours, totalIncome: income });
 
-        // Last 7 days activity
         const last7Days = [...Array(7)].map((_, i) => {
           const d = new Date();
           d.setDate(d.getDate() - i);
@@ -89,7 +87,6 @@ const Statistics = ({ role, uid }: { role: any, uid: string }) => {
           hours 
         })));
 
-        // Student distribution based on hours
         const studentMap: any = {};
         lessons?.forEach(l => {
           const sName = students?.find(s => s.id === l.student_id)?.name || 'طالب مجهول';
@@ -127,16 +124,6 @@ const Statistics = ({ role, uid }: { role: any, uid: string }) => {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">تحليلات الأداء</h1>
           <p className="text-slate-500 mt-1 font-bold">رؤى تفصيلية حول ساعات العمل والنمو المالي.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 font-bold shadow-sm hover:bg-slate-50 transition-colors">
-            <Filter size={18} />
-            <span>تصفية</span>
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-colors">
-            <Download size={18} />
-            <span>تصدير التقرير</span>
-          </button>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -158,7 +145,11 @@ const Statistics = ({ role, uid }: { role: any, uid: string }) => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} />
-                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', textAlign: 'right', fontWeight: 'bold', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                <Tooltip 
+                  formatter={(value: any) => [`${value} ساعة`, '']}
+                  cursor={{fill: '#f8fafc'}} 
+                  contentStyle={{borderRadius: '16px', border: 'none', textAlign: 'right', fontWeight: 'bold', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} 
+                />
                 <Bar dataKey="hours" name="ساعات" fill="#4f46e5" radius={[8, 8, 0, 0]} barSize={32} />
               </BarChart>
             </ResponsiveContainer>
@@ -187,29 +178,10 @@ const Statistics = ({ role, uid }: { role: any, uid: string }) => {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{borderRadius: '16px', border: 'none', fontWeight: 'bold', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                <Tooltip formatter={(value: any) => [`${value} ساعة`, '']} contentStyle={{borderRadius: '16px', border: 'none', fontWeight: 'bold', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                 <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{paddingTop: '20px', fontWeight: 'bold', fontSize: '12px'}} />
               </PieChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-8 sm:p-10 rounded-[2.5rem] border border-slate-200 shadow-sm">
-        <h3 className="text-xl font-black text-slate-900 mb-6">ملاحظات الأداء</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100">
-            <p className="text-indigo-900 font-black mb-2 flex items-center gap-2"><TrendingUp size={18}/> نمو مستمر</p>
-            <p className="text-indigo-700/80 text-sm font-bold leading-relaxed">زاد عدد الساعات التعليمية بنسبة 15% مقارنة بالشهر الماضي. استمر في هذا الأداء الرائع.</p>
-          </div>
-          <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
-            <p className="text-emerald-900 font-black mb-2 flex items-center gap-2"><DollarSign size={18}/> استقرار مالي</p>
-            <p className="text-emerald-700/80 text-sm font-bold leading-relaxed">نسبة التحصيل المالي وصلت لـ 92%. ننصح بمتابعة الدفعات المتبقية لضمان تدفق نقدي مثالي.</p>
-          </div>
-          <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100">
-            {/* Added missing Users icon from lucide-react */}
-            <p className="text-blue-900 font-black mb-2 flex items-center gap-2"><Users size={18}/> رضا الطلاب</p>
-            <p className="text-blue-700/80 text-sm font-bold leading-relaxed">متوسط الحصص لكل طالب مرتفع، مما يشير إلى ولاء الطلاب واستمراريتهم معك.</p>
           </div>
         </div>
       </div>

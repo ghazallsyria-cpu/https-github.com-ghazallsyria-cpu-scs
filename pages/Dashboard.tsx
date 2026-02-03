@@ -25,7 +25,6 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
         let qPayments = supabase.from('payments').select('*');
         let qTeachers = supabase.from('profiles').select('*').eq('role', 'teacher');
 
-        // سياسات RLS تتعامل مع العزل، لكن نضمن الفلترة في الواجهة أيضاً للمدرس
         if (role === 'teacher') {
           qStudents = qStudents.eq('teacher_id', uid);
           qLessons = qLessons.eq('teacher_id', uid);
@@ -41,7 +40,6 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
 
         const totalHours = (lessons || []).reduce((sum, l) => sum + Number(l.hours), 0);
         const totalIncome = (payments || []).reduce((sum, p) => sum + Number(p.amount), 0);
-        // للطلاب غير المنتهية دفعاتهم فقط أو الجميع حسب رغبة المدير
         const totalAgreed = (students || []).reduce((sum, s) => sum + Number(s.agreed_amount), 0);
 
         setStats({
@@ -53,7 +51,6 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
           totalTeachers: teachers?.length || 0
         });
 
-        // بيانات الشارت (آخر 6 أشهر)
         const monthlyData: any = {};
         const months = [...Array(6)].map((_, i) => {
           const d = new Date();
@@ -119,7 +116,10 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontWeight: 'bold'}} />
               <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontWeight: 'bold'}} />
-              <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold', textAlign: 'right'}} />
+              <Tooltip 
+                formatter={(value: any) => [`${value} ساعة`, '']}
+                contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold', textAlign: 'right'}} 
+              />
               <Area type="monotone" dataKey="hours" name="ساعة" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorHours)" />
             </AreaChart>
           </ResponsiveContainer>
