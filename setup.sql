@@ -1,105 +1,112 @@
 
 -- ==========================================
--- 1. تنظيف شامل للسياسات والوظائف القديمة المتسببة في التكرار
--- ==========================================
-DROP POLICY IF EXISTS "profiles_select_v2" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_insert_v2" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_update_v2" ON public.profiles;
-DROP POLICY IF EXISTS "students_insert_v2" ON public.students;
-DROP POLICY IF EXISTS "students_select_v2" ON public.students;
-DROP POLICY IF EXISTS "students_delete_v2" ON public.students;
-DROP POLICY IF EXISTS "lessons_insert_v2" ON public.lessons;
-DROP POLICY IF EXISTS "lessons_select_v2" ON public.lessons;
-DROP POLICY IF EXISTS "payments_insert_v2" ON public.payments;
-DROP POLICY IF EXISTS "payments_select_v2" ON public.payments;
-
--- ==========================================
--- 2. وظائف SECURITY DEFINER محسنة
--- المفتاح هنا هو استخدام SECURITY DEFINER لتجاوز RLS داخل الوظيفة نفسها
+-- 1. إنشاء الجداول الأساسية (إذا لم تكن موجودة)
 -- ==========================================
 
--- دالة للتحقق من الإدارة بدون التسبب في تكرار
-CREATE OR REPLACE FUNCTION public.is_admin_v3(u_id uuid) 
+-- جدول البروفايلات
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+  full_name text,
+  phone text UNIQUE,
+  role text DEFAULT 'teacher',
+  gender text,
+  is_approved boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- جدول الطلاب
+CREATE TABLE IF NOT EXISTS public.students (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  teacher_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  address text,
+  phone text,
+  grade text,
+  agreed_amount numeric DEFAULT 0,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- جدول الدروس
+CREATE TABLE IF NOT EXISTS public.lessons (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  student_id uuid REFERENCES public.students(id) ON DELETE CASCADE,
+  teacher_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  lesson_date date DEFAULT CURRENT_DATE,
+  hours numeric DEFAULT 1,
+  notes text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- جدول المدفوعات
+CREATE TABLE IF NOT EXISTS public.payments (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  student_id uuid REFERENCES public.students(id) ON DELETE CASCADE,
+  teacher_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  amount numeric DEFAULT 0,
+  payment_date date DEFAULT CURRENT_DATE,
+  notes text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- ==========================================
+-- 2. تنظيف السياسات والوظائف
+-- ==========================================
+DROP POLICY IF EXISTS "profiles_self_access" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_admin_access" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_insert_basic" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_update_logic" ON public.profiles;
+DROP POLICY IF EXISTS "students_all_v3" ON public.students;
+DROP POLICY IF EXISTS "lessons_all_v3" ON public.lessons;
+DROP POLICY IF EXISTS "payments_all_v3" ON public.payments;
+
+-- ==========================================
+-- 3. وظائف الحماية (Security Definer)
+-- ==========================================
+
+-- التحقق من المدير (بدون استدعاء السياسات لتجنب التكرار)
+CREATE OR REPLACE FUNCTION public.is_admin() 
 RETURNS boolean 
-LANGUAGE sql 
+LANGUAGE plpgsql 
 SECURITY DEFINER 
-SET search_path = public
 AS $$
-  SELECT EXISTS (
+BEGIN
+  RETURN EXISTS (
     SELECT 1 FROM public.profiles 
-    WHERE id = u_id AND role = 'admin'
+    WHERE id = auth.uid() AND role = 'admin'
   );
+END;
 $$;
 
--- دالة للتحقق من التفعيل بدون التسبب في تكرار
-CREATE OR REPLACE FUNCTION public.is_approved_v3(u_id uuid) 
-RETURNS boolean 
-LANGUAGE sql 
-SECURITY DEFINER 
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles 
-    WHERE id = u_id AND is_approved = true
-  );
-$$;
-
 -- ==========================================
--- 3. سياسات البروفايلات (Profiles) - الحل الجذري للتكرار
--- نقوم بتقسيم السياسات بحيث لا تستدعي السياسة نفسها وظيفة تبحث في نفس الجدول
+-- 4. تفعيل RLS وسياسات الوصول
 -- ==========================================
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 
--- الجميع يمكنهم رؤية بروفايلاتهم الخاصة دائماً (أساسي)
-CREATE POLICY "profiles_self_access" ON public.profiles 
-FOR SELECT USING (auth.uid() = id);
+-- سياسات البروفايلات (مبسطة جداً لمنع الـ Recursion)
+CREATE POLICY "p_select" ON public.profiles FOR SELECT USING (true); -- السماح بالقراءة للكل لتسهيل الربط
+CREATE POLICY "p_insert" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "p_update" ON public.profiles FOR UPDATE USING (auth.uid() = id OR public.is_admin());
 
--- المدير يمكنه رؤية جميع البروفايلات
--- نستخدم استعلام مباشر بدلاً من الدالة لمنع التعقيد في هذا الجدول تحديداً
-CREATE POLICY "profiles_admin_access" ON public.profiles 
-FOR SELECT USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+-- سياسات الطلاب
+CREATE POLICY "s_all" ON public.students FOR ALL USING (
+  auth.uid() = teacher_id OR public.is_admin()
 );
 
-CREATE POLICY "profiles_insert_basic" ON public.profiles FOR INSERT 
-WITH CHECK (auth.uid() = id);
+-- سياسات الدروس
+CREATE POLICY "l_all" ON public.lessons FOR ALL USING (
+  auth.uid() = teacher_id OR public.is_admin()
+);
 
-CREATE POLICY "profiles_update_logic" ON public.profiles FOR UPDATE 
-USING (
-  auth.uid() = id 
-  OR 
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+-- سياسات المدفوعات
+CREATE POLICY "pay_all" ON public.payments FOR ALL USING (
+  auth.uid() = teacher_id OR public.is_admin()
 );
 
 -- ==========================================
--- 4. سياسات الجداول الأخرى (Students, Lessons, Payments)
--- هنا يمكننا استخدام الوظائف بأمان لأنها لا تسبب تكراراً متقاطعاً مع البروفايلات
+-- 5. تعيين المدير الرئيسي
 -- ==========================================
-
--- الطلاب
-CREATE POLICY "students_all_v3" ON public.students FOR ALL 
-USING (
-  auth.uid() = teacher_id 
-  OR 
-  public.is_admin_v3(auth.uid())
-);
-
--- الدروس
-CREATE POLICY "lessons_all_v3" ON public.lessons FOR ALL 
-USING (
-  auth.uid() = teacher_id 
-  OR 
-  public.is_admin_v3(auth.uid())
-);
-
--- المدفوعات
-CREATE POLICY "payments_all_v3" ON public.payments FOR ALL 
-USING (
-  auth.uid() = teacher_id 
-  OR 
-  public.is_admin_v3(auth.uid())
-);
-
--- ==========================================
--- 5. تحديث المدير الافتراضي
--- ==========================================
+-- تأكد من استبدال هذا الرقم برقم هاتفك المسجل لتصبح مديراً
 UPDATE public.profiles SET role = 'admin', is_approved = true WHERE phone = '55315661';

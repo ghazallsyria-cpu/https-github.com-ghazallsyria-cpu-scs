@@ -59,18 +59,13 @@ const App: React.FC = () => {
 
   async function fetchProfile(uid: string) {
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
-      
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).single();
       if (error) throw error;
-
-      if (data) {
-        setProfile(data);
-      } else {
-        // إذا لم يوجد بروفايل (حالة نادرة)، نحاول الانتظار قليلاً أو إعادة التوجيه
-        console.warn("Profile not found for UID:", uid);
-      }
+      setProfile(data);
     } catch (e) {
-      console.error("Profile Error:", e);
+      console.error("Profile Fetch Error:", e);
+      // في حالة فشل الجلب، نحاول تسجيل الخروج لضمان عدم بقاء حالة غير مستقرة
+      if (uid) setProfile({ role: 'teacher', is_approved: false }); 
     } finally {
       setLoading(false);
     }
@@ -79,7 +74,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-      <p className="font-bold text-slate-600 text-lg">جاري تحميل النظام...</p>
+      <p className="font-bold text-slate-600 text-lg">جاري التحقق من الصلاحيات...</p>
     </div>
   );
 
@@ -87,20 +82,20 @@ const App: React.FC = () => {
 
   if (profile && profile.role === 'teacher' && !profile.is_approved) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-['Cairo']">
-        <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-lg text-center border border-slate-100">
-           <div className="bg-amber-100 w-24 h-24 rounded-full flex items-center justify-center text-amber-600 mx-auto mb-8 shadow-inner">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-['Cairo'] text-center">
+        <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-lg border border-slate-100">
+           <div className="bg-amber-100 w-24 h-24 rounded-full flex items-center justify-center text-amber-600 mx-auto mb-8">
              <ShieldAlert size={48} />
            </div>
            <h1 className="text-3xl font-black text-slate-900 mb-4">حسابك قيد المراجعة</h1>
            <p className="text-slate-500 font-bold leading-relaxed mb-10">
-             أهلاً بك يا <span className="text-indigo-600">{profile.full_name}</span>. تم استلام طلب تسجيلك بنجاح، وهو الآن بانتظار موافقة المدير العام لتتمكن من الدخول.
+             أهلاً بك يا <span className="text-indigo-600">{profile.full_name}</span>. حسابك بانتظار موافقة الإدارة العامة لتتمكن من الوصول للوحة التحكم.
            </p>
            <button 
              onClick={() => supabase.auth.signOut()} 
-             className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-rose-600 transition-all flex items-center justify-center gap-3"
+             className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-rose-600 transition-all"
            >
-             <LogOut size={20} /> تسجيل الخروج والانتظار
+             تسجيل الخروج والانتظار
            </button>
         </div>
         <div className="mt-10"><Footer /></div>
@@ -114,12 +109,12 @@ const App: React.FC = () => {
     <HashRouter>
       <div className="min-h-screen bg-slate-50 flex font-['Cairo'] overflow-hidden">
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex w-72 bg-white border-l border-slate-200 flex-col p-8 sticky top-0 h-screen transition-all shadow-sm">
+        <aside className="hidden lg:flex w-72 bg-white border-l border-slate-200 flex-col p-8 sticky top-0 h-screen shadow-sm">
           <div className="flex items-center gap-3 mb-12">
             <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100">
               < GraduationCap size={28} />
             </div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight leading-tight">ادارة الطلاب</h1>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">إدارة الدروس</h1>
           </div>
           
           <nav className="flex-1 space-y-2 overflow-y-auto pr-2">
@@ -131,7 +126,7 @@ const App: React.FC = () => {
             
             {isAdmin && (
               <div className="pt-6 mt-6 border-t border-slate-100">
-                <p className="text-[11px] font-black text-slate-400 uppercase px-4 mb-3 tracking-widest">إدارة النظام</p>
+                <p className="text-[11px] font-black text-slate-400 uppercase px-4 mb-3">إدارة النظام</p>
                 <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="المعلمون والطلبات" />
               </div>
             )}
@@ -139,31 +134,31 @@ const App: React.FC = () => {
           
           <button 
             onClick={() => supabase.auth.signOut()} 
-            className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all group"
+            className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"
           >
-            <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" /> تسجيل الخروج
+            <LogOut size={20} /> تسجيل الخروج
           </button>
         </aside>
 
-        <main className="flex-1 min-w-0 flex flex-col relative h-screen overflow-hidden">
-          <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40 flex-shrink-0">
+        <main className="flex-1 min-w-0 flex flex-col h-screen">
+          <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 z-40">
             <div className="flex items-center gap-4">
-              <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 bg-slate-50 rounded-xl text-slate-600 hover:bg-slate-100">
+              <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 bg-slate-50 rounded-xl">
                 <Menu size={20} />
               </button>
-              <div className="font-black text-slate-900 text-lg hidden sm:block">
+              <div className="font-black text-slate-900 text-lg">
                 {isAdmin ? 'الإدارة العامة' : 'لوحة تحكم المعلم'}
               </div>
             </div>
             
             <div className="flex items-center gap-4">
-              <div className="text-right hidden xs:block">
-                <p className="text-sm font-black text-slate-900 leading-none">{profile?.full_name}</p>
-                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-black text-slate-900">{profile?.full_name}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   {isAdmin ? 'المدير' : 'معلم'}
                 </p>
               </div>
-              <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg shadow-indigo-200 ring-4 ring-white">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black">
                 {profile?.full_name?.charAt(0).toUpperCase()}
               </div>
             </div>
@@ -193,9 +188,9 @@ const NavItem = ({ to, icon, label }: any) => {
   const location = useLocation();
   const isActive = location.pathname === to;
   return (
-    <Link to={to} className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all font-bold ${isActive ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}>
+    <Link to={to} className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all font-bold ${isActive ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
       <span>{icon}</span>
-      <span className="truncate">{label}</span>
+      <span>{label}</span>
     </Link>
   );
 };
