@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
@@ -14,6 +14,12 @@ import Lessons from './pages/Lessons.tsx';
 import Login from './pages/Login.tsx';
 import Teachers from './pages/Teachers.tsx';
 
+// مخزن بسيط للبيانات في الذاكرة لمنع إعادة الطلب
+const cache = {
+  profile: null as any,
+  lastUid: null as string | null
+};
+
 const Footer: React.FC = () => (
   <footer className="mt-auto py-8 text-center border-t border-slate-100 bg-white/50 backdrop-blur-sm rounded-t-[2.5rem] lg:rounded-t-[3rem] pb-24 lg:pb-8">
     <div className="flex flex-col items-center justify-center gap-2">
@@ -22,7 +28,7 @@ const Footer: React.FC = () => (
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 2.0.1 &copy; {new Date().getFullYear()}
+        الإصدار 2.1.0 (تحسين الأداء) &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
@@ -59,7 +65,6 @@ const MobileNav: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   );
 };
 
-// مكون تفعيل الحساب
 const ActivationOverlay: React.FC<{ onActivated: () => void, profileName: string }> = ({ onActivated, profileName }) => {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -73,11 +78,10 @@ const ActivationOverlay: React.FC<{ onActivated: () => void, profileName: string
     
     try {
       const { data, error: funcError } = await supabase.rpc('activate_account_with_code', { provided_code: code.trim().toUpperCase() });
-      
       if (funcError) throw funcError;
-
       if (data.success) {
         setSuccess(true);
+        cache.profile = null; // تفريغ الكاش لإجبار النظام على جلب البيانات الجديدة
         setTimeout(() => onActivated(), 2000);
       } else {
         setError(data.message);
@@ -93,57 +97,23 @@ const ActivationOverlay: React.FC<{ onActivated: () => void, profileName: string
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 font-['Cairo'] text-right">
       <div className="bg-white w-full max-w-lg p-10 md:p-14 rounded-[3.5rem] shadow-2xl relative overflow-hidden">
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-50 rounded-full opacity-50"></div>
-        
         <div className="relative z-10">
-          <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3">
-            <KeyRound size={40} />
-          </div>
-          
-          <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط حساب المعلم</h2>
-          <p className="text-slate-500 font-bold mb-8">مرحباً بك <span className="text-indigo-600">{profileName}</span>. حسابك بانتظار التنشيط، يرجى إدخال الكود المستلم من الإدارة.</p>
-
-          {error && (
-            <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100 animate-shake">
-              <ShieldAlert size={20} className="shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {success && (
-            <div className="bg-emerald-50 text-emerald-600 p-6 rounded-[2rem] mb-6 text-center animate-bounce">
-              <CheckCircle size={48} className="mx-auto mb-3" />
-              <p className="font-black">تم تفعيل حسابك بنجاح! جاري التحميل...</p>
-            </div>
-          )}
-
+          <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3"><KeyRound size={40} /></div>
+          <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط الحساب</h2>
+          <p className="text-slate-500 font-bold mb-8">مرحباً بك <span className="text-indigo-600">{profileName}</span>. أدخل كود التفعيل لتشغيل النظام.</p>
+          {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100"><ShieldAlert size={20} /><span>{error}</span></div>}
+          {success && <div className="bg-emerald-50 text-emerald-600 p-6 rounded-[2rem] mb-6 text-center animate-bounce"><CheckCircle size={48} className="mx-auto mb-3" /><p className="font-black">تم التفعيل بنجاح!</p></div>}
           {!success && (
             <form onSubmit={handleActivate} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest">كود التفعيل (8 خانات)</label>
-                <input 
-                  required 
-                  maxLength={8}
-                  placeholder="مثال: ABC123XY"
-                  className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-3xl tracking-[0.3em] uppercase outline-none focus:border-indigo-500 transition-all placeholder:tracking-normal placeholder:text-sm"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
-              </div>
-              
-              <button 
-                disabled={loading || code.length < 5}
-                className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[2rem] font-black shadow-2xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 text-lg"
-              >
-                {loading ? <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div> : "تنشيط الحساب الآن"}
+              <input 
+                required maxLength={8} placeholder="ABC123XY"
+                className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-3xl tracking-[0.3em] uppercase outline-none focus:border-indigo-500 transition-all"
+                value={code} onChange={(e) => setCode(e.target.value)}
+              />
+              <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 disabled:opacity-50 text-lg">
+                {loading ? "جاري المعالجة..." : "تنشيط الحساب الآن"}
               </button>
-
-              <button 
-                type="button"
-                onClick={() => supabase.auth.signOut()}
-                className="w-full py-4 text-slate-400 font-bold hover:text-rose-500 transition-colors flex items-center justify-center gap-2"
-              >
-                <LogOut size={18} /> تسجيل الخروج والعودة لاحقاً
-              </button>
+              <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold hover:text-rose-500 transition-colors flex items-center justify-center gap-2"><LogOut size={18} /> تسجيل الخروج</button>
             </form>
           )}
         </div>
@@ -157,22 +127,25 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [supervisedTeacher, setSupervisedTeacher] = useState<{id: string, name: string} | null>(null);
-  
   const [currentYear, setCurrentYear] = useState('2024-2025');
   const [currentSemester, setCurrentSemester] = useState('1');
 
-  const fetchProfile = async (uid: string) => {
+  const fetchProfile = async (uid: string, force = false) => {
+    // استخدام الكاش إذا كان موجوداً لنفس المستخدم
+    if (!force && cache.profile && cache.lastUid === uid) {
+      setProfile(cache.profile);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, role, full_name, is_approved')
-        .eq('id', uid)
-        .maybeSingle();
-      
+      const { data, error } = await supabase.from('profiles').select('id, role, full_name, is_approved').eq('id', uid).maybeSingle();
       if (error) throw error;
-      setProfile(data || { role: 'teacher', is_approved: false });
+      const profileData = data || { role: 'teacher', is_approved: false };
+      cache.profile = profileData;
+      cache.lastUid = uid;
+      setProfile(profileData);
     } catch (e) {
-      console.error("Profile Fetch Error:", e);
       setProfile({ role: 'teacher', is_approved: false }); 
     } finally {
       setLoading(false);
@@ -181,52 +154,35 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const init = async () => {
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        setSession(currentSession);
-        if (currentSession) {
-          await fetchProfile(currentSession.user.id);
-        } else {
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error(err);
-        setLoading(false);
-      }
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      setSession(currentSession);
+      if (currentSession) await fetchProfile(currentSession.user.id);
+      else setLoading(false);
     };
     init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
-      if (newSession) {
-        fetchProfile(newSession.user.id);
-      } else {
+      if (newSession) fetchProfile(newSession.user.id);
+      else {
         setProfile(null);
+        cache.profile = null;
         setLoading(false);
       }
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleLogout = async () => {
-    if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
-      await supabase.auth.signOut();
-    }
-  };
-
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
-      <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-      <p className="font-bold text-slate-600 text-lg">جاري تحميل النظام الفني...</p>
+    <div className="h-screen flex flex-col items-center justify-center bg-white">
+      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p className="font-bold text-slate-400">تحسين اتصال البيانات...</p>
     </div>
   );
 
   if (!session) return <Login />;
-
-  // إذا كان المستخدم معلماً وغير مفعل، نظهر واجهة التنشيط
   if (profile && !profile.is_approved && profile.role !== 'admin' && !supervisedTeacher) {
-    return <ActivationOverlay profileName={profile.full_name} onActivated={() => fetchProfile(session.user.id)} />;
+    return <ActivationOverlay profileName={profile.full_name} onActivated={() => fetchProfile(session.user.id, true)} />;
   }
 
   const isAdmin = profile?.role === 'admin';
@@ -237,18 +193,15 @@ const App: React.FC = () => {
     <HashRouter>
       <div className="min-h-screen bg-slate-50 flex font-['Cairo'] overflow-x-hidden">
         {supervisedTeacher && (
-          <div className="fixed top-0 inset-x-0 h-10 bg-amber-500 text-white z-[100] flex items-center justify-center gap-4 px-4 shadow-lg">
+          <div className="fixed top-0 inset-x-0 h-10 bg-amber-500 text-white z-[100] flex items-center justify-center gap-4 px-4 shadow-lg animate-in slide-in-from-top duration-300">
             <span className="font-black text-[10px]">وضع الإشراف: {supervisedTeacher.name}</span>
             <button onClick={() => setSupervisedTeacher(null)} className="bg-white/20 hover:bg-white/40 px-2 py-0.5 rounded text-[9px] font-black flex items-center gap-1"><EyeOff size={10} /> إنهاء</button>
           </div>
         )}
 
-        {/* Sidebar Desktop */}
         <aside className="hidden lg:flex w-72 bg-white border-l border-slate-200 flex-col p-8 sticky top-0 h-screen shadow-sm">
           <div className="flex items-center gap-3 mb-12">
-            <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl">
-              < GraduationCap size={28} />
-            </div>
+            <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl"><GraduationCap size={28} /></div>
             <h1 className="text-xl font-black text-slate-900 tracking-tight">إدارة الدروس</h1>
           </div>
           <nav className="flex-1 space-y-2 overflow-y-auto pr-2">
@@ -259,44 +212,28 @@ const App: React.FC = () => {
             <NavItem to="/statistics" icon={<BarChart3 size={20} />} label="الإحصائيات" />
             {isAdmin && (
               <div className="pt-6 mt-6 border-t border-slate-100">
-                <p className="text-[10px] font-black text-slate-400 uppercase px-4 mb-3">النظام</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase px-4 mb-3">نظام الإدارة</p>
                 <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="المعلمون" />
               </div>
             )}
           </nav>
-          <button onClick={handleLogout} className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> تسجيل خروج</button>
+          <button onClick={() => confirm('تسجيل خروج؟') && supabase.auth.signOut()} className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> تسجيل خروج</button>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 flex flex-col min-h-screen max-w-full">
           <header className={`h-16 lg:h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-10 z-40 sticky top-0 ${supervisedTeacher ? 'mt-10' : ''}`}>
             <div className="flex items-center gap-3 lg:gap-6">
-              {/* اختيار السنة والفصل */}
-              <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl lg:rounded-2xl border border-slate-200">
-                <div className="relative group">
-                   <select 
-                    value={currentYear} 
-                    onChange={(e) => setCurrentYear(e.target.value)}
-                    className="bg-transparent text-[10px] lg:text-xs font-black text-slate-700 outline-none pr-6 pl-2 py-1 appearance-none cursor-pointer"
-                   >
-                     <option value="2023-2024">2023-2024</option>
-                     <option value="2024-2025">2024-2025</option>
-                     <option value="2025-2026">2025-2026</option>
-                   </select>
-                   <CalendarDays size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
+              <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <select value={currentYear} onChange={(e) => setCurrentYear(e.target.value)} className="bg-transparent text-[10px] lg:text-xs font-black text-slate-700 outline-none px-2 py-1 appearance-none cursor-pointer">
+                  <option value="2023-2024">2023-2024</option>
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                </select>
                 <div className="w-px h-4 bg-slate-300"></div>
-                <div className="relative group">
-                   <select 
-                    value={currentSemester} 
-                    onChange={(e) => setCurrentSemester(e.target.value)}
-                    className="bg-transparent text-[10px] lg:text-xs font-black text-slate-700 outline-none pr-6 pl-2 py-1 appearance-none cursor-pointer"
-                   >
-                     <option value="1">الفصل الأول</option>
-                     <option value="2">الفصل الثاني</option>
-                   </select>
-                   <Layers size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
+                <select value={currentSemester} onChange={(e) => setCurrentSemester(e.target.value)} className="bg-transparent text-[10px] lg:text-xs font-black text-slate-700 outline-none px-2 py-1 appearance-none cursor-pointer">
+                  <option value="1">الفصل الأول</option>
+                  <option value="2">الفصل الثاني</option>
+                </select>
               </div>
             </div>
 
@@ -305,20 +242,13 @@ const App: React.FC = () => {
                 <p className="text-xs lg:text-sm font-black text-slate-900">{profile?.full_name}</p>
                 <p className="text-[9px] lg:text-[10px] font-bold text-slate-400 uppercase">{isAdmin ? 'المدير' : 'معلم'}</p>
               </div>
-              <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl lg:rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg uppercase text-sm">
+              <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg uppercase text-sm">
                 {profile?.full_name?.charAt(0) || 'U'}
               </div>
-              <button 
-                onClick={handleLogout} 
-                className="lg:hidden p-2 text-rose-500 bg-rose-50 rounded-xl hover:bg-rose-100 transition-all"
-                aria-label="تسجيل خروج"
-              >
-                <LogOut size={20} />
-              </button>
             </div>
           </header>
 
-          <div className="flex-1 p-4 lg:p-10 flex flex-col pb-24 lg:pb-10">
+          <div className="flex-1 p-4 lg:p-10 flex flex-col pb-24 lg:pb-10 overflow-y-auto">
             <div className="max-w-7xl mx-auto w-full flex-grow">
               <Routes>
                 <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
@@ -332,7 +262,6 @@ const App: React.FC = () => {
             </div>
             <Footer />
           </div>
-
           <MobileNav isAdmin={isAdmin} />
         </main>
       </div>
