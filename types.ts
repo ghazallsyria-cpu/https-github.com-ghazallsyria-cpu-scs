@@ -27,22 +27,13 @@ export interface Student {
   created_at: string;
 }
 
-export interface Lesson {
+export interface Schedule {
   id: string;
   teacher_id: string;
   student_id: string;
-  lesson_date: string;
-  hours: number;
-  notes?: string;
-  created_at: string;
-}
-
-export interface Payment {
-  id: string;
-  teacher_id: string;
-  student_id: string;
-  amount: number;
-  payment_date: string;
+  day_of_week: string;
+  start_time: string;
+  duration_hours: number;
   notes?: string;
   created_at: string;
 }

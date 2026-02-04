@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, Menu, X, CalendarDays, Layers, CheckCircle, KeyRound, ArrowLeft
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, Menu, X, CalendarDays, Layers, CheckCircle, KeyRound, ArrowLeft, Clock
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard.tsx';
@@ -13,6 +13,7 @@ import Payments from './pages/Payments.tsx';
 import Lessons from './pages/Lessons.tsx';
 import Login from './pages/Login.tsx';
 import Teachers from './pages/Teachers.tsx';
+import Schedule from './pages/Schedule.tsx';
 
 // مخزن بسيط للبيانات في الذاكرة لمنع إعادة الطلب
 const cache = {
@@ -28,7 +29,7 @@ const Footer: React.FC = () => (
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 2.1.0 (تحسين الأداء) &copy; {new Date().getFullYear()}
+        الإصدار 2.5.0 (نظام الجدولة الذكي) &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
@@ -38,10 +39,10 @@ const MobileNav: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   const location = useLocation();
   const navItems = [
     { to: '/', icon: <LayoutDashboard size={20} />, label: 'الرئيسية' },
+    { to: '/schedule', icon: <Clock size={20} />, label: 'الجدول' },
     { to: '/students', icon: <Users size={20} />, label: 'الطلاب' },
-    { to: '/lessons', icon: <BookOpen size={20} />, label: 'الدروس' },
+    { to: '/lessons', icon: <BookOpen size={20} />, label: 'الحصص' },
     { to: '/payments', icon: <Wallet size={20} />, label: 'المالية' },
-    { to: '/statistics', icon: <BarChart3 size={20} />, label: 'تقارير' },
   ];
 
   return (
@@ -65,63 +66,6 @@ const MobileNav: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   );
 };
 
-const ActivationOverlay: React.FC<{ onActivated: () => void, profileName: string }> = ({ onActivated, profileName }) => {
-  const [code, setCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-
-  const handleActivate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      const { data, error: funcError } = await supabase.rpc('activate_account_with_code', { provided_code: code.trim().toUpperCase() });
-      if (funcError) throw funcError;
-      if (data.success) {
-        setSuccess(true);
-        cache.profile = null; // تفريغ الكاش لإجبار النظام على جلب البيانات الجديدة
-        setTimeout(() => onActivated(), 2000);
-      } else {
-        setError(data.message);
-      }
-    } catch (err: any) {
-      setError(err.message || 'حدث خطأ أثناء الاتصال بالنظام');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 font-['Cairo'] text-right">
-      <div className="bg-white w-full max-w-lg p-10 md:p-14 rounded-[3.5rem] shadow-2xl relative overflow-hidden">
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-50 rounded-full opacity-50"></div>
-        <div className="relative z-10">
-          <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3"><KeyRound size={40} /></div>
-          <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط الحساب</h2>
-          <p className="text-slate-500 font-bold mb-8">مرحباً بك <span className="text-indigo-600">{profileName}</span>. أدخل كود التفعيل لتشغيل النظام.</p>
-          {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100"><ShieldAlert size={20} /><span>{error}</span></div>}
-          {success && <div className="bg-emerald-50 text-emerald-600 p-6 rounded-[2rem] mb-6 text-center animate-bounce"><CheckCircle size={48} className="mx-auto mb-3" /><p className="font-black">تم التفعيل بنجاح!</p></div>}
-          {!success && (
-            <form onSubmit={handleActivate} className="space-y-6">
-              <input 
-                required maxLength={8} placeholder="ABC123XY"
-                className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-3xl tracking-[0.3em] uppercase outline-none focus:border-indigo-500 transition-all"
-                value={code} onChange={(e) => setCode(e.target.value)}
-              />
-              <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 disabled:opacity-50 text-lg">
-                {loading ? "جاري المعالجة..." : "تنشيط الحساب الآن"}
-              </button>
-              <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold hover:text-rose-500 transition-colors flex items-center justify-center gap-2"><LogOut size={18} /> تسجيل الخروج</button>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any | null>(null);
@@ -131,7 +75,6 @@ const App: React.FC = () => {
   const [currentSemester, setCurrentSemester] = useState('1');
 
   const fetchProfile = async (uid: string, force = false) => {
-    // استخدام الكاش إذا كان موجوداً لنفس المستخدم
     if (!force && cache.profile && cache.lastUid === uid) {
       setProfile(cache.profile);
       setLoading(false);
@@ -176,7 +119,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white">
       <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="font-bold text-slate-400">تحسين اتصال البيانات...</p>
+      <p className="font-bold text-slate-400 font-['Cairo']">تحميل النظام...</p>
     </div>
   );
 
@@ -206,6 +149,7 @@ const App: React.FC = () => {
           </div>
           <nav className="flex-1 space-y-2 overflow-y-auto pr-2">
             <NavItem to="/" icon={<LayoutDashboard size={20} />} label="الرئيسية" />
+            <NavItem to="/schedule" icon={<Clock size={20} />} label="الجدول الزمني" />
             <NavItem to="/students" icon={<Users size={20} />} label="الطلاب" />
             <NavItem to="/lessons" icon={<BookOpen size={20} />} label="سجل الدروس" />
             <NavItem to="/payments" icon={<Wallet size={20} />} label="المالية" />
@@ -252,6 +196,7 @@ const App: React.FC = () => {
             <div className="max-w-7xl mx-auto w-full flex-grow">
               <Routes>
                 <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
                 <Route path="/students" element={<Students role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                 <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                 <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
@@ -266,6 +211,53 @@ const App: React.FC = () => {
         </main>
       </div>
     </HashRouter>
+  );
+};
+
+const ActivationOverlay = ({ onActivated, profileName }: any) => {
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleActivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const { data, error: funcError } = await supabase.rpc('activate_account_with_code', { provided_code: code.trim().toUpperCase() });
+      if (funcError) throw funcError;
+      if (data.success) {
+        setSuccess(true);
+        cache.profile = null;
+        setTimeout(() => onActivated(), 2000);
+      } else setError(data.message);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 text-right">
+      <div className="bg-white w-full max-w-lg p-10 md:p-14 rounded-[3.5rem] shadow-2xl relative overflow-hidden">
+        <div className="relative z-10">
+          <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3"><KeyRound size={40} /></div>
+          <h2 className="text-3xl font-black text-slate-900 mb-2 font-['Cairo']">تنشيط الحساب</h2>
+          <p className="text-slate-500 font-bold mb-8 font-['Cairo']">أهلاً <span className="text-indigo-600">{profileName}</span>. أدخل كود التفعيل لتشغيل النظام.</p>
+          {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100 font-['Cairo']"><ShieldAlert size={20} /><span>{error}</span></div>}
+          {success && <div className="bg-emerald-50 text-emerald-600 p-6 rounded-[2rem] mb-6 text-center animate-bounce font-['Cairo']"><CheckCircle size={48} className="mx-auto mb-3" /><p className="font-black">تم التفعيل بنجاح!</p></div>}
+          {!success && (
+            <form onSubmit={handleActivate} className="space-y-6">
+              <input required maxLength={8} placeholder="ABC123XY" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-3xl tracking-[0.3em] uppercase outline-none focus:border-indigo-500 transition-all font-['Cairo']" value={code} onChange={(e) => setCode(e.target.value)} />
+              <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 disabled:opacity-50 text-lg font-['Cairo']">{loading ? "جاري المعالجة..." : "تنشيط الحساب الآن"}</button>
+              <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold hover:text-rose-500 transition-colors flex items-center justify-center gap-2 font-['Cairo']"><LogOut size={18} /> تسجيل الخروج</button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
