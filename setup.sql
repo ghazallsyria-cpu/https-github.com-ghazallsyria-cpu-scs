@@ -1,31 +1,52 @@
 
--- جدول المواعيد الأسبوعية
-CREATE TABLE IF NOT EXISTS public.schedules (
+-- إضافة حقول جديدة لجدول الطلاب
+ALTER TABLE public.students 
+ADD COLUMN IF NOT EXISTS school_name TEXT,
+ADD COLUMN IF NOT EXISTS phones JSONB DEFAULT '[]'::jsonb;
+
+-- إضافة حقول جديدة لجدول المدفوعات
+ALTER TABLE public.payments 
+ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'كاش',
+ADD COLUMN IF NOT EXISTS payment_number TEXT,
+ADD COLUMN IF NOT EXISTS is_final BOOLEAN DEFAULT false;
+
+-- إنشاء جدول السجلات الدراسية (الملاحظات ونقاط الضعف)
+CREATE TABLE IF NOT EXISTS public.academic_records (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
     student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
-    day_of_week TEXT NOT NULL, -- 'السبت', 'الأحد', إلخ
-    start_time TIME NOT NULL,
-    duration_hours NUMERIC DEFAULT 1,
-    notes TEXT,
+    teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    status_notes TEXT,
+    weaknesses TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- فهرس لتحسين سرعة الاستعلام
-CREATE INDEX IF NOT EXISTS idx_schedules_teacher_day ON public.schedules (teacher_id, day_of_week);
+-- تفعيل الحماية للسجل الدراسي
+ALTER TABLE public.academic_records ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Manage own academic records" ON public.academic_records FOR ALL USING (auth.uid() = teacher_id);
 
--- تفعيل سياسات الحماية (RLS)
-ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Teachers can manage their own schedules" 
-ON public.schedules FOR ALL 
-USING (auth.uid() = teacher_id);
-
-CREATE POLICY "Admins can see all schedules" 
-ON public.schedules FOR SELECT 
-USING (
-  EXISTS (
-    SELECT 1 FROM profiles 
-    WHERE id = auth.uid() AND role = 'admin'
-  )
-);
+-- تحديث الـ View ليشمل الحقول الجديدة
+OR REPLACE VIEW public.student_summary_view AS
+SELECT 
+    s.*,
+    COALESCE(l.total_lessons, 0) as total_lessons,
+    COALESCE(l.total_hours, 0) as total_hours,
+    COALESCE(p.total_paid, 0) as total_paid,
+    CASE 
+        WHEN s.is_hourly THEN COALESCE(l.total_hours, 0) * s.price_per_hour
+        ELSE s.agreed_amount
+    END as expected_income,
+    (CASE 
+        WHEN s.is_hourly THEN COALESCE(l.total_hours, 0) * s.price_per_hour
+        ELSE s.agreed_amount
+    END) - COALESCE(p.total_paid, 0) as remaining_balance
+FROM students s
+LEFT JOIN (
+    SELECT student_id, COUNT(*) as total_lessons, SUM(hours) as total_hours
+    FROM lessons
+    GROUP BY student_id
+) l ON s.id = l.student_id
+LEFT JOIN (
+    SELECT student_id, SUM(amount) as total_paid
+    FROM payments
+    GROUP BY student_id
+) p ON s.id = p.student_id;
