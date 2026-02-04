@@ -1,10 +1,9 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase.ts';
-// Added 'History' and 'DollarSign' to imports
 import { 
   Calendar, Clock, BookOpen, ChevronLeft, Plus, Info, 
-  Wallet, MessageCircle, School, Star, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, History, DollarSign
+  Wallet, MessageCircle, School, Star, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, History, DollarSign, Folder, FolderOpen
 } from 'lucide-react';
 
 const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
@@ -15,6 +14,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'lessons' | 'payments' | 'academic'>('lessons');
+  const [selectedGradeFolder, setSelectedGradeFolder] = useState<string>('الكل');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
@@ -59,7 +59,6 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
   useEffect(() => { 
     if (selectedStudent) {
       fetchRecords(selectedStudent.id);
-      // تحديث بيانات الطالب لضمان آخر الإحصائيات
       const updated = students.find(s => s.id === selectedStudent.id);
       if (updated) setSelectedStudent(updated);
     }
@@ -78,7 +77,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
       showFeedback("تم تسجيل الدفعة بنجاح");
       setIsModalOpen(false); 
       setPaymentForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], payment_method: 'كاش', payment_number: 'الأولى', is_final: false, notes: '' });
-      await fetchStudents(); // تحديث الإحصائيات العامة
+      await fetchStudents();
     } catch (err: any) { showFeedback(err.message, "error"); }
   };
 
@@ -95,7 +94,16 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
     } catch (err: any) { showFeedback(err.message, "error"); }
   };
 
-  // ميزة ذكية: حساب معدل ثمن الحصة عند اكتمال الذمة المالية
+  const filteredStudents = useMemo(() => {
+    return students.filter(s => selectedGradeFolder === 'الكل' || s.grade === selectedGradeFolder);
+  }, [students, selectedGradeFolder]);
+
+  const gradeCounts = useMemo(() => {
+    const counts: any = { '10': 0, '11': 0, '12': 0, 'الكل': students.length };
+    students.forEach(s => { if (counts[s.grade] !== undefined) counts[s.grade]++; });
+    return counts;
+  }, [students]);
+
   const averagePrice = selectedStudent && selectedStudent.remaining_balance <= 0 && selectedStudent.total_lessons > 0
     ? (selectedStudent.total_paid / selectedStudent.total_lessons).toFixed(2)
     : null;
@@ -110,29 +118,62 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
       )}
 
       {!selectedStudent ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {students.map(s => (
-            <div key={s.id} onClick={() => setSelectedStudent(s)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 hover:border-indigo-600 cursor-pointer transition-all shadow-sm group">
-               <div className="flex justify-between items-start mb-4">
-                 <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{s.name}</h3>
-                 <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black">الصف {s.grade}</span>
-               </div>
-               <p className="text-xs text-slate-400 font-bold mb-4 flex items-center gap-2"><School size={14}/> {s.school_name || 'بلا مدرسة'}</p>
-               <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100 group-hover:bg-indigo-50 transition-colors">
-                  <div className="text-right">
-                    <p className="text-[9px] font-black text-slate-400 uppercase">المتبقي</p>
-                    <p className={`font-black ${s.remaining_balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>${s.remaining_balance}</p>
+        <div className="space-y-8">
+          {/* Folders Navigation */}
+          <div className="flex flex-wrap gap-4 animate-in slide-in-from-top duration-700">
+            {[
+              { id: 'الكل', label: 'كافة الطلاب' },
+              { id: '10', label: 'الصف العاشر (10)' },
+              { id: '11', label: 'الحادي عشر (11)' },
+              { id: '12', label: 'الثاني عشر (12)' },
+            ].map((folder) => {
+              const isActive = selectedGradeFolder === folder.id;
+              const count = gradeCounts[folder.id];
+              return (
+                <button
+                  key={folder.id}
+                  onClick={() => setSelectedGradeFolder(folder.id)}
+                  className={`flex-1 min-w-[140px] p-4 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${
+                    isActive ? 'border-indigo-600 bg-indigo-50/30' : 'border-slate-100 bg-white hover:border-slate-200 shadow-sm'
+                  }`}
+                >
+                  <div className={`p-3 rounded-2xl ${isActive ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-400 shadow-inner'}`}>
+                    {isActive ? <FolderOpen size={24} /> : <Folder size={24} />}
                   </div>
-                  <ChevronLeft size={18} className="text-indigo-300 group-hover:text-indigo-600 transition-all"/>
-               </div>
-            </div>
-          ))}
-          {students.length === 0 && (
-            <div className="col-span-full py-20 text-center bg-white rounded-[3.5rem] border-4 border-dashed border-slate-50">
-              <BookOpen size={64} className="mx-auto text-slate-200 mb-4" />
-              <p className="text-slate-400 font-black text-lg">لا يوجد طلاب مسجلين لهذا الفصل.</p>
-            </div>
-          )}
+                  <div className="text-center">
+                    <p className={`text-[11px] font-black ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>{folder.label}</p>
+                    <p className={`text-[9px] font-bold ${isActive ? 'text-indigo-400' : 'text-slate-400'}`}>{count} طالب</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* List of Students in Folder */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredStudents.map(s => (
+              <div key={s.id} onClick={() => setSelectedStudent(s)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 hover:border-indigo-600 cursor-pointer transition-all shadow-sm group animate-in zoom-in duration-300">
+                 <div className="flex justify-between items-start mb-4">
+                   <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{s.name}</h3>
+                   <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black">الصف {s.grade}</span>
+                 </div>
+                 <p className="text-xs text-slate-400 font-bold mb-4 flex items-center gap-2"><School size={14}/> {s.school_name || 'بلا مدرسة'}</p>
+                 <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100 group-hover:bg-indigo-50 transition-colors">
+                    <div className="text-right">
+                      <p className="text-[9px] font-black text-slate-400 uppercase">المتبقي</p>
+                      <p className={`font-black ${s.remaining_balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>${s.remaining_balance.toLocaleString()}</p>
+                    </div>
+                    <ChevronLeft size={18} className="text-indigo-300 group-hover:text-indigo-600 transition-all"/>
+                 </div>
+              </div>
+            ))}
+            {filteredStudents.length === 0 && (
+              <div className="col-span-full py-20 text-center bg-white rounded-[3.5rem] border-4 border-dashed border-slate-50">
+                <Folder size={64} className="mx-auto text-slate-100 mb-4" />
+                <p className="text-slate-400 font-black text-lg">هذا المجلد لا يحتوي على طلاب مسجلين.</p>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-6">
@@ -298,7 +339,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 text-right">
-          <form onSubmit={handleAddPayment} className="bg-white w-full max-w-md p-10 rounded-[3.5rem] shadow-2xl relative animate-in zoom-in duration-300 border border-slate-100">
+          <form onSubmit={handleAddPayment} className="bg-white w-full max-md p-10 rounded-[3.5rem] shadow-2xl relative animate-in zoom-in duration-300 border border-slate-100">
             <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500"><X size={28}/></button>
             <h2 className="text-2xl font-black mb-10 text-slate-900">تسجيل دفعة نقدية</h2>
             

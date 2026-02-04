@@ -24,8 +24,11 @@ CREATE TABLE IF NOT EXISTS public.academic_records (
 ALTER TABLE public.academic_records ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Manage own academic records" ON public.academic_records FOR ALL USING (auth.uid() = teacher_id);
 
--- تحديث الـ View ليشمل الحقول الجديدة (تم تصحيح CREATE OR REPLACE)
-CREATE OR REPLACE VIEW public.student_summary_view AS
+-- حذف الـ View القديم لتجنب أخطاء تغيير هيكلية الأعمدة (Metadata Conflict)
+DROP VIEW IF EXISTS public.student_summary_view;
+
+-- إعادة إنشاء الـ View بالهيكلية الجديدة
+CREATE VIEW public.student_summary_view AS
 SELECT 
     s.*,
     COALESCE(l.total_lessons, 0) as total_lessons,
