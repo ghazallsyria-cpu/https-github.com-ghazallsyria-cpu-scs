@@ -89,7 +89,7 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
             <span className="bg-slate-200 text-slate-700 text-[10px] font-black px-3 py-1 rounded-full shadow-sm">الفصل الدراسي {semester}</span>
           </div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">أداء الفصل الدراسي</h1>
-          <p className="text-slate-500 font-bold mt-2">بيانات مجمعة فورياً من محرك الحسابات السحابي.</p>
+          <p className="text-slate-500 font-bold mt-2">إحصائيات فورية ومحدثة بناءً على البيانات المدخلة.</p>
         </div>
       </div>
       
@@ -137,9 +137,11 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
             </div>
           </div>
           <div className="space-y-4 relative z-10">
-             <div className="flex justify-between items-end mb-1">
+             <div className="flex justify-between items-end">
                 <p className="text-slate-500 text-[10px] font-black uppercase">نسبة التحصيل من الإجمالي</p>
-                <span className="text-2xl font-black text-emerald-500">{collectionRate}%</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-emerald-500">{collectionRate}%</span>
+                </div>
              </div>
              <div className="w-full bg-white/10 h-4 rounded-full overflow-hidden p-0.5">
                <div 
