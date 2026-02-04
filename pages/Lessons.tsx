@@ -205,11 +205,10 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
                    </div>
                    {averagePrice && (
                      <div className="bg-indigo-600/30 p-6 rounded-[2.5rem] col-span-2 border border-indigo-500/40 flex justify-between items-center px-10 animate-in zoom-in duration-500 shadow-xl shadow-indigo-900/20">
-                        <div>
-                          <p className="text-[10px] text-indigo-200 font-black uppercase tracking-[0.2em] flex items-center gap-2 mb-1"><Star size={16} className="text-amber-400 fill-amber-400"/> معدل ثمن الحصة الواحدة</p>
+                        <div className="w-full text-center">
+                          <p className="text-[10px] text-indigo-200 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 mb-1"><Star size={16} className="text-amber-400 fill-amber-400"/> معدل ثمن الحصة الواحدة</p>
                           <p className="text-4xl font-black text-white">${averagePrice}</p>
                         </div>
-                        <p className="text-4xl font-black text-white">${averagePrice}</p>
                      </div>
                    )}
                 </div>
@@ -222,7 +221,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
                {id: 'payments', label: 'المالية والدفع', icon: <Wallet size={16}/>},
                {id: 'academic', label: 'المتابعة الدراسية', icon: <Target size={16}/>}
              ].map((t) => (
-               <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3.5 rounded-[1.5rem] font-black text-xs transition-all ${activeTab === t.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50'}`}>
+               <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3.5 rounded-[1.5rem] font-black text-xs transition-all ${activeTab === t.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50'}`}>
                  {t.icon} {t.label}
                </button>
              ))}

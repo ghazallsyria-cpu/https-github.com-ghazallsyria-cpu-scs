@@ -1,9 +1,8 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase.ts';
-import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User, AlertCircle, History, Trash2, Calendar, FileText, Clock } from 'lucide-react';
+import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User, AlertCircle, History, Trash2, Calendar, FileText, Clock, Folder, FolderOpen, Search } from 'lucide-react';
 
-// Fix: Added year and semester props to the component signature and type definition.
 const Payments = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const [students, setStudents] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<any[]>([]);
@@ -11,7 +10,16 @@ const Payments = ({ role, uid, year, semester }: { role: any, uid: string, year:
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
-  const [paymentForm, setPaymentForm] = useState({ amount: '', payment_date: new Date().toISOString().split('T')[0], notes: '' });
+  const [selectedGradeFolder, setSelectedGradeFolder] = useState<string>('الكل');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [paymentForm, setPaymentForm] = useState({ 
+    amount: '', 
+    payment_date: new Date().toISOString().split('T')[0], 
+    notes: '',
+    payment_method: 'كاش',
+    payment_number: 'الأولى',
+    is_final: false
+  });
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   const isAdmin = role === 'admin';
@@ -21,59 +29,20 @@ const Payments = ({ role, uid, year, semester }: { role: any, uid: string, year:
     setTimeout(() => setFeedback(null), 3000);
   };
 
-  // Fix: Wrapped fetchFinancialData in useCallback and implemented period-based filtering.
   const fetchFinancialData = useCallback(async () => {
     setLoading(true);
     try {
-      // First, fetch students for the selected academic year and semester.
-      let qStds = supabase
-        .from('students')
-        .select('*, profiles:teacher_id(full_name)')
-        .eq('academic_year', year)
-        .eq('semester', semester);
-      
-      if (!isAdmin) {
-        qStds = qStds.eq('teacher_id', uid);
-      }
-      
+      let qStds = supabase.from('student_summary_view').select('*, profiles:teacher_id(full_name)').eq('academic_year', year).eq('semester', semester);
+      if (!isAdmin) qStds = qStds.eq('teacher_id', uid);
       const { data: stds } = await qStds;
-      const studentIds = stds?.map(s => s.id) || [];
 
-      // Filter financial records (payments and lessons) based on the student IDs of the selected period.
+      const studentIds = stds?.map(s => s.id) || [];
       let qPays = supabase.from('payments').select('*, students(name)').in('student_id', studentIds);
-      let qLsns = supabase.from('lessons').select('student_id, hours').in('student_id', studentIds);
-      
-      if (!isAdmin) {
-        qPays = qPays.eq('teacher_id', uid);
-        qLsns = qLsns.eq('teacher_id', uid);
-      }
-      
-      const [{ data: pays }, { data: lsns }] = await Promise.all([qPays, qLsns]);
+      if (!isAdmin) qPays = qPays.eq('teacher_id', uid);
+      const { data: pays } = await qPays;
       
       setAllPayments(pays || []);
-
-      const enriched = (stds || []).map(s => {
-        const studentPayments = (pays || []).filter(p => p.student_id === s.id);
-        const studentLessons = (lsns || []).filter(l => l.student_id === s.id);
-        
-        const totalPaid = studentPayments.reduce((acc, p) => acc + Number(p.amount), 0);
-        const totalHours = studentLessons.reduce((acc, l) => acc + Number(l.hours), 0);
-        
-        // حساب المبلغ المتوقع بناءً على نوع الطالب
-        const expectedIncome = s.is_hourly 
-          ? (totalHours * Number(s.price_per_hour)) 
-          : Number(s.agreed_amount);
-
-        return { 
-          ...s, 
-          totalPaid, 
-          totalHours,
-          expectedIncome,
-          balance: expectedIncome - totalPaid,
-          paymentsCount: studentPayments.length 
-        };
-      });
-      setStudents(enriched);
+      setStudents(stds || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -89,9 +58,12 @@ const Payments = ({ role, uid, year, semester }: { role: any, uid: string, year:
 
     const { error } = await supabase.from('payments').insert([{
       student_id: selectedStudent.id,
-      teacher_id: selectedStudent.teacher_id,
+      teacher_id: uid,
       amount: parseFloat(paymentForm.amount),
       payment_date: paymentForm.payment_date,
+      payment_method: paymentForm.payment_method,
+      payment_number: paymentForm.payment_number,
+      is_final: paymentForm.is_final,
       notes: paymentForm.notes
     }]);
 
@@ -99,13 +71,13 @@ const Payments = ({ role, uid, year, semester }: { role: any, uid: string, year:
     else {
       showFeedback('تم تسجيل الدفعة النقدية بنجاح!');
       setIsModalOpen(false);
-      setPaymentForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], notes: '' });
+      setPaymentForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], notes: '', payment_method: 'كاش', payment_number: 'الأولى', is_final: false });
       fetchFinancialData();
     }
   };
 
   const handleDeletePayment = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا السجل المالي؟ سيؤدي ذلك لتغيير رصيد الطالب.')) return;
+    if (!confirm('هل أنت متأكد من حذف هذا السجل المالي؟')) return;
     const { error } = await supabase.from('payments').delete().eq('id', id);
     if (error) showFeedback("فشل الحذف", 'error');
     else {
@@ -114,250 +86,186 @@ const Payments = ({ role, uid, year, semester }: { role: any, uid: string, year:
     }
   };
 
-  const openDetails = (student: any) => {
-    setSelectedStudent(student);
-    setIsDetailModalOpen(true);
-  };
+  const filteredStudents = useMemo(() => {
+    return students.filter(s => {
+      const matchesFolder = selectedGradeFolder === 'الكل' || s.grade === selectedGradeFolder;
+      const matchesSearch = s.name.includes(searchTerm);
+      return matchesFolder && matchesSearch;
+    });
+  }, [students, selectedGradeFolder, searchTerm]);
 
-  const studentSpecificPayments = selectedStudent 
-    ? allPayments.filter(p => p.student_id === selectedStudent.id).sort((a,b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
-    : [];
+  const gradeCounts = useMemo(() => {
+    const counts: any = { '10': 0, '11': 0, '12': 0, 'الكل': students.length };
+    students.forEach(s => { if (counts[s.grade] !== undefined) counts[s.grade]++; });
+    return counts;
+  }, [students]);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 relative">
+    <div className="space-y-8 animate-in fade-in duration-500 relative text-right pb-20">
       {feedback && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all animate-in slide-in-from-top-full ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all ${feedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
           {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
           {feedback.msg}
         </div>
       )}
 
-      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+      {/* Header */}
+      <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-4">
-          <div className="bg-emerald-100 p-4 rounded-2xl text-emerald-600 shadow-inner"><Wallet size={28}/></div>
+          <div className="bg-emerald-100 p-4 rounded-2xl text-emerald-600"><Wallet size={28}/></div>
           <div>
-            <h1 className="text-3xl font-black text-slate-900">إدارة المدفوعات</h1>
-            <p className="text-slate-500 font-bold">{isAdmin ? 'مراجعة الموقف المالي لجميع الطلاب والمعلمين.' : 'تتبع مستحقاتك من الطلاب وتسجيل الدفعات.'}</p>
+            <h1 className="text-2xl font-black text-slate-900">سجل المدفوعات</h1>
+            <p className="text-slate-400 font-bold text-xs">إجمالي الديون: <span className="text-rose-600">${students.reduce((acc, s) => acc + Math.max(0, s.remaining_balance), 0).toLocaleString()}</span></p>
           </div>
         </div>
-        <div className="bg-slate-50 px-8 py-4 rounded-2xl border border-slate-100 text-center">
-          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">إجمالي الديون المعلقة {isAdmin ? '(للكل)' : ''}</p>
-          <p className="text-3xl font-black text-rose-600">${students.reduce((acc, s) => acc + Math.max(0, s.balance), 0).toLocaleString()}</p>
+        <div className="relative w-full md:w-64">
+           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+           <input 
+             placeholder="بحث عن طالب مالي..." 
+             className="w-full pr-10 pl-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold"
+             value={searchTerm}
+             onChange={e => setSearchTerm(e.target.value)}
+           />
         </div>
       </div>
 
+      {/* Folders Navigation */}
+      <div className="flex flex-wrap gap-4 animate-in slide-in-from-top duration-700">
+        {[
+          { id: 'الكل', label: 'كافة الطلاب' },
+          { id: '10', label: 'الصف العاشر (10)' },
+          { id: '11', label: 'الحادي عشر (11)' },
+          { id: '12', label: 'الثاني عشر (12)' },
+        ].map((folder) => {
+          const isActive = selectedGradeFolder === folder.id;
+          const count = gradeCounts[folder.id];
+          return (
+            <button
+              key={folder.id}
+              onClick={() => setSelectedGradeFolder(folder.id)}
+              className={`flex-1 min-w-[140px] p-4 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${
+                isActive ? 'border-indigo-600 bg-indigo-50/30' : 'border-slate-100 bg-white hover:border-slate-200 shadow-sm'
+              }`}
+            >
+              <div className={`p-3 rounded-2xl ${isActive ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-400'}`}>
+                {isActive ? <FolderOpen size={24} /> : <Folder size={24} />}
+              </div>
+              <div className="text-center">
+                <p className={`text-[11px] font-black ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>{folder.label}</p>
+                <p className={`text-[9px] font-bold ${isActive ? 'text-indigo-400' : 'text-slate-400'}`}>{count} طالب</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Table Section */}
       <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-right border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs">
-                <th className="p-6 font-black uppercase tracking-widest">الطالب</th>
-                {isAdmin && <th className="p-6 font-black uppercase tracking-widest">المعلم</th>}
-                <th className="p-6 font-black uppercase tracking-widest">نوع المحاسبة</th>
-                <th className="p-6 font-black uppercase tracking-widest">المستحق الحالي</th>
-                <th className="p-6 font-black uppercase tracking-widest">المسدد</th>
-                <th className="p-6 font-black uppercase tracking-widest">المتبقي (دين)</th>
-                <th className="p-6 font-black uppercase tracking-widest text-center">الإجراءات</th>
+              <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs font-black uppercase tracking-widest">
+                <th className="p-6">الطالب</th>
+                <th className="p-6">المستحق</th>
+                <th className="p-6">المسدد</th>
+                <th className="p-6">المتبقي</th>
+                <th className="p-6 text-center">الإجراءات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {students.map(s => (
+              {filteredStudents.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="p-6">
-                    <button 
-                      onClick={() => openDetails(s)}
-                      className="text-right group hover:text-indigo-600 transition-colors"
-                    >
-                      <p className="font-black text-slate-900 group-hover:text-indigo-600">{s.name}</p>
-                      <p className="text-xs text-slate-400 font-bold flex items-center gap-1">
-                        <History size={10} /> عرض السجل ({s.paymentsCount})
-                      </p>
+                    <button onClick={() => { setSelectedStudent(s); setIsDetailModalOpen(true); }} className="text-right group">
+                      <p className="font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{s.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold">الصف {s.grade} | {s.is_hourly ? 'بالساعة' : 'فصلي'}</p>
                     </button>
                   </td>
-                  {isAdmin && (
-                    <td className="p-6">
-                      <div className="flex items-center gap-1 text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md w-fit">
-                        <User size={10} /> {s.profiles?.full_name}
-                      </div>
-                    </td>
-                  )}
+                  <td className="p-6 font-bold text-slate-600">${s.expected_income.toLocaleString()}</td>
+                  <td className="p-6 font-black text-emerald-600">${s.total_paid.toLocaleString()}</td>
                   <td className="p-6">
-                    <div className="flex items-center gap-2">
-                      {s.is_hourly ? (
-                        <span className="flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black"><Clock size={12}/> ساعة</span>
-                      ) : (
-                        <span className="flex items-center gap-1 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black"><Calendar size={12}/> فصلي</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="p-6 font-bold text-slate-600">
-                    ${s.expectedIncome.toLocaleString()}
-                    {s.is_hourly && <span className="text-[10px] block text-slate-400 font-medium">({s.totalHours} ساعة × {s.price_per_hour})</span>}
-                  </td>
-                  <td className="p-6">
-                    <div className="flex items-center gap-2 font-black text-emerald-600">
-                      <ArrowDownRight size={14}/>
-                      ${s.totalPaid.toLocaleString()}
-                    </div>
-                  </td>
-                  <td className="p-6">
-                    <span className={`px-4 py-1.5 rounded-full text-xs font-black ${s.balance > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                      {s.balance > 0 ? `$${s.balance.toLocaleString()}` : 'خالص'}
+                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black ${s.remaining_balance > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                      {s.remaining_balance > 0 ? `$${s.remaining_balance.toLocaleString()}` : 'خالص'}
                     </span>
                   </td>
                   <td className="p-6 text-center">
                     <button 
                       onClick={() => { setSelectedStudent(s); setIsModalOpen(true); }}
-                      className="inline-flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-black hover:bg-indigo-600 transition-all shadow-xl shadow-slate-100 active:scale-95"
+                      className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-600 transition-all shadow-xl"
                     >
-                      <Plus size={16}/> تسجيل دفعة
+                      تسجيل دفعة
                     </button>
                   </td>
                 </tr>
               ))}
-              {students.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={isAdmin ? 7 : 6} className="p-20 text-center font-bold text-slate-400 italic">لا يوجد طلاب مسجلين لعرض بياناتهم المالية.</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* نافذة تسجيل دفعة */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-m-md p-10 rounded-[3rem] shadow-2xl animate-in zoom-in duration-300 relative">
-            <div className="flex justify-between items-center mb-10">
-              <div>
-                <h2 className="text-3xl font-black text-slate-900">تسجيل دفعة نقدية</h2>
-                <p className="text-indigo-600 font-bold text-sm mt-1">للطالب: {selectedStudent?.name}</p>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-300 hover:text-rose-500 transition-colors"><X size={24}/></button>
+      {/* Modal Payment Entry */}
+      {isModalOpen && selectedStudent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <form onSubmit={handleAddPayment} className="bg-white w-full max-w-md p-10 rounded-[3.5rem] shadow-2xl relative animate-in zoom-in duration-300">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500"><X size={28}/></button>
+            <h2 className="text-2xl font-black mb-8 text-slate-900">تسجيل دفعة نقدية</h2>
+            <div className="space-y-5">
+               <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 mb-6">
+                  <p className="text-xs font-bold text-indigo-600">تسجيل مبلغ للطالب:</p>
+                  <p className="text-lg font-black text-slate-900">{selectedStudent.name}</p>
+               </div>
+               <div className="space-y-1">
+                 <label className="text-[10px] font-black text-slate-400 uppercase mr-3">المبلغ ($)</label>
+                 <input required type="number" className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-xl" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} />
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 mr-3">الوسيلة</label>
+                    <select className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs" value={paymentForm.payment_method} onChange={e => setPaymentForm({...paymentForm, payment_method: e.target.value})}>
+                       <option value="كاش">كاش</option>
+                       <option value="كي نت">كي نت</option>
+                       <option value="ومض">ومض</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 mr-3">الدفعة رقم</label>
+                    <select className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs" value={paymentForm.payment_number} onChange={e => setPaymentForm({...paymentForm, payment_number: e.target.value})}>
+                       <option value="الأولى">الأولى</option>
+                       <option value="الثانية">الثانية</option>
+                       <option value="الثالثة">الثالثة</option>
+                       <option value="الأخيرة">الأخيرة</option>
+                    </select>
+                  </div>
+               </div>
+               <div className="space-y-1">
+                 <label className="text-[10px] font-black text-slate-400 uppercase mr-3">ملاحظات</label>
+                 <textarea className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs h-20" value={paymentForm.notes} onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})} />
+               </div>
             </div>
-            <form onSubmit={handleAddPayment} className="space-y-6">
-              <div className="space-y-1">
-                <label className="text-xs font-black text-slate-400 uppercase mr-3">المبلغ المسدد ($)</label>
-                <div className="relative">
-                  <DollarSign size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
-                  <input required type="number" placeholder="مثال: 100" className="w-full p-4 pl-10 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-black" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} />
-                </div>
-                <p className="text-[10px] text-slate-400 mr-3 mt-2 italic font-bold">المتبقي حالياً على الطالب: ${selectedStudent?.balance.toLocaleString()}</p>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-black text-slate-400 uppercase mr-3">تاريخ الدفع</label>
-                <input required type="date" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500" value={paymentForm.payment_date} onChange={e => setPaymentForm({...paymentForm, payment_date: e.target.value})} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-black text-slate-400 uppercase mr-3">ملاحظات (اختياري)</label>
-                <input placeholder="مثال: دفعة شهر أكتوبر" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500" value={paymentForm.notes} onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})} />
-              </div>
-              <button type="submit" className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-3xl shadow-2xl shadow-indigo-100 transition-all hover:-translate-y-1">تأكيد تسجيل الدفعة</button>
-            </form>
-          </div>
+            <button className="w-full py-5 bg-indigo-600 text-white font-black rounded-3xl mt-8 shadow-2xl hover:bg-indigo-700 transition-all">تأكيد الاستلام</button>
+          </form>
         </div>
       )}
 
-      {/* نافذة تفاصيل سجل الدفعات */}
+      {/* Detail Modal */}
       {isDetailModalOpen && selectedStudent && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[3rem] shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-300 relative">
-            
-            <div className="p-10 pb-6 border-b border-slate-100 flex justify-between items-start">
-              <div className="flex items-center gap-6">
-                <div className="bg-indigo-600 text-white w-20 h-20 rounded-3xl flex items-center justify-center font-black text-3xl shadow-xl shadow-indigo-100">
-                  {selectedStudent.name.charAt(0)}
-                </div>
-                <div>
-                  <h2 className="text-3xl font-black text-slate-900">{selectedStudent.name}</h2>
-                  <div className="flex items-center gap-4 mt-1">
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{selectedStudent.grade}</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
-                    <span className="text-xs font-bold text-indigo-500 flex items-center gap-1"><Calendar size={12}/> انضم في {new Date(selectedStudent.created_at).toLocaleDateString('ar-EG')}</span>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl max-h-[80vh] overflow-y-auto p-10 rounded-[3.5rem] shadow-2xl relative">
+            <button type="button" onClick={() => setIsDetailModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500"><X size={28}/></button>
+            <h2 className="text-2xl font-black mb-8 text-slate-900">سجل المدفوعات: {selectedStudent.name}</h2>
+            <div className="space-y-4">
+              {allPayments.filter(p => p.student_id === selectedStudent.id).map(p => (
+                <div key={p.id} className="p-5 border border-slate-100 rounded-[2rem] flex justify-between items-center group">
+                  <div>
+                    <p className="font-black text-slate-900">الدفعة {p.payment_number} (${p.amount})</p>
+                    <p className="text-[10px] text-slate-400 font-bold">{p.payment_method} | {new Date(p.payment_date).toLocaleDateString('ar-EG')}</p>
                   </div>
+                  <button onClick={() => handleDeletePayment(p.id)} className="p-3 text-slate-300 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"><Trash2 size={18}/></button>
                 </div>
-              </div>
-              <button onClick={() => setIsDetailModalOpen(false)} className="bg-slate-50 p-4 rounded-2xl text-slate-400 hover:text-rose-500 transition-all"><X size={24}/></button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-10 space-y-10">
-              {/* إحصائيات مصغرة */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">إجمالي المبلغ المستحق</p>
-                  <p className="text-2xl font-black text-slate-900">${selectedStudent.expectedIncome.toLocaleString()}</p>
-                </div>
-                <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100">
-                  <p className="text-[10px] font-black text-emerald-600 uppercase mb-2 tracking-widest">المبلغ المسدد إجمالاً</p>
-                  <p className="text-2xl font-black text-emerald-700">${selectedStudent.totalPaid.toLocaleString()}</p>
-                </div>
-                <div className={`p-6 rounded-[2rem] border ${selectedStudent.balance > 0 ? 'bg-rose-50 border-rose-100' : 'bg-indigo-50 border-indigo-100'}`}>
-                  <p className={`text-[10px] font-black uppercase mb-2 tracking-widest ${selectedStudent.balance > 0 ? 'text-rose-600' : 'text-indigo-600'}`}>الرصيد المتبقي (الدين)</p>
-                  <p className={`text-2xl font-black ${selectedStudent.balance > 0 ? 'text-rose-700' : 'text-indigo-700'}`}>
-                    {selectedStudent.balance > 0 ? `$${selectedStudent.balance.toLocaleString()}` : 'خالص بالكامل'}
-                  </p>
-                </div>
-              </div>
-
-              {/* جدول السجل */}
-              <div>
-                <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-                  <History size={20} className="text-indigo-600" /> سجل الدفعات النقدية
-                </h3>
-                {studentSpecificPayments.length > 0 ? (
-                  <div className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden">
-                    <table className="w-full text-right">
-                      <thead>
-                        <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          <th className="p-5">تاريخ الدفعة</th>
-                          <th className="p-5">المبلغ</th>
-                          <th className="p-5">الملاحظات</th>
-                          <th className="p-5 text-center">حذف</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {studentSpecificPayments.map(p => (
-                          <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="p-5">
-                              <div className="flex items-center gap-2 font-bold text-slate-600">
-                                <Calendar size={14} className="text-slate-300" />
-                                {new Date(p.payment_date).toLocaleDateString('ar-EG', { dateStyle: 'medium' })}
-                              </div>
-                            </td>
-                            <td className="p-5">
-                              <span className="font-black text-emerald-600">${p.amount.toLocaleString()}</span>
-                            </td>
-                            <td className="p-5 text-sm text-slate-500 font-medium italic">
-                              {p.notes || '-'}
-                            </td>
-                            <td className="p-5 text-center">
-                              <button 
-                                onClick={() => handleDeletePayment(p.id)}
-                                className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
-                              ><Trash2 size={16}/></button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-20 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-100">
-                    <FileText size={48} className="mx-auto mb-4 text-slate-200" />
-                    <p className="text-slate-400 font-bold italic">لا توجد دفعات مسجلة لهذا الطالب بعد.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="p-10 pt-4 border-t border-slate-100 bg-slate-50/50">
-              <button 
-                onClick={() => { setIsDetailModalOpen(false); setIsModalOpen(true); }}
-                className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3"
-              >
-                <Plus size={20}/> تسجيل دفعة جديدة الآن
-              </button>
+              ))}
+              {allPayments.filter(p => p.student_id === selectedStudent.id).length === 0 && (
+                <p className="text-center py-10 text-slate-400 font-bold italic">لا توجد دفعات مسجلة.</p>
+              )}
             </div>
           </div>
         </div>

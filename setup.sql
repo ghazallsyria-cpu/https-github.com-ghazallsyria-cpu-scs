@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS public.academic_records (
 
 -- تفعيل الحماية للسجل الدراسي
 ALTER TABLE public.academic_records ENABLE ROW LEVEL SECURITY;
+
+-- حذف السياسة إذا كانت موجودة لتجنب الخطأ 42710 (Policy Already Exists)
+DROP POLICY IF EXISTS "Manage own academic records" ON public.academic_records;
 CREATE POLICY "Manage own academic records" ON public.academic_records FOR ALL USING (auth.uid() = teacher_id);
 
 -- حذف الـ View القديم لتجنب أخطاء تغيير هيكلية الأعمدة (Metadata Conflict)
