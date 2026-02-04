@@ -21,7 +21,6 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
     const fetchData = async () => {
       setLoading(true);
       try {
-        // جلب ملخص الـ View المحسوب مسبقاً
         let query = supabase.from('student_summary_view')
           .select('total_lessons, total_hours, total_paid, expected_income, remaining_balance')
           .eq('academic_year', year)
@@ -32,13 +31,11 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
         const { data: stdData, error } = await query;
         if (error) throw error;
 
-        // حساب الإحصائيات مع ضمان تطابق منطق الديون مع صفحة المالية
         const totals = (stdData || []).reduce((acc, curr) => ({
           students: acc.students + 1,
           lessons: acc.lessons + curr.total_lessons,
           hours: acc.hours + curr.total_hours,
           income: acc.income + curr.total_paid,
-          // نجمع الديون الحقيقية فقط (القيم الموجبة) لتجنب إنقاص مبالغ الزيادة من إجمالي الديون
           debts: acc.debts + Math.max(0, curr.remaining_balance)
         }), { students: 0, lessons: 0, hours: 0, income: 0, debts: 0 });
 
@@ -50,7 +47,6 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
           pendingPayments: totals.debts
         });
 
-        // جلب عينة صغيرة للرسم البياني
         let lQuery = supabase.from('lessons')
           .select('lesson_date, hours')
           .order('lesson_date', { ascending: false })
@@ -76,6 +72,8 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
     fetchData();
   }, [role, uid, year, semester]);
 
+  const collectionRate = Math.round((stats.totalIncome / (stats.totalIncome + stats.pendingPayments || 1)) * 100);
+
   if (loading) return (
     <div className="h-full flex items-center justify-center py-20">
       <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
@@ -83,7 +81,7 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-12">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-12 text-right">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -138,12 +136,15 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
               <ArrowUpRight size={18} /> <span>زيادة مستمرة</span>
             </div>
           </div>
-          <div className="space-y-6 relative z-10">
-             <p className="text-slate-500 text-[10px] font-black uppercase">نسبة التحصيل من الإجمالي</p>
-             <div className="w-full bg-white/10 h-4 rounded-full overflow-hidden">
+          <div className="space-y-4 relative z-10">
+             <div className="flex justify-between items-end mb-1">
+                <p className="text-slate-500 text-[10px] font-black uppercase">نسبة التحصيل من الإجمالي</p>
+                <span className="text-2xl font-black text-emerald-500">{collectionRate}%</span>
+             </div>
+             <div className="w-full bg-white/10 h-4 rounded-full overflow-hidden p-0.5">
                <div 
-                 className="bg-emerald-500 h-full rounded-full transition-all duration-1000" 
-                 style={{ width: `${(stats.totalIncome / (stats.totalIncome + stats.pendingPayments || 1)) * 100}%` }}
+                 className="bg-emerald-500 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(16,185,129,0.5)]" 
+                 style={{ width: `${collectionRate}%` }}
                />
              </div>
           </div>
