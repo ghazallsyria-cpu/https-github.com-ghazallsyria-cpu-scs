@@ -4,7 +4,7 @@ import { supabase } from '../supabase.ts';
 import { Users, Calendar, Clock, DollarSign, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, User, LayoutGrid } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
-const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
+const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const [stats, setStats] = useState({
     totalStudents: 0, 
     totalLessons: 0, 
@@ -23,9 +23,15 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        let qSt = supabase.from('students').select('*, profiles:teacher_id(full_name)');
-        let qLe = supabase.from('lessons').select('*, profiles:teacher_id(full_name)').order('lesson_date', { ascending: true });
-        let qPa = supabase.from('payments').select('*, profiles:teacher_id(full_name)');
+        // الفلترة بناءً على السنة والفصل الدراسي
+        let qSt = supabase.from('students').select('*, profiles:teacher_id(full_name)').eq('academic_year', year).eq('semester', semester);
+        
+        // جلب معرفات الطلاب في الفترة المختارة لفلترة الحصص والمدفوعات
+        const { data: periodStudents } = await qSt;
+        const studentIds = periodStudents?.map(s => s.id) || [];
+
+        let qLe = supabase.from('lessons').select('*, profiles:teacher_id(full_name)').in('student_id', studentIds).order('lesson_date', { ascending: true });
+        let qPa = supabase.from('payments').select('*, profiles:teacher_id(full_name)').in('student_id', studentIds);
         let qProf = supabase.from('profiles').select('id, full_name').neq('role', 'admin');
 
         if (!isAdmin) {
@@ -41,14 +47,11 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
           { data: profiles }
         ] = await Promise.all([qSt, qLe, qPa, qProf]);
 
-        // حسابات دورية (حصص اليوم، الأسبوع، الشهر)
+        // حسابات دورية
         const now = new Date();
         const startOfDay = new Date(new Date().setHours(0,0,0,0)).toISOString().split('T')[0];
-        
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(now.getDate() - 7);
+        const oneWeekAgo = new Date(); oneWeekAgo.setDate(now.getDate() - 7);
         const startOfWeek = oneWeekAgo.toISOString().split('T')[0];
-
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
         const dailyLsns = (lsns || []).filter(l => l.lesson_date >= startOfDay).length;
@@ -57,11 +60,9 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
         
         setPeriodicStats({ daily: dailyLsns, weekly: weeklyLsns, monthly: monthlyLsns });
 
-        // إجمالي الساعات والمبالغ المحصلة
         const totalHours = (lsns || []).reduce((sum, l) => sum + Number(l.hours), 0);
         const totalIncome = (pays || []).reduce((sum, p) => sum + Number(p.amount), 0);
         
-        // حساب إجمالي الديون (المبلغ المتوقع - المحصل)
         const totalAgreed = (stds || []).reduce((sum, s) => {
           if (s.is_hourly) {
             const sLsns = (lsns || []).filter(l => l.student_id === s.id);
@@ -79,7 +80,6 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
           pendingPayments: Math.max(0, totalAgreed - totalIncome)
         });
 
-        // بيانات الرسم البياني
         const grouped = (lsns || []).reduce((acc: any, curr) => {
           const date = new Date(curr.lesson_date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
           acc[date] = (acc[date] || 0) + Number(curr.hours);
@@ -89,7 +89,6 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
         const formatted = Object.entries(grouped).map(([name, hours]) => ({ name, hours }));
         setChartData(formatted.length > 0 ? formatted.slice(-10) : [{name: 'لا بيانات', hours: 0}]);
 
-        // أداء المعلمين (للمدير فقط)
         if (isAdmin && profiles) {
           const perf = profiles.map(p => {
             const pStds = (stds || []).filter(s => s.teacher_id === p.id);
@@ -126,10 +125,10 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
       }
     };
     fetchData();
-  }, [role, uid, isAdmin]);
+  }, [role, uid, isAdmin, year, semester]);
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center">
+    <div className="h-full flex items-center justify-center py-20">
       <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
     </div>
   );
@@ -138,11 +137,15 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-sm">{year}</span>
+            <span className="bg-slate-200 text-slate-700 text-[10px] font-black px-3 py-1 rounded-full shadow-sm">الفصل الدراسي {semester}</span>
+          </div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">
             {isAdmin ? 'إحصائيات المنظومة العامة' : 'لوحة تحكم المعلم'}
           </h1>
           <p className="text-slate-500 font-bold mt-2">
-            {isAdmin ? 'مرحباً بك حضرة المدير. إليك ملخص أداء المعلمين والطلاب فصلياً.' : 'مرحباً بك. تتبع دروسك ومدفوعات طلابك بدقة.'}
+            ملخص الأداء لهذه الفترة الزمنية المحددة.
           </p>
         </div>
         
@@ -167,7 +170,7 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
         <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm h-[450px]">
           <div className="flex justify-between items-center mb-10">
             <h3 className="text-xl font-black flex items-center gap-3 text-slate-900">
-              <TrendingUp className="text-indigo-600" /> كثافة الحصص اليومية (ساعات)
+              <TrendingUp className="text-indigo-600" /> كثافة الحصص (ساعات)
             </h3>
           </div>
           <div className="h-[300px]">
@@ -197,7 +200,7 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
             <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mb-3">الدخل الإجمالي المتوقع</p>
             <h2 className="text-5xl font-black">${(stats.totalIncome + stats.pendingPayments).toLocaleString()}</h2>
             <div className="flex items-center gap-2 text-emerald-400 text-sm font-black mt-4">
-              <ArrowUpRight size={18} /> <span>بناءً على الساعات والاتفاقات</span>
+              <ArrowUpRight size={18} /> <span>للفصل الدراسي المختار</span>
             </div>
           </div>
           <div className="space-y-6 relative z-10">
@@ -217,9 +220,6 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
                  style={{ width: `${(stats.totalIncome / (stats.totalIncome + stats.pendingPayments || 1)) * 100}%` }}
                />
              </div>
-             <p className="text-[10px] text-slate-500 font-bold text-center uppercase tracking-tighter">
-               معدل التحصيل المالي: {((stats.totalIncome / (stats.totalIncome + stats.pendingPayments || 1)) * 100).toFixed(1)}%
-             </p>
           </div>
         </div>
       </div>
@@ -230,7 +230,7 @@ const Dashboard = ({ role, uid }: { role: any, uid: string }) => {
               <div className="bg-indigo-100 p-4 rounded-2xl text-indigo-600 shadow-sm"><LayoutGrid size={28}/></div>
               <div>
                 <h3 className="text-2xl font-black text-slate-900">تقارير أداء المعلمين</h3>
-                <p className="text-slate-400 font-bold text-sm">مراقبة الحصص والأرباح والديون لكل معلم بشكل منفرد.</p>
+                <p className="text-slate-400 font-bold text-sm">مراقبة الحصص والديون للفصل الدراسي {semester}.</p>
               </div>
            </div>
            

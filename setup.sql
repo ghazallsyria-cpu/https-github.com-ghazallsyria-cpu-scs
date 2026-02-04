@@ -1,73 +1,55 @@
 
--- تنظيف شامل للسياسات القديمة لتجنب أخطاء التكرار
-DO $$ 
+-- ==========================================
+-- 1. وظيفة تفعيل الحساب باستخدام كود (Secure Activation Function)
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION public.activate_account_with_code(provided_code TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER -- تشغيل الصلاحيات بصلاحية النظام لتجاوز RLS مؤقتاً
+AS $$
+DECLARE
+    code_record RECORD;
+    result JSONB;
 BEGIN
-    -- جداول السياسات
-    EXECUTE (SELECT string_agg('DROP POLICY IF EXISTS ' || quote_ident(policyname) || ' ON ' || quote_ident(schemaname) || '.' || quote_ident(tablename) || ';', ' ')
-             FROM pg_policies 
-             WHERE schemaname = 'public' AND (tablename = 'profiles' OR tablename = 'students' OR tablename = 'lessons' OR tablename = 'payments' OR tablename = 'activation_codes'));
-END $$;
+    -- 1. البحث عن الكود والتأكد أنه غير مستخدم
+    SELECT * INTO code_record 
+    FROM public.activation_codes 
+    WHERE code = provided_code AND is_used = false 
+    LIMIT 1;
 
--- إنشاء جدول البروفايلات (إذا لم يكن موجوداً)
-CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  full_name TEXT,
-  phone TEXT UNIQUE,
-  role TEXT DEFAULT 'teacher', -- 'admin' or 'teacher'
-  gender TEXT DEFAULT 'male',
-  is_approved BOOLEAN DEFAULT false, -- الحالة الافتراضية معلق
-  created_at TIMESTAMPTZ DEFAULT NOW()
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'message', 'كود التفعيل غير صحيح أو مستخدم مسبقاً');
+    END IF;
+
+    -- 2. تحديث بروفايل المعلم ليصبح معتمداً
+    UPDATE public.profiles 
+    SET is_approved = true 
+    WHERE id = auth.uid();
+
+    -- 3. تحديث الكود ليصبح مستخدماً
+    UPDATE public.activation_codes 
+    SET is_used = true, used_by = auth.uid() 
+    WHERE id = code_record.id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'تم تفعيل حسابك بنجاح');
+END;
+$$;
+
+-- ==========================================
+-- 2. تصحيح السياسات الأمنية لضمان ظهور المعلمين للمدير
+-- ==========================================
+
+-- التأكد من أن المدير يمكنه رؤية جميع البروفايلات دائماً
+DROP POLICY IF EXISTS "Profiles_Admin_All" ON public.profiles;
+CREATE POLICY "Profiles_Admin_All" ON public.profiles FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
--- إنشاء جدول أكواد التفعيل
-CREATE TABLE IF NOT EXISTS public.activation_codes (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  code TEXT UNIQUE NOT NULL,
-  is_used BOOLEAN DEFAULT false,
-  used_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- السماح للمستخدم بإنشاء بروفايله الخاص عند التسجيل (حتى لو لم يكن مسجلاً دخول بعد)
+DROP POLICY IF EXISTS "Profiles_Owner_Insert" ON public.profiles;
+CREATE POLICY "Profiles_Owner_Insert" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
--- تفعيل الحماية على مستوى الصف
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY;
-
--- دوال التحقق المتقدمة
-CREATE OR REPLACE FUNCTION public.is_admin() 
-RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin');
-END; $$;
-
-CREATE OR REPLACE FUNCTION public.is_approved_teacher() 
-RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  RETURN EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_approved = true);
-END; $$;
-
--- إنشاء السياسات الجديدة
-CREATE POLICY "Profiles_Full_Access_Admin" ON public.profiles FOR ALL USING (public.is_admin());
-CREATE POLICY "Profiles_Self_Access" ON public.profiles FOR ALL USING (auth.uid() = id);
-CREATE POLICY "Profiles_Public_View" ON public.profiles FOR SELECT USING (true);
-
-CREATE POLICY "Codes_Admin_Control" ON public.activation_codes FOR ALL USING (public.is_admin());
-CREATE POLICY "Codes_Select_Any" ON public.activation_codes FOR SELECT USING (true);
-CREATE POLICY "Codes_Update_Unused" ON public.activation_codes FOR UPDATE USING (NOT is_used);
-
--- سياسات الجداول التشغيلية (الطلاب، الدروس، المدفوعات)
--- سيتم ربطها بـ is_approved_teacher لضمان عدم ظهور بيانات للمعلم غير المفعل
-ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Students_Strict_Access" ON public.students FOR ALL USING (
-  (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
-);
-
-ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Lessons_Strict_Access" ON public.lessons FOR ALL USING (
-  (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
-);
-
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Payments_Strict_Access" ON public.payments FOR ALL USING (
-  (teacher_id = auth.uid() AND public.is_approved_teacher()) OR public.is_admin()
-);
+-- السماح للمستخدم بتحديث بياناته (لأغراض التفعيل مثلاً)
+DROP POLICY IF EXISTS "Profiles_Owner_Update" ON public.profiles;
+CREATE POLICY "Profiles_Owner_Update" ON public.profiles FOR UPDATE USING (auth.uid() = id);

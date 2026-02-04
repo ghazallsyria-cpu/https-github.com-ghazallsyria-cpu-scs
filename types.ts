@@ -22,6 +22,8 @@ export interface Student {
   is_hourly: boolean;
   price_per_hour: number;
   is_completed: boolean;
+  academic_year: string;
+  semester: string;
   created_at: string;
 }
 

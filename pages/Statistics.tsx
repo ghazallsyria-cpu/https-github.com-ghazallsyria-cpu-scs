@@ -4,7 +4,8 @@ import { supabase } from '../supabase.ts';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import { BookOpen, Clock, TrendingUp, PieChart as PieIcon, LayoutDashboard } from 'lucide-react';
 
-const Statistics = ({ role, uid }: { role: any, uid: string }) => {
+// Fix: Added year and semester props to the component signature and type definition.
+const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const [data, setData] = useState<any[]>([]);
   const [summary, setSummary] = useState({ hourlyHours: 0, fixedHours: 0, hourlyLessons: 0, fixedLessons: 0 });
   const [loading, setLoading] = useState(true);
@@ -15,7 +16,20 @@ const Statistics = ({ role, uid }: { role: any, uid: string }) => {
     const fetchStats = async () => {
       setLoading(true);
       try {
-        let lQuery = supabase.from('lessons').select('*, students(is_hourly)');
+        // Fix: Added logic to filter statistics by the selected academic year and semester.
+        const { data: periodStudents } = await supabase
+          .from('students')
+          .select('id')
+          .eq('academic_year', year)
+          .eq('semester', semester);
+        
+        const studentIds = periodStudents?.map(s => s.id) || [];
+
+        let lQuery = supabase
+          .from('lessons')
+          .select('*, students(is_hourly)')
+          .in('student_id', studentIds);
+          
         if (!isAdmin) {
           lQuery = lQuery.eq('teacher_id', uid);
         }
@@ -52,7 +66,7 @@ const Statistics = ({ role, uid }: { role: any, uid: string }) => {
       }
     };
     fetchStats();
-  }, [uid, role, isAdmin]);
+  }, [uid, role, isAdmin, year, semester]);
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700 pb-12">

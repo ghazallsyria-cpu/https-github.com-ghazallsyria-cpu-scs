@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.ts';
 import { Calendar, Clock, BookOpen, Search, Trash2, User, CheckCircle, AlertCircle, Edit3, X } from 'lucide-react';
 
-const Lessons = ({ role, uid }: { role: any, uid: string }) => {
+// Fix: Added year and semester props to the component signature and type definition.
+const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const [lessons, setLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,20 +20,39 @@ const Lessons = ({ role, uid }: { role: any, uid: string }) => {
     setTimeout(() => setFeedback(null), 3000);
   };
 
-  const fetchLessons = async () => {
+  // Fix: Wrapped fetchLessons in useCallback and added period-based filtering using student IDs.
+  const fetchLessons = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('lessons').select('*, students(name), profiles:teacher_id(full_name)').order('lesson_date', { ascending: false });
-    
-    if (!isAdmin) {
-      query = query.eq('teacher_id', uid);
-    }
-    
-    const { data } = await query;
-    setLessons(data || []);
-    setLoading(false);
-  };
+    try {
+      // First, fetch student IDs for the selected period to filter lessons correctly.
+      const { data: periodStudents } = await supabase
+        .from('students')
+        .select('id')
+        .eq('academic_year', year)
+        .eq('semester', semester);
+      
+      const studentIds = periodStudents?.map(s => s.id) || [];
 
-  useEffect(() => { fetchLessons(); }, [uid, role, isAdmin]);
+      let query = supabase
+        .from('lessons')
+        .select('*, students(name), profiles:teacher_id(full_name)')
+        .in('student_id', studentIds)
+        .order('lesson_date', { ascending: false });
+      
+      if (!isAdmin) {
+        query = query.eq('teacher_id', uid);
+      }
+      
+      const { data } = await query;
+      setLessons(data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [uid, role, isAdmin, year, semester]);
+
+  useEffect(() => { fetchLessons(); }, [fetchLessons]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا الدرس؟')) return;

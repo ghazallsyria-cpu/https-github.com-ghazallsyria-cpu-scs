@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.ts';
 import { Wallet, Plus, X, ArrowDownRight, DollarSign, CheckCircle, User, AlertCircle, History, Trash2, Calendar, FileText, Clock } from 'lucide-react';
 
-const Payments = ({ role, uid }: { role: any, uid: string }) => {
+// Fix: Added year and semester props to the component signature and type definition.
+const Payments = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const [students, setStudents] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,20 +21,34 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
     setTimeout(() => setFeedback(null), 3000);
   };
 
-  const fetchFinancialData = async () => {
+  // Fix: Wrapped fetchFinancialData in useCallback and implemented period-based filtering.
+  const fetchFinancialData = useCallback(async () => {
     setLoading(true);
     try {
-      let qStds = supabase.from('students').select('*, profiles:teacher_id(full_name)');
-      let qPays = supabase.from('payments').select('*, students(name)');
-      let qLsns = supabase.from('lessons').select('student_id, hours');
+      // First, fetch students for the selected academic year and semester.
+      let qStds = supabase
+        .from('students')
+        .select('*, profiles:teacher_id(full_name)')
+        .eq('academic_year', year)
+        .eq('semester', semester);
       
       if (!isAdmin) {
         qStds = qStds.eq('teacher_id', uid);
+      }
+      
+      const { data: stds } = await qStds;
+      const studentIds = stds?.map(s => s.id) || [];
+
+      // Filter financial records (payments and lessons) based on the student IDs of the selected period.
+      let qPays = supabase.from('payments').select('*, students(name)').in('student_id', studentIds);
+      let qLsns = supabase.from('lessons').select('student_id, hours').in('student_id', studentIds);
+      
+      if (!isAdmin) {
         qPays = qPays.eq('teacher_id', uid);
         qLsns = qLsns.eq('teacher_id', uid);
       }
       
-      const [{ data: stds }, { data: pays }, { data: lsns }] = await Promise.all([qStds, qPays, qLsns]);
+      const [{ data: pays }, { data: lsns }] = await Promise.all([qPays, qLsns]);
       
       setAllPayments(pays || []);
 
@@ -64,9 +79,9 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [uid, role, isAdmin, year, semester]);
 
-  useEffect(() => { fetchFinancialData(); }, [uid, role, isAdmin]);
+  useEffect(() => { fetchFinancialData(); }, [fetchFinancialData]);
 
   const handleAddPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,7 +228,7 @@ const Payments = ({ role, uid }: { role: any, uid: string }) => {
       {/* نافذة تسجيل دفعة */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl animate-in zoom-in duration-300 relative">
+          <div className="bg-white w-full max-m-md p-10 rounded-[3rem] shadow-2xl animate-in zoom-in duration-300 relative">
             <div className="flex justify-between items-center mb-10">
               <div>
                 <h2 className="text-3xl font-black text-slate-900">تسجيل دفعة نقدية</h2>

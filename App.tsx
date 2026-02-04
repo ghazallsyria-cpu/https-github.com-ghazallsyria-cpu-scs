@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, Menu, X
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, Menu, X, CalendarDays, Layers, CheckCircle, KeyRound, ArrowLeft
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard.tsx';
@@ -22,7 +22,7 @@ const Footer: React.FC = () => (
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 1.5.0 &copy; {new Date().getFullYear()}
+        الإصدار 2.0.1 &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
@@ -59,14 +59,107 @@ const MobileNav: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   );
 };
 
+// مكون تفعيل الحساب
+const ActivationOverlay: React.FC<{ onActivated: () => void, profileName: string }> = ({ onActivated, profileName }) => {
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleActivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    
+    try {
+      const { data, error: funcError } = await supabase.rpc('activate_account_with_code', { provided_code: code.trim().toUpperCase() });
+      
+      if (funcError) throw funcError;
+
+      if (data.success) {
+        setSuccess(true);
+        setTimeout(() => onActivated(), 2000);
+      } else {
+        setError(data.message);
+      }
+    } catch (err: any) {
+      setError(err.message || 'حدث خطأ أثناء الاتصال بالنظام');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 font-['Cairo'] text-right">
+      <div className="bg-white w-full max-w-lg p-10 md:p-14 rounded-[3.5rem] shadow-2xl relative overflow-hidden">
+        <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-50 rounded-full opacity-50"></div>
+        
+        <div className="relative z-10">
+          <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3">
+            <KeyRound size={40} />
+          </div>
+          
+          <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط حساب المعلم</h2>
+          <p className="text-slate-500 font-bold mb-8">مرحباً بك <span className="text-indigo-600">{profileName}</span>. حسابك بانتظار التنشيط، يرجى إدخال الكود المستلم من الإدارة.</p>
+
+          {error && (
+            <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100 animate-shake">
+              <ShieldAlert size={20} className="shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-emerald-50 text-emerald-600 p-6 rounded-[2rem] mb-6 text-center animate-bounce">
+              <CheckCircle size={48} className="mx-auto mb-3" />
+              <p className="font-black">تم تفعيل حسابك بنجاح! جاري التحميل...</p>
+            </div>
+          )}
+
+          {!success && (
+            <form onSubmit={handleActivate} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest">كود التفعيل (8 خانات)</label>
+                <input 
+                  required 
+                  maxLength={8}
+                  placeholder="مثال: ABC123XY"
+                  className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-3xl tracking-[0.3em] uppercase outline-none focus:border-indigo-500 transition-all placeholder:tracking-normal placeholder:text-sm"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+              </div>
+              
+              <button 
+                disabled={loading || code.length < 5}
+                className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[2rem] font-black shadow-2xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 text-lg"
+              >
+                {loading ? <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div> : "تنشيط الحساب الآن"}
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => supabase.auth.signOut()}
+                className="w-full py-4 text-slate-400 font-bold hover:text-rose-500 transition-colors flex items-center justify-center gap-2"
+              >
+                <LogOut size={18} /> تسجيل الخروج والعودة لاحقاً
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [supervisedTeacher, setSupervisedTeacher] = useState<{id: string, name: string} | null>(null);
-  const [activationCode, setActivationCode] = useState('');
-  const [actLoading, setActLoading] = useState(false);
-  const [actError, setActError] = useState('');
+  
+  const [currentYear, setCurrentYear] = useState('2024-2025');
+  const [currentSemester, setCurrentSemester] = useState('1');
 
   const fetchProfile = async (uid: string) => {
     try {
@@ -83,45 +176,6 @@ const App: React.FC = () => {
       setProfile({ role: 'teacher', is_approved: false }); 
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleUseCode = async () => {
-    if (!activationCode.trim() || !session) return;
-    setActLoading(true);
-    setActError('');
-    try {
-      const { data: codeData, error: codeErr } = await supabase
-        .from('activation_codes')
-        .select('*')
-        .eq('code', activationCode.trim().toUpperCase())
-        .eq('is_used', false)
-        .maybeSingle();
-
-      if (codeErr) throw codeErr;
-      if (!codeData) {
-        setActError('كود التفعيل غير صحيح أو تم استخدامه مسبقاً');
-        setActLoading(false);
-        return;
-      }
-
-      const { error: profErr } = await supabase
-        .from('profiles')
-        .update({ is_approved: true })
-        .eq('id', session.user.id);
-
-      if (profErr) throw profErr;
-
-      await supabase
-        .from('activation_codes')
-        .update({ is_used: true, used_by: session.user.id })
-        .eq('id', codeData.id);
-
-      await fetchProfile(session.user.id);
-    } catch (e: any) {
-      setActError('خطأ: ' + e.message);
-    } finally {
-      setActLoading(false);
     }
   };
 
@@ -155,6 +209,12 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  const handleLogout = async () => {
+    if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+      await supabase.auth.signOut();
+    }
+  };
+
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"></div>
@@ -164,38 +224,9 @@ const App: React.FC = () => {
 
   if (!session) return <Login />;
 
-  if (profile && profile.role === 'teacher' && !profile.is_approved) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-['Cairo'] text-center">
-        <div className="bg-white p-8 md:p-14 rounded-[2.5rem] lg:rounded-[3.5rem] shadow-2xl max-w-xl border border-slate-100 relative overflow-hidden">
-           <div className="bg-amber-100 w-20 h-20 rounded-2xl flex items-center justify-center text-amber-600 mx-auto mb-6">
-             <ShieldAlert size={40} />
-           </div>
-           <h1 className="text-2xl lg:text-3xl font-black text-slate-900 mb-4 tracking-tight">حسابك قيد المراجعة</h1>
-           <p className="text-slate-500 font-bold leading-relaxed mb-8 text-sm lg:text-base">
-             مرحباً <span className="text-indigo-600">{profile.full_name}</span>. يرجى إدخال كود التفعيل لتشغيل النظام.
-           </p>
-           <div className="space-y-4 bg-slate-50 p-6 rounded-[2rem] border border-slate-200 mb-6 shadow-sm">
-              <input 
-                type="text" 
-                placeholder="أدخل كود التفعيل" 
-                className="w-full p-4 bg-white border-2 border-slate-100 rounded-xl text-center font-black uppercase tracking-[0.2em] outline-none focus:border-indigo-500 transition-all text-lg"
-                value={activationCode}
-                onChange={e => setActivationCode(e.target.value)}
-              />
-              {actError && <p className="text-rose-600 text-xs font-bold">{actError}</p>}
-              <button 
-                onClick={handleUseCode}
-                disabled={actLoading || !activationCode}
-                className="w-full py-4 bg-indigo-600 text-white rounded-xl font-black shadow-xl hover:bg-indigo-700 transition-all disabled:opacity-50"
-              >
-                {actLoading ? "جاري التفعيل..." : "تفعيل الحساب الآن"}
-              </button>
-           </div>
-           <button onClick={() => supabase.auth.signOut()} className="text-slate-400 font-bold hover:text-rose-600 transition-all flex items-center justify-center gap-2 mx-auto"><LogOut size={16} /> خروج</button>
-        </div>
-      </div>
-    );
+  // إذا كان المستخدم معلماً وغير مفعل، نظهر واجهة التنشيط
+  if (profile && !profile.is_approved && profile.role !== 'admin' && !supervisedTeacher) {
+    return <ActivationOverlay profileName={profile.full_name} onActivated={() => fetchProfile(session.user.id)} />;
   }
 
   const isAdmin = profile?.role === 'admin';
@@ -233,15 +264,42 @@ const App: React.FC = () => {
               </div>
             )}
           </nav>
-          <button onClick={() => { if(confirm('هل تريد تسجيل الخروج؟')) supabase.auth.signOut(); }} className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> خروج</button>
+          <button onClick={handleLogout} className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> تسجيل خروج</button>
         </aside>
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-h-screen max-w-full">
           <header className={`h-16 lg:h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-10 z-40 sticky top-0 ${supervisedTeacher ? 'mt-10' : ''}`}>
-            <div className="font-black text-slate-900 text-base lg:text-lg truncate max-w-[60%]">
-              {supervisedTeacher ? `إشراف: ${supervisedTeacher.name}` : (isAdmin ? 'الإدارة العامة' : 'لوحة تحكم المعلم')}
+            <div className="flex items-center gap-3 lg:gap-6">
+              {/* اختيار السنة والفصل */}
+              <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl lg:rounded-2xl border border-slate-200">
+                <div className="relative group">
+                   <select 
+                    value={currentYear} 
+                    onChange={(e) => setCurrentYear(e.target.value)}
+                    className="bg-transparent text-[10px] lg:text-xs font-black text-slate-700 outline-none pr-6 pl-2 py-1 appearance-none cursor-pointer"
+                   >
+                     <option value="2023-2024">2023-2024</option>
+                     <option value="2024-2025">2024-2025</option>
+                     <option value="2025-2026">2025-2026</option>
+                   </select>
+                   <CalendarDays size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+                <div className="w-px h-4 bg-slate-300"></div>
+                <div className="relative group">
+                   <select 
+                    value={currentSemester} 
+                    onChange={(e) => setCurrentSemester(e.target.value)}
+                    className="bg-transparent text-[10px] lg:text-xs font-black text-slate-700 outline-none pr-6 pl-2 py-1 appearance-none cursor-pointer"
+                   >
+                     <option value="1">الفصل الأول</option>
+                     <option value="2">الفصل الثاني</option>
+                   </select>
+                   <Layers size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
             </div>
+
             <div className="flex items-center gap-2 lg:gap-4">
               <div className="text-right hidden sm:block">
                 <p className="text-xs lg:text-sm font-black text-slate-900">{profile?.full_name}</p>
@@ -250,34 +308,24 @@ const App: React.FC = () => {
               <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl lg:rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg uppercase text-sm">
                 {profile?.full_name?.charAt(0) || 'U'}
               </div>
-              
-              <div className="flex items-center gap-1">
-                {isAdmin && (
-                  <Link to="/teachers" className="lg:hidden p-2 text-slate-400 hover:text-indigo-600 transition-colors">
-                    <ShieldCheck size={20} />
-                  </Link>
-                )}
-                <button 
-                  onClick={() => {
-                    if(confirm('هل تريد فعلاً تسجيل الخروج من النظام؟')) supabase.auth.signOut();
-                  }} 
-                  className="lg:hidden p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                  title="تسجيل الخروج"
-                >
-                  <LogOut size={20} />
-                </button>
-              </div>
+              <button 
+                onClick={handleLogout} 
+                className="lg:hidden p-2 text-rose-500 bg-rose-50 rounded-xl hover:bg-rose-100 transition-all"
+                aria-label="تسجيل خروج"
+              >
+                <LogOut size={20} />
+              </button>
             </div>
           </header>
 
-          <div className="flex-1 p-4 lg:p-10 flex flex-col">
+          <div className="flex-1 p-4 lg:p-10 flex flex-col pb-24 lg:pb-10">
             <div className="max-w-7xl mx-auto w-full flex-grow">
               <Routes>
-                <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} />} />
-                <Route path="/students" element={<Students role={effectiveRole} uid={effectiveUid} />} />
-                <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} />} />
-                <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} />} />
-                <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} />} />
+                <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/students" element={<Students role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                 {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
@@ -285,7 +333,6 @@ const App: React.FC = () => {
             <Footer />
           </div>
 
-          {/* شريط التنقل السفلي للموبايل */}
           <MobileNav isAdmin={isAdmin} />
         </main>
       </div>

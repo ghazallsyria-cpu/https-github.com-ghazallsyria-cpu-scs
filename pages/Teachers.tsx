@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase.ts';
 import { 
-  ShieldCheck, Calendar, Trash2, Phone, UserCircle, CheckCircle, XCircle, AlertCircle, Eye, UserPlus, X, Lock, User, KeyRound, Copy, Check, Plus, Hash, Send 
+  ShieldCheck, Calendar, Trash2, Phone, UserCircle, CheckCircle, XCircle, AlertCircle, Eye, UserPlus, X, Lock, User, KeyRound, Copy, Check, Plus, Hash, Send, RefreshCw 
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -31,10 +31,12 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
   async function fetchTeachers() {
     setLoading(true);
     try {
+      // جلب كافة البروفايلات التي ليست بمدير
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .neq('role', 'admin') 
+        .order('is_approved', { ascending: true }) // المعلقين أولاً
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -61,7 +63,6 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
   }
 
   const handleGenerateCode = async () => {
-    // توليد كود عشوائي قوي 8 خانات
     const newCode = Array.from({ length: 8 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
     
     try {
@@ -122,14 +123,17 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
 
       if (signUpError) throw signUpError;
       if (data.user) {
-        await supabase.from('profiles').update({
+        // تحديث البروفايل الذي يتم إنشاؤه تلقائياً بواسطة trigger أو يدوياً
+        const { error: profErr } = await supabase.from('profiles').update({
           full_name: addForm.fullName, 
-          phone: addForm.mobile, 
+          phone: addForm.mobile.trim(), 
           gender: addForm.gender,
           role: 'teacher', 
-          is_approved: true // المضاف يدوياً يكون مفعلاً افتراضياً
+          is_approved: true 
         }).eq('id', data.user.id);
         
+        if (profErr) throw profErr;
+
         showFeedback("تم إضافة المعلم وتفعيل حسابه يدوياً");
         setIsAddModalOpen(false);
         setAddForm({ fullName: '', mobile: '', password: '', gender: 'male' });
@@ -169,12 +173,21 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
              <p className="text-slate-500 font-bold mt-1">الموافقة على المعلمين الجدد وتوليد أكواد التفعيل الفوري.</p>
            </div>
         </div>
-        <button 
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 transition-all active:scale-95"
-        >
-          <UserPlus size={20} /> إضافة معلم وتفعيل يدوي
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={fetchTeachers}
+            className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
+            title="تحديث البيانات"
+          >
+            <RefreshCw size={24} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button 
+            onClick={() => setIsAddModalOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 transition-all active:scale-95"
+          >
+            <UserPlus size={20} /> إضافة معلم وتفعيل يدوي
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 p-1.5 bg-white rounded-[2rem] border border-slate-200 w-fit shadow-sm">
@@ -219,11 +232,11 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
               
               <div className="space-y-4 pt-8 border-t border-slate-50 text-sm font-bold text-slate-600">
                 <div className="flex items-center gap-4"><Phone size={18} className="text-indigo-400" /> {t.phone || 'غير مسجل'}</div>
-                <div className="flex items-center gap-4"><Calendar size={18} className="text-indigo-400" /> تاريخ الانضمام: {new Date(t.created_at).toLocaleDateString('ar-EG')}</div>
+                <div className="flex items-center gap-4"><Calendar size={18} className="text-indigo-400" /> انضم: {new Date(t.created_at).toLocaleDateString('ar-EG')}</div>
               </div>
             </div>
           ))}
-          {teachers.length === 0 && (
+          {teachers.length === 0 && !loading && (
              <div className="col-span-full py-20 text-center bg-slate-50 rounded-[3rem] border-4 border-dashed border-slate-100">
                 <UserCircle size={80} className="mx-auto text-slate-200 mb-4" />
                 <p className="text-slate-400 font-black text-xl">لا يوجد معلمون مسجلون حالياً.</p>

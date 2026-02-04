@@ -1,5 +1,11 @@
-// Fix: Manually declare Vite environment types to resolve the "Cannot find type definition file for 'vite/client'" error.
-// This provides the global ImportMeta and ImportMetaEnv interfaces that the project expects.
+// @ts-ignore: Reference to Vite client types to provide environment and module definitions
+/// <reference types="vite/client" />
+
+/**
+ * Fix: Removed redundant 'declare module' blocks for SVG, PNG, and CSS 
+ * as they are already provided by 'vite/client' and were causing 
+ * "Duplicate identifier 'src'" errors when overlapping with Vite's internal types.
+ */
 
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
@@ -9,19 +15,4 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
-}
-
-declare module '*.svg' {
-  const content: any;
-  export default content;
-}
-
-declare module '*.png' {
-  const content: any;
-  export default content;
-}
-
-declare module '*.css' {
-  const content: { [className: string]: string };
-  export default content;
 }

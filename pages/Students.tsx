@@ -2,21 +2,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase.ts';
 import { StudentStats } from '../types.ts';
-import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, X, AlertCircle, Users, Edit3, Clock, DollarSign } from 'lucide-react';
+import { Plus, MapPin, Phone, Calendar, Search, Trash2, CheckCircle, X, AlertCircle, Users, Edit3, Clock, DollarSign, ArrowRightLeft, Copy, CalendarDays, Layers } from 'lucide-react';
 
-const Students = ({ role, uid }: { role: any, uid: string }) => {
+const Students = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const [students, setStudents] = useState<(StudentStats & { profiles?: { full_name: string } })[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   
   const [form, setForm] = useState({ 
     name: '', address: '', phone: '', grade: '', 
     agreed_amount: '0', is_hourly: false, price_per_hour: '0' 
   });
+  
+  const [transferForm, setTransferForm] = useState({
+    targetYear: year,
+    targetSemester: semester === '1' ? '2' : '1',
+    copyFullData: false
+  });
+
   const [lessonForm, setLessonForm] = useState({ lesson_date: new Date().toISOString().split('T')[0], hours: '1', notes: '' });
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
@@ -35,7 +43,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         profiles:teacher_id (
           full_name
         )
-      `);
+      `).eq('academic_year', year).eq('semester', semester);
       
       if (!isAdmin) {
         query = query.eq('teacher_id', uid);
@@ -77,7 +85,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
     } finally {
       setLoading(false);
     }
-  }, [uid, role, isAdmin]);
+  }, [uid, role, isAdmin, year, semester]);
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
@@ -92,11 +100,13 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         agreed_amount: form.is_hourly ? 0 : (parseFloat(form.agreed_amount) || 0),
         is_hourly: form.is_hourly,
         price_per_hour: form.is_hourly ? (parseFloat(form.price_per_hour) || 0) : 0,
-        teacher_id: uid 
+        teacher_id: uid,
+        academic_year: year,
+        semester: semester
       }]);
 
       if (error) throw error;
-      showFeedback('تمت إضافة الطالب بنجاح');
+      showFeedback('تمت إضافة الطالب بنجاح للفصل الحالي');
       setIsModalOpen(false);
       setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '0', is_hourly: false, price_per_hour: '0' });
       fetchStudents();
@@ -128,6 +138,66 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
     }
   };
 
+  // وظيفة نقل/نسخ الطالب لفصل آخر
+  const handleTransferStudent = async () => {
+    if (!selectedStudent) return;
+    try {
+      setLoading(true);
+      // 1. إنشاء سجل الطالب الجديد
+      const { data: newStudent, error: sErr } = await supabase.from('students').insert([{
+        name: selectedStudent.name,
+        address: selectedStudent.address,
+        phone: selectedStudent.phone,
+        grade: selectedStudent.grade,
+        agreed_amount: selectedStudent.agreed_amount,
+        is_hourly: selectedStudent.is_hourly,
+        price_per_hour: selectedStudent.price_per_hour,
+        teacher_id: selectedStudent.teacher_id,
+        academic_year: transferForm.targetYear,
+        semester: transferForm.targetSemester
+      }]).select().single();
+
+      if (sErr) throw sErr;
+
+      // 2. إذا تم اختيار نقل البيانات كاملة
+      if (transferForm.copyFullData && newStudent) {
+        // جلب الحصص القديمة
+        const { data: oldLessons } = await supabase.from('lessons').select('*').eq('student_id', selectedStudent.id);
+        if (oldLessons && oldLessons.length > 0) {
+          const newLessons = oldLessons.map(l => ({
+            student_id: newStudent.id,
+            teacher_id: l.teacher_id,
+            lesson_date: l.lesson_date,
+            hours: l.hours,
+            notes: l.notes + " (تم نسخه من فصل سابق)"
+          }));
+          await supabase.from('lessons').insert(newLessons);
+        }
+
+        // جلب المدفوعات القديمة
+        const { data: oldPayments } = await supabase.from('payments').select('*').eq('student_id', selectedStudent.id);
+        if (oldPayments && oldPayments.length > 0) {
+          const newPayments = oldPayments.map(p => ({
+            student_id: newStudent.id,
+            teacher_id: p.teacher_id,
+            amount: p.amount,
+            payment_date: p.payment_date,
+            notes: p.notes + " (تم نسخه من فصل سابق)"
+          }));
+          await supabase.from('payments').insert(newPayments);
+        }
+      }
+
+      showFeedback(`تم بنجاح نقل الطالب إلى ${transferForm.targetYear} - الفصل ${transferForm.targetSemester}`);
+      setIsTransferModalOpen(false);
+      fetchStudents();
+    } catch (err: any) {
+      showFeedback(err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddLesson = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudent) return;
@@ -149,7 +219,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
   };
 
   const handleDeleteStudent = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف الطالب؟ سيتم حذف كافة حصصه ومدفوعاته أيضاً.')) return;
+    if (!confirm('هل أنت متأكد من حذف الطالب؟ سيتم حذف كافة حصصه ومدفوعاته أيضاً من هذا الفصل.')) return;
     const { error } = await supabase.from('students').delete().eq('id', id);
     if (error) showFeedback(error.message, 'error');
     else fetchStudents();
@@ -182,9 +252,13 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
 
       <div className="flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1 rounded-full">{year}</span>
+            <span className="bg-slate-200 text-slate-700 text-[10px] font-black px-3 py-1 rounded-full">الفصل {semester}</span>
+          </div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">إدارة الطلاب</h1>
           <p className="text-slate-500 font-bold mt-2">
-            {isAdmin ? "وضع الإدارة العامة: عرض وتعديل كافة البيانات" : `أهلاً بك، لديك ${students.length} طالب مسجل.`}
+            عرض طلابك في الفترة الزمنية المحددة.
           </p>
         </div>
         <div className="flex flex-wrap gap-4 w-full md:w-auto">
@@ -202,7 +276,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
             onClick={() => { setForm({ name: '', address: '', phone: '', grade: '', agreed_amount: '0', is_hourly: false, price_per_hour: '0' }); setIsModalOpen(true); }} 
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black shadow-xl transition-all active:scale-95"
           >
-            إضافة طالب
+            إضافة طالب جديد
           </button>
         </div>
       </div>
@@ -213,23 +287,12 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredStudents.map(s => (
             <div key={s.id} className={`bg-white p-8 rounded-[2.5rem] border transition-all relative group hover:shadow-xl ${s.is_hourly ? 'border-amber-200' : 'border-slate-200'}`}>
-              {isAdmin && s.profiles && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-1 rounded-full text-[10px] font-black shadow-lg">
-                  المعلم: {s.profiles.full_name}
-                </div>
-              )}
-
-              {s.is_hourly && (
-                <div className="absolute top-8 left-8 bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
-                  <Clock size={12} /> نظام ساعة
-                </div>
-              )}
-              
               <div className="flex justify-between items-start mb-6">
                 <div className="bg-indigo-50 text-indigo-600 w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl">
                   {s.name.charAt(0)}
                 </div>
                 <div className="flex gap-1">
+                  <button onClick={() => { setSelectedStudent(s); setIsTransferModalOpen(true); }} className="p-3 bg-slate-50 rounded-xl hover:bg-amber-600 hover:text-white transition-all text-slate-400" title="نقل لفصل آخر"><ArrowRightLeft size={18}/></button>
                   <button onClick={() => openEditModal(s)} className="p-3 bg-slate-50 rounded-xl hover:bg-emerald-600 hover:text-white transition-all text-slate-400" title="تعديل"><Edit3 size={18}/></button>
                   <button onClick={() => { setSelectedStudent(s); setIsLessonModalOpen(true); }} className="p-3 bg-slate-50 rounded-xl hover:bg-indigo-600 hover:text-white transition-all text-slate-400" title="حصة جديدة"><Calendar size={18}/></button>
                   <button onClick={() => handleDeleteStudent(s.id)} className="p-3 bg-slate-50 rounded-xl hover:bg-rose-600 hover:text-white transition-all text-slate-400" title="حذف"><Trash2 size={18}/></button>
@@ -265,9 +328,77 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
           {filteredStudents.length === 0 && (
             <div className="col-span-full py-20 text-center bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
               <Users size={48} className="mx-auto mb-4 text-slate-200" />
-              <p className="text-slate-400 font-bold">لا يوجد طلاب لعرضهم.</p>
+              <p className="text-slate-400 font-bold">لا يوجد طلاب في السنة {year} الفصل {semester}.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* نافذة نقل الطالب لفصل آخر */}
+      {isTransferModalOpen && selectedStudent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300 border-2 border-amber-100">
+            <button onClick={() => setIsTransferModalOpen(false)} className="absolute top-8 left-8 text-slate-300 hover:text-rose-500"><X /></button>
+            <div className="flex items-center gap-3 mb-8 text-amber-600">
+              <ArrowRightLeft size={32} />
+              <h2 className="text-2xl font-black text-slate-900 leading-tight">نقل الطالب لفصل آخر</h2>
+            </div>
+            
+            <p className="text-slate-500 font-bold text-sm mb-8 bg-slate-50 p-4 rounded-2xl">
+              أنت تقوم بنقل بيانات <span className="text-indigo-600">{selectedStudent.name}</span> من فصلك الحالي لفترة زمنية جديدة.
+            </p>
+
+            <div className="space-y-6">
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-2">
+                    <CalendarDays size={12}/> السنة الدراسية المستهدفة
+                 </label>
+                 <select 
+                   className="w-full p-4 bg-slate-100 border-none rounded-2xl font-black outline-none"
+                   value={transferForm.targetYear}
+                   onChange={e => setTransferForm({...transferForm, targetYear: e.target.value})}
+                 >
+                   <option value="2023-2024">2023-2024</option>
+                   <option value="2024-2025">2024-2025</option>
+                   <option value="2025-2026">2025-2026</option>
+                 </select>
+               </div>
+
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-2">
+                    <Layers size={12}/> الفصل الدراسي المستهدف
+                 </label>
+                 <select 
+                   className="w-full p-4 bg-slate-100 border-none rounded-2xl font-black outline-none"
+                   value={transferForm.targetSemester}
+                   onChange={e => setTransferForm({...transferForm, targetSemester: e.target.value})}
+                 >
+                   <option value="1">الفصل الدراسي الأول</option>
+                   <option value="2">الفصل الدراسي الثاني</option>
+                 </select>
+               </div>
+
+               <label className="flex items-center gap-3 p-4 bg-indigo-50 rounded-2xl cursor-pointer group hover:bg-indigo-100 transition-colors">
+                  <input 
+                    type="checkbox" 
+                    className="w-5 h-5 accent-indigo-600"
+                    checked={transferForm.copyFullData}
+                    onChange={e => setTransferForm({...transferForm, copyFullData: e.target.checked})}
+                  />
+                  <div>
+                    <p className="text-sm font-black text-indigo-700">نسخ كامل السجلات (حصص + مالية)</p>
+                    <p className="text-[10px] text-indigo-400 font-bold">في حال عدم التفعيل، سيتم نقل بيانات الطالب الأساسية فقط.</p>
+                  </div>
+               </label>
+
+               <button 
+                onClick={handleTransferStudent}
+                className="w-full py-5 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-3xl shadow-xl shadow-amber-100 flex items-center justify-center gap-3 transition-all active:scale-95"
+               >
+                 <Copy size={20}/> تأكيد عملية النقل
+               </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -276,7 +407,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <form onSubmit={isEditModalOpen ? handleUpdateStudent : handleAddStudent} className="bg-white w-full max-w-lg p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
             <button type="button" onClick={() => { setIsModalOpen(false); setIsEditModalOpen(false); }} className="absolute top-8 left-8 text-slate-400 hover:text-rose-500 transition-colors"><X /></button>
-            <h2 className="text-2xl font-black mb-8 text-slate-900">{isEditModalOpen ? 'تعديل بيانات الطالب' : 'إضافة طالب جديد'}</h2>
+            <h2 className="text-2xl font-black mb-8 text-slate-900">{isEditModalOpen ? 'تعديل بيانات الطالب' : 'إضافة طالب جديد للفصل'}</h2>
             
             <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl mb-8 w-fit mx-auto">
               <button 
@@ -327,7 +458,7 @@ const Students = ({ role, uid }: { role: any, uid: string }) => {
               </div>
             </div>
             <button type="submit" className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl mt-8 shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
-              {isEditModalOpen ? 'حفظ التعديلات' : 'إضافة الطالب'}
+              {isEditModalOpen ? 'حفظ التعديلات' : 'إضافة الطالب للفصل الحالي'}
             </button>
           </form>
         </div>
