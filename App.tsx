@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, Menu, X, CalendarDays, Layers, CheckCircle, KeyRound, ArrowLeft, Clock
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, Menu, X, CalendarDays, Layers, CheckCircle, KeyRound, ArrowLeft, Clock, FileDown
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard.tsx';
@@ -14,6 +14,7 @@ import Lessons from './pages/Lessons.tsx';
 import Login from './pages/Login.tsx';
 import Teachers from './pages/Teachers.tsx';
 import Schedule from './pages/Schedule.tsx';
+import Reports from './pages/Reports.tsx';
 
 // مخزن بسيط للبيانات في الذاكرة لمنع إعادة الطلب
 const cache = {
@@ -29,7 +30,7 @@ const Footer: React.FC = () => (
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 2.5.0 (نظام الجدولة الذكي) &copy; {new Date().getFullYear()}
+        الإصدار 2.6.0 (نظام التصدير الذكي) &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
@@ -40,8 +41,8 @@ const MobileNav: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   const navItems = [
     { to: '/', icon: <LayoutDashboard size={20} />, label: 'الرئيسية' },
     { to: '/schedule', icon: <Clock size={20} />, label: 'الجدول' },
+    { to: '/reports', icon: <FileDown size={20} />, label: 'التقارير' },
     { to: '/students', icon: <Users size={20} />, label: 'الطلاب' },
-    { to: '/lessons', icon: <BookOpen size={20} />, label: 'الحصص' },
     { to: '/payments', icon: <Wallet size={20} />, label: 'المالية' },
   ];
 
@@ -153,6 +154,7 @@ const App: React.FC = () => {
             <NavItem to="/students" icon={<Users size={20} />} label="الطلاب" />
             <NavItem to="/lessons" icon={<BookOpen size={20} />} label="سجل الدروس" />
             <NavItem to="/payments" icon={<Wallet size={20} />} label="المالية" />
+            <NavItem to="/reports" icon={<FileDown size={20} />} label="التقارير والتصدير" />
             <NavItem to="/statistics" icon={<BarChart3 size={20} />} label="الإحصائيات" />
             {isAdmin && (
               <div className="pt-6 mt-6 border-t border-slate-100">
@@ -201,6 +203,7 @@ const App: React.FC = () => {
                 <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                 <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                 <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                 {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
