@@ -1,7 +1,6 @@
-
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { supabase } from './supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
 import { 
   LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, KeyRound, Clock, FileDown, RefreshCw, Calendar, Sparkles
 } from 'lucide-react';
@@ -17,6 +16,27 @@ import Schedule from './pages/Schedule';
 import Reports from './pages/Reports';
 
 const cache = { profile: null as any, lastUid: null as string | null };
+
+const SupabaseConnectionError: React.FC = () => (
+    <div className="h-screen flex items-center justify-center bg-rose-50 font-['Cairo'] p-6 text-right">
+        <div className="bg-white p-10 lg:p-16 rounded-[4rem] shadow-2xl text-center max-w-3xl border-4 border-rose-100 animate-in zoom-in duration-500">
+            <ShieldAlert size={64} className="text-rose-500 mx-auto mb-8 animate-bounce" />
+            <h1 className="text-3xl lg:text-4xl font-black text-slate-900 mb-4">خطأ جسيم في الاتصال</h1>
+            <p className="text-slate-600 font-bold mb-10 leading-relaxed text-lg">
+                لم يتمكن النظام من الاتصال بقاعدة البيانات. يبدو أن مفاتيح الاتصال الخاصة بـ Supabase غير مُعرَّفة.
+            </p>
+            <div className="text-right bg-slate-50 p-8 rounded-[3rem] border border-slate-200 space-y-4 font-mono text-sm text-slate-700 shadow-inner">
+                <p className="font-['Cairo'] font-bold text-base mb-4">لحل المشكلة، يجب إعداد متغيرات البيئة الخاصة بالمشروع:</p>
+                <div className="bg-slate-800 text-white p-6 rounded-3xl text-left text-base">
+                    <p><span className="text-purple-400">VITE_SUPABASE_URL</span>=<span className="text-emerald-300">"رابط المشروع الخاص بك"</span></p>
+                    <p><span className="text-purple-400">VITE_SUPABASE_ANON_KEY</span>=<span className="text-emerald-300">"مفتاح Anon الخاص بك"</span></p>
+                </div>
+                 <p className="font-['Cairo'] text-xs text-slate-500 pt-4">إذا كنت لا تملك هذه المفاتيح، يرجى التواصل مع مبرمج النظام لتزويدك بها.</p>
+            </div>
+        </div>
+    </div>
+);
+
 
 const Footer: React.FC = () => (
   <footer className="mt-auto py-12 text-center border-t border-slate-100/50 pb-28 lg:pb-12 font-['Cairo']">
@@ -76,6 +96,8 @@ const App: React.FC = () => {
   const [currentYear, setCurrentYear] = useState(localStorage.getItem('selectedYear') || '2024-2025');
   const [currentSemester, setCurrentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
 
+  const isSupabaseConfigured = SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes('placeholder');
+
   useEffect(() => {
     localStorage.setItem('selectedYear', currentYear);
     localStorage.setItem('selectedSemester', currentSemester);
@@ -99,6 +121,10 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       if (s) fetchProfile(s.user.id, true);
@@ -110,7 +136,11 @@ const App: React.FC = () => {
       else { setProfile(null); cache.profile = null; setLoading(false); }
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [isSupabaseConfigured]);
+  
+  if (!isSupabaseConfigured) {
+    return <SupabaseConnectionError />;
+  }
 
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
