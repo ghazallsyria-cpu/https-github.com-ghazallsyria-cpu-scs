@@ -1,69 +1,101 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Cell } from 'recharts';
-import { BookOpen, Clock, TrendingUp, RefreshCw, Trophy, Target, Sparkles, Zap, Award, BarChart3 } from 'lucide-react';
+import { 
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Cell, 
+  PieChart, Pie, RadialBarChart, RadialBar, LineChart, Line, AreaChart, Area
+} from 'recharts';
+import { 
+  BookOpen, Clock, TrendingUp, RefreshCw, Trophy, Target, Sparkles, Zap, Award, 
+  BarChart3, Users, DollarSign, PieChart as PieIcon, Activity, CreditCard, Wallet
+} from 'lucide-react';
 
 const COLORS = ['#4f46e5', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
+const GRADE_COLORS = { '10': '#10b981', '11': '#8b5cf6', '12': '#4f46e5' };
 
 const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
-  const [data, setData] = useState<any[]>([]);
-  const [teacherComparison, setTeacherComparison] = useState<any[]>([]);
-  const [summary, setSummary] = useState({ hourlyHours: 0, fixedHours: 0, hourlyLessons: 0, fixedLessons: 0 });
   const [loading, setLoading] = useState(true);
+  const [statsData, setStatsData] = useState<any[]>([]);
+  const [financialStats, setFinancialStats] = useState({ 
+    totalRevenue: 0, 
+    totalDebt: 0, 
+    totalExpected: 0, 
+    collectionRate: 0,
+    activeStudents: 0
+  });
+  const [gradeDistribution, setGradeDistribution] = useState<any[]>([]);
+  const [teacherPerformance, setTeacherPerformance] = useState<any[]>([]);
 
   const isAdmin = role === 'admin';
 
-  const fetchStats = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: periodStudents } = await supabase.from('students').select('id').eq('academic_year', year).eq('semester', semester);
-      const studentIds = periodStudents?.map(s => s.id) || [];
+      // 1. جلب ملخص الطلاب للفصل المحدد
+      let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
+      if (!isAdmin) query = query.eq('teacher_id', uid);
       
-      if (studentIds.length === 0) {
-        setLoading(false);
-        return;
+      const { data: stds, error } = await query;
+      if (error) throw error;
+
+      const students = stds || [];
+      
+      // 2. معالجة البيانات المالية والطلابية
+      let rev = 0, debt = 0, expected = 0;
+      const grades: any = { '10': 0, '11': 0, '12': 0 };
+      
+      students.forEach(s => {
+        rev += (s.total_paid || 0);
+        debt += Math.max(0, s.remaining_balance || 0);
+        expected += (s.agreed_amount || 0);
+        if (grades[s.grade] !== undefined) grades[s.grade]++;
+      });
+
+      setFinancialStats({
+        totalRevenue: rev,
+        totalDebt: debt,
+        totalExpected: expected,
+        collectionRate: Math.round((rev / (expected || 1)) * 100),
+        activeStudents: students.length
+      });
+
+      setGradeDistribution([
+        { name: 'عاشر', value: grades['10'], grade: '10' },
+        { name: 'حادي عشر', value: grades['11'], grade: '11' },
+        { name: 'ثاني عشر', value: grades['12'], grade: '12' }
+      ]);
+
+      // 3. جلب بيانات الحصص للرسم البياني الزمني
+      const studentIds = students.map(s => s.id);
+      if (studentIds.length > 0) {
+        let lQuery = supabase.from('lessons').select('lesson_date, hours').in('student_id', studentIds).order('lesson_date');
+        const { data: lessons } = await lQuery;
+        
+        const grouped = (lessons || []).reduce((acc: any, curr) => {
+          const date = new Date(curr.lesson_date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
+          acc[date] = (acc[date] || 0) + Number(curr.hours);
+          return acc;
+        }, {});
+        
+        setStatsData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })).slice(-15));
       }
 
-      let lQuery = supabase.from('lessons').select('*, students(is_hourly, teacher_id)').in('student_id', studentIds);
-      if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
-      
-      const { data: lsns } = await lQuery;
-      
-      let hH = 0, fH = 0, hL = 0, fL = 0;
-      const grouped = (lsns || []).reduce((acc: any, curr) => {
-        const date = curr.lesson_date;
-        const isHourly = curr.students?.is_hourly;
-        const hoursValue = Number(curr.hours) || 0;
-        
-        if (isHourly) { hH += hoursValue; hL++; }
-        else { fH += hoursValue; fL++; }
-
-        if (!acc[date]) acc[date] = { date, hourly: 0, fixed: 0 };
-        if (isHourly) acc[date].hourly += hoursValue;
-        else acc[date].fixed += hoursValue;
-        
-        return acc;
-      }, {});
-
-      setSummary({ hourlyHours: hH, fixedHours: fH, hourlyLessons: hL, fixedLessons: fL });
-      setData(Object.values(grouped).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-15));
-
+      // 4. مقارنة المعلمين (للمدير فقط)
       if (isAdmin) {
         const { data: teachers } = await supabase.from('profiles').select('id, full_name').neq('role', 'admin');
-        const teacherMap = (lsns || []).reduce((acc: any, curr) => {
+        const teacherMetrics = students.reduce((acc: any, curr) => {
           const tid = curr.teacher_id;
-          if (!acc[tid]) acc[tid] = { name: '', lessons: 0, hours: 0 };
-          acc[tid].lessons++;
-          acc[tid].hours += Number(curr.hours) || 0;
+          if (!acc[tid]) acc[tid] = { name: '', collected: 0, students: 0 };
+          acc[tid].collected += (curr.total_paid || 0);
+          acc[tid].students++;
           return acc;
         }, {});
 
-        setTeacherComparison((teachers || []).map(t => ({
+        setTeacherPerformance((teachers || []).map(t => ({
           name: t.full_name,
-          lessons: teacherMap[t.id]?.lessons || 0,
-          hours: teacherMap[t.id]?.hours || 0,
-        })).sort((a, b) => b.lessons - a.lessons));
+          collected: teacherMetrics[t.id]?.collected || 0,
+          students: teacherMetrics[t.id]?.students || 0
+        })).sort((a, b) => b.collected - a.collected));
       }
 
     } catch (err) {
@@ -73,129 +105,170 @@ const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, yea
     }
   }, [uid, role, isAdmin, year, semester]);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const financialSummaryData = [
+    { name: 'المحصل فعلياً', value: financialStats.totalRevenue, fill: '#10b981' },
+    { name: 'الذمم المتبقية', value: financialStats.totalDebt, fill: '#f59e0b' }
+  ];
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 pb-24 text-right font-['Cairo']">
+    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-10 duration-1000 pb-32 text-right font-['Cairo']">
       
-      {/* Header Section */}
-      <div className="bg-gradient-to-br from-indigo-700 via-indigo-800 to-slate-900 p-12 lg:p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden group">
-        <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+      {/* PREMIUM HEADER */}
+      <div className="bg-[#1E1B4B] p-12 lg:p-20 rounded-[5rem] text-white shadow-2xl relative overflow-hidden group border border-white/5">
+        <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-500/20 rounded-full blur-[120px]"></div>
         <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-8">
-            <span className="bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-              <Sparkles size={14} className="text-amber-400" /> تحليل البيانات الذكي
+          <div className="flex items-center gap-5 mb-10">
+            <span className="bg-white/10 backdrop-blur-3xl border border-white/20 px-8 py-3 rounded-full text-[11px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
+              <Activity size={20} className="text-emerald-400" /> مركز التحليل الذكي V3.1
             </span>
           </div>
-          <h1 className="text-4xl lg:text-6xl font-black leading-tight tracking-tighter mb-4">مرصد الأداء <br/><span className="text-indigo-300">والإحصائيات الرقمية</span></h1>
-          <p className="text-indigo-100/60 font-bold max-w-xl text-lg">رؤية شاملة ودقيقة لتحركات المحتوى التعليمي والإنتاجية المحققة.</p>
+          <h1 className="text-5xl lg:text-7xl font-black leading-tight tracking-tighter mb-6">تقرير الأداء <br/><span className="text-indigo-400">والحالة المالية الشاملة</span></h1>
+          <p className="text-indigo-100/60 font-black max-w-2xl text-xl leading-relaxed">رؤية بانورامية لنمو المنصة، توزيع الطلاب، والكفاءة المالية المحققة.</p>
         </div>
-        <BarChart3 className="absolute -bottom-12 -left-12 text-white/5 w-80 h-80 -rotate-12 group-hover:rotate-0 transition-transform duration-[2s]" />
+        <BarChart3 className="absolute -bottom-20 -left-20 text-white/[0.03] w-[600px] h-[600px] -rotate-12 group-hover:rotate-0 transition-transform duration-[3s]" />
       </div>
 
-      {/* Stats Summary Bento Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-        <StatSummaryCard label="ساعات النظام الخارجي" value={summary.hourlyHours.toFixed(1)} subValue={`${summary.hourlyLessons} حصة`} icon={<Clock size={28}/>} color="bg-orange-500" />
-        <StatSummaryCard label="ساعات النظام الفصلي" value={summary.fixedHours.toFixed(1)} subValue={`${summary.fixedLessons} حصة`} icon={<BookOpen size={28}/>} color="bg-indigo-600" />
-        <StatSummaryCard label="متوسط مدة الحصة" value={((summary.hourlyHours + summary.fixedHours) / (summary.hourlyLessons + summary.fixedLessons || 1)).toFixed(1)} subValue="ساعة / حصة" icon={<Target size={28}/>} color="bg-emerald-500" />
-        <StatSummaryCard label="إجمالي الإنتاجية" value={summary.hourlyLessons + summary.fixedLessons} subValue="إجمالي الحصص" icon={<Award size={28}/>} color="bg-rose-500" />
+      {/* KEY METRICS BENTO */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <MetricCard label="إجمالي الأرباح (المحصل)" value={`$${financialStats.totalRevenue.toLocaleString()}`} icon={<Wallet size={32}/>} color="bg-emerald-500 shadow-emerald-200" trend={`${financialStats.collectionRate}% من المستهدف`} />
+        <MetricCard label="إجمالي الذمم (المتبقي)" value={`$${financialStats.totalDebt.toLocaleString()}`} icon={<CreditCard size={32}/>} color="bg-amber-500 shadow-amber-200" trend="مطالبات مالية نشطة" />
+        <MetricCard label="القاعدة الطلابية" value={financialStats.activeStudents} icon={<Users size={32}/>} color="bg-indigo-600 shadow-indigo-200" trend="طالب مسجل حالياً" />
+        <MetricCard label="كفاءة التحصيل" value={`${financialStats.collectionRate}%`} icon={<TrendingUp size={32}/>} color="bg-blue-500 shadow-blue-200" trend="معدل التدفق النقدي" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* Main Chart Card */}
-        <div className="lg:col-span-2 bg-white/90 backdrop-blur-xl p-12 lg:p-16 rounded-[4.5rem] border border-white shadow-2xl relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-16">
-            <div>
-              <h3 className="text-3xl font-black text-slate-900 mb-2">مخطط النشاط الزمني</h3>
-              <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.3em]">توزيع ساعات العمل خلال آخر 15 يوماً</p>
-            </div>
-            <div className="bg-indigo-50 p-4 rounded-3xl text-indigo-600 group-hover:scale-110 transition-transform"><TrendingUp size={32} /></div>
-          </div>
-          
-          <div className="h-[400px] w-full">
-            {loading ? (
-               <div className="h-full flex items-center justify-center"><RefreshCw className="animate-spin text-indigo-600" size={48} /></div>
-            ) : data.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" tick={{fontSize: 11, fill: '#94a3b8', fontWeight: 900}} axisLine={false} tickLine={false} />
-                  <YAxis tick={{fontSize: 11, fill: '#94a3b8', fontWeight: 900}} axisLine={false} tickLine={false} />
-                  <Tooltip 
-                    cursor={{fill: '#f8fafc'}} 
-                    contentStyle={{ borderRadius: '28px', border: 'none', boxShadow: '0 25px 60px -12px rgba(0,0,0,0.15)', fontFamily: 'Cairo', fontWeight: 900, padding: '20px', backgroundColor: 'rgba(255,255,255,0.9)' }} 
-                  />
-                  <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{paddingBottom: '40px', fontSize: '12px', fontWeight: 900}} />
-                  <Bar dataKey="hourly" name="خارجي (ساعة)" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={24} />
-                  <Bar dataKey="fixed" name="فصلي (اتفاق)" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={24} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-300 font-black italic">لا توجد بيانات مسجلة حالياً.</div>
-            )}
-          </div>
-        </div>
-
-        {/* Admin Leaderboard Card */}
-        {isAdmin && (
-           <div className="bg-slate-950 p-12 lg:p-14 rounded-[4.5rem] shadow-2xl text-white relative overflow-hidden group border border-white/5 flex flex-col">
-             <div className="absolute -top-24 -right-24 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px] group-hover:bg-indigo-500/20 transition-all duration-1000"></div>
-             
-             <div className="relative z-10 mb-12">
-               <div className="flex items-center gap-4 mb-4">
-                 <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-500/20"><Trophy size={28}/></div>
-                 <h3 className="text-2xl font-black">تميز مديري المحتوى</h3>
-               </div>
-               <p className="text-slate-400 text-xs font-bold leading-relaxed uppercase tracking-widest">تحليل الكفاءة حسب عدد الحصص</p>
-             </div>
-
-             <div className="flex-1 space-y-6 relative z-10 overflow-y-auto no-scrollbar pr-2">
-               {teacherComparison.length > 0 ? (
-                 teacherComparison.map((t, i) => (
-                    <div key={i} className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] flex items-center justify-between group/card hover:bg-white/10 transition-all">
-                       <div className="flex items-center gap-5">
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg border-2 border-white/10 transition-transform group-hover/card:scale-110`} style={{ backgroundColor: `${COLORS[i % COLORS.length]}20`, color: COLORS[i % COLORS.length] }}>
-                            {i === 0 ? <Zap size={24} fill="currentColor"/> : i + 1}
-                          </div>
-                          <div>
-                            <p className="text-sm font-black text-white">{t.name}</p>
-                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">{t.hours.toFixed(1)} ساعة إجمالية</p>
-                          </div>
-                       </div>
-                       <div className="text-right">
-                          <p className="text-2xl font-black leading-none" style={{ color: COLORS[i % COLORS.length] }}>{t.lessons}</p>
-                          <p className="text-[9px] text-slate-500 font-black uppercase mt-1">حصة</p>
-                       </div>
-                    </div>
-                 ))
-               ) : (
-                 <div className="h-full flex items-center justify-center text-slate-700 font-black italic">لا يوجد سجلات نشطة.</div>
-               )}
-             </div>
-             
-             <div className="mt-10 relative z-10 bg-white/5 p-6 rounded-[2rem] border border-white/10 text-center animate-pulse">
-                <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">إجمالي الحصص المنجزة للمنصة</p>
-                <p className="text-3xl font-black">{teacherComparison.reduce((acc, curr) => acc + curr.lessons, 0)}</p>
-             </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        {/* FINANCIAL HEALTH CHART */}
+        <div className="lg:col-span-2 bg-white p-14 lg:p-16 rounded-[5rem] border border-slate-100 shadow-2xl relative group overflow-hidden">
+           <div className="flex justify-between items-center mb-14">
+              <div>
+                 <h3 className="text-3xl font-black text-slate-900">ميزانية الفصل</h3>
+                 <p className="text-[11px] text-slate-400 font-black uppercase mt-3 tracking-[0.3em]">تحليل المدفوعات والذمم المالية</p>
+              </div>
+              <div className="bg-emerald-50 p-5 rounded-[2rem] text-emerald-600 shadow-inner group-hover:scale-110 transition-transform duration-700">
+                 <DollarSign size={32} />
+              </div>
            </div>
+           <div className="h-[400px]">
+              <ResponsiveContainer width="100%" height="100%">
+                 <BarChart data={financialSummaryData} layout="vertical" barSize={50}>
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#475569', fontSize: 14, fontWeight: 900}} width={120} />
+                    <Tooltip contentStyle={{borderRadius: '30px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', fontFamily: 'Cairo', fontWeight: 900}} />
+                    <Bar dataKey="value" radius={[0, 20, 20, 0]}>
+                       {financialSummaryData.map((entry, index) => (
+                         <Cell key={`cell-${index}`} fill={entry.fill} />
+                       ))}
+                    </Bar>
+                 </BarChart>
+              </ResponsiveContainer>
+           </div>
+           <div className="mt-8 flex justify-center gap-10">
+              <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-emerald-500"></div> <span className="text-xs font-black text-slate-500">الأرباح المحصلة</span></div>
+              <div className="flex items-center gap-3"><div className="w-4 h-4 rounded-full bg-amber-500"></div> <span className="text-xs font-black text-slate-500">الذمم والديون</span></div>
+           </div>
+        </div>
+
+        {/* GRADE DISTRIBUTION CHART */}
+        <div className="bg-white p-14 lg:p-16 rounded-[5rem] border border-slate-100 shadow-2xl relative group flex flex-col items-center">
+           <h3 className="text-2xl font-black text-slate-900 mb-10 text-center">توزيع الصفوف</h3>
+           <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                 <PieChart>
+                    <Pie data={gradeDistribution} innerRadius={80} outerRadius={120} paddingAngle={10} dataKey="value">
+                       {gradeDistribution.map((entry: any, index: number) => (
+                         <Cell key={`cell-${index}`} fill={GRADE_COLORS[entry.grade as keyof typeof GRADE_COLORS]} />
+                       ))}
+                    </Pie>
+                    <Tooltip contentStyle={{borderRadius: '25px', border: 'none', fontFamily: 'Cairo', fontWeight: 900}} />
+                 </PieChart>
+              </ResponsiveContainer>
+           </div>
+           <div className="space-y-4 w-full mt-10">
+              {gradeDistribution.map((entry, idx) => (
+                <div key={idx} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl">
+                   <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: GRADE_COLORS[entry.grade as keyof typeof GRADE_COLORS] }}></div>
+                      <span className="font-black text-slate-600 text-sm">{entry.name}</span>
+                   </div>
+                   <span className="font-black text-slate-900">{entry.value} طالب</span>
+                </div>
+              ))}
+           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        {/* TIME GROWTH CHART */}
+        <div className="bg-white p-16 rounded-[5rem] border border-slate-100 shadow-2xl group overflow-hidden">
+           <div className="flex items-center gap-5 mb-14">
+              <div className="bg-indigo-50 p-4 rounded-2xl text-indigo-600"><Activity size={24}/></div>
+              <div>
+                 <h3 className="text-2xl font-black text-slate-900">منحنى المجهود التدريسي</h3>
+                 <p className="text-[10px] text-slate-400 font-black uppercase mt-1">إجمالي ساعات الحصص المنجزة زمنياً</p>
+              </div>
+           </div>
+           <div className="h-[350px]">
+              <ResponsiveContainer width="100%" height="100%">
+                 <AreaChart data={statsData}>
+                    <defs>
+                      <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} />
+                    <Tooltip contentStyle={{borderRadius: '30px', border: 'none', boxShadow: '0 15px 30px rgba(0,0,0,0.1)', fontFamily: 'Cairo', fontWeight: 900}} />
+                    <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={6} fill="url(#colorHours)" dot={{r: 6, fill: '#fff', strokeWidth: 4, stroke: '#4f46e5'}} />
+                 </AreaChart>
+              </ResponsiveContainer>
+           </div>
+        </div>
+
+        {/* TEACHER RANKING (ADMIN) */}
+        {isAdmin && (
+          <div className="bg-slate-900 p-16 rounded-[5rem] text-white shadow-2xl relative overflow-hidden flex flex-col">
+             <div className="absolute top-0 right-0 w-full h-full bg-indigo-600/5"></div>
+             <h3 className="text-3xl font-black mb-14 flex items-center gap-5 relative z-10"><Trophy size={32} className="text-amber-400"/> كفاءة تحصيل المعلمين</h3>
+             <div className="space-y-6 flex-1 relative z-10 overflow-y-auto no-scrollbar">
+                {teacherPerformance.map((t, i) => (
+                  <div key={i} className="bg-white/5 border border-white/10 p-8 rounded-[3rem] flex items-center justify-between hover:bg-white/10 transition-all">
+                     <div className="flex items-center gap-6">
+                        <div className="w-16 h-16 rounded-[1.5rem] bg-indigo-600 flex items-center justify-center font-black text-2xl shadow-xl">{i+1}</div>
+                        <div>
+                           <p className="text-xl font-black">{t.name}</p>
+                           <p className="text-xs text-indigo-400 font-black mt-2 uppercase tracking-widest">{t.students} طلاب تحت الإشراف</p>
+                        </div>
+                     </div>
+                     <div className="text-right">
+                        <p className="text-3xl font-black text-emerald-400 leading-none">${t.collected.toLocaleString()}</p>
+                        <p className="text-[10px] text-slate-500 font-black uppercase mt-2">صافي المحصل</p>
+                     </div>
+                  </div>
+                ))}
+             </div>
+          </div>
         )}
       </div>
     </div>
   );
 };
 
-const StatSummaryCard = ({ label, value, subValue, icon, color }: any) => (
-  <div className="bg-white/90 backdrop-blur-xl p-10 rounded-[3.5rem] border border-white shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-700 group overflow-hidden relative">
-    <div className={`${color} w-20 h-20 rounded-[2rem] flex items-center justify-center mb-10 group-hover:scale-110 group-hover:rotate-12 transition-all duration-700 relative z-10 text-white shadow-2xl shadow-indigo-100`}>{icon}</div>
+const MetricCard = ({ label, value, icon, color, trend }: any) => (
+  <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-3 transition-all duration-700 group relative overflow-hidden">
+    <div className={`${color} w-20 h-20 rounded-[2.5rem] flex items-center justify-center text-white mb-10 group-hover:rotate-12 group-hover:scale-110 transition-all duration-700 shadow-2xl relative z-10`}>{icon}</div>
     <div className="relative z-10">
-      <p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.25em] mb-2">{label}</p>
-      <p className="text-5xl font-black text-slate-900 mb-3 tracking-tighter">{value}</p>
-      <div className="flex items-center gap-2">
-        <div className={`w-1.5 h-1.5 rounded-full ${color} animate-pulse`}></div>
-        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{subValue}</p>
-      </div>
+       <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em] mb-3">{label}</p>
+       <h4 className="text-5xl font-black text-slate-900 mb-4 tracking-tighter leading-none">{value}</h4>
+       <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{trend}</p>
+       </div>
     </div>
-    <div className={`absolute -right-12 -bottom-12 w-48 h-48 opacity-[0.03] group-hover:opacity-[0.08] group-hover:scale-150 transition-all duration-1000 text-slate-900`}>{icon}</div>
+    <div className="absolute -right-16 -bottom-16 w-48 h-48 opacity-[0.03] group-hover:opacity-[0.08] transition-all duration-1000 text-slate-900">{icon}</div>
   </div>
 );
 
