@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Link, useLocation, Navigate, NavLink } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
-  LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Code2, Clock, FileDown, Database, Search
+  LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
+  BookOpen, Calendar, FileText, Settings, Database, Menu, X, Bell
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -26,30 +27,6 @@ const App: React.FC = () => {
   const [currentYear, setCurrentYear] = useState(localStorage.getItem('selectedYear') || '2024-2025');
   const [currentSemester, setCurrentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
 
-  const fetchProfile = async (user: any) => {
-    const userPhone = user.user_metadata?.phone || '';
-    const isDirectAdmin = userPhone === ADMIN_PHONE;
-
-    try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      if (data) {
-        setProfile({ ...data, role: (isDirectAdmin || data.role === 'admin') ? 'admin' : 'teacher' });
-      } else {
-        setProfile({ 
-          id: user.id,
-          role: isDirectAdmin ? 'admin' : 'teacher', 
-          phone: userPhone,
-          is_approved: isDirectAdmin,
-          full_name: user.user_metadata?.full_name || 'مستخدم'
-        });
-      }
-    } catch (e) {
-      setProfile({ role: isDirectAdmin ? 'admin' : 'teacher', is_approved: isDirectAdmin });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
@@ -65,70 +42,120 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  const fetchProfile = async (user: any) => {
+    const userPhone = user.user_metadata?.phone || '';
+    try {
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      setProfile({ 
+        ...(data || {}), 
+        id: user.id,
+        role: (userPhone === ADMIN_PHONE || data?.role === 'admin') ? 'admin' : 'teacher',
+        is_approved: userPhone === ADMIN_PHONE || data?.is_approved
+      });
+    } catch (e) { console.error(e); } finally { setLoading(false); }
+  };
+
   if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-white font-['Cairo']">
-      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+    <div className="h-screen flex items-center justify-center bg-indigo-50/30">
+      <div className="relative">
+        <div className="w-16 h-16 border-4 border-indigo-100 rounded-full"></div>
+        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+      </div>
     </div>
   );
 
   if (!session) return <Login />;
 
-  const userMetadataPhone = session.user.user_metadata?.phone;
-  const isAdmin = userMetadataPhone === ADMIN_PHONE || profile?.phone === ADMIN_PHONE || profile?.role === 'admin';
+  const isAdmin = profile?.role === 'admin';
   const effectiveUid = supervisedTeacher ? supervisedTeacher.id : session.user.id;
   const effectiveRole = isAdmin && !supervisedTeacher ? 'admin' : 'teacher';
 
+  const navItems = [
+    { to: "/", icon: <LayoutDashboard size={20} />, label: "الرئيسية" },
+    { to: "/schedule", icon: <Calendar size={20} />, label: "الجدول" },
+    { to: "/students", icon: <Users size={20} />, label: "الطلاب" },
+    { to: "/lessons", icon: <BookOpen size={20} />, label: "الحصص" },
+    { to: "/payments", icon: <Wallet size={20} />, label: "المالية" },
+    { to: "/reports", icon: <FileText size={20} />, label: "التقارير" },
+  ];
+
   return (
     <HashRouter>
-      <div className="min-h-screen flex font-['Cairo'] selection:bg-indigo-100 selection:text-indigo-600">
-        {supervisedTeacher && (
-          <div className="fixed top-0 inset-x-0 h-11 bg-amber-600 text-white z-[100] flex items-center justify-center gap-4 px-4 shadow-xl">
-             <span className="font-black text-xs">وضع الرقابة: {supervisedTeacher.name}</span>
-             <button onClick={() => setSupervisedTeacher(null)} className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-black">إغلاق</button>
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col lg:flex-row-reverse text-right">
+        
+        {/* Sidebar for Desktop */}
+        <aside className="hidden lg:flex w-72 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen shadow-sm z-50">
+          <div className="p-8 flex items-center gap-3 border-b border-slate-50 mb-6">
+            <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-100"><GraduationCap size={24} /></div>
+            <span className="font-black text-slate-800 text-lg">نظام المعلم</span>
           </div>
-        )}
-
-        <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col p-8 sticky top-0 h-screen shadow-2xl">
-          <div className="flex items-center gap-4 mb-12">
-            <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100"><GraduationCap size={28} /></div>
-            <h1 className="text-xl font-black text-slate-900">إدارة الطلاب</h1>
-          </div>
-          <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar text-right">
-            <Link to="/" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الرئيسية</Link>
-            <Link to="/schedule" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الجدول</Link>
-            <Link to="/students" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الطلاب</Link>
-            <Link to="/lessons" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الحصص</Link>
-            <Link to="/payments" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">المالية</Link>
-            {isAdmin && <Link to="/teachers" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-indigo-600 bg-indigo-50 border border-indigo-100">الإدارة</Link>}
+          
+          <nav className="flex-1 px-4 space-y-1">
+            {navItems.map(item => (
+              <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-3 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${isActive ? 'bg-indigo-50 text-indigo-600 shadow-sm border border-indigo-100/50' : 'text-slate-500 hover:bg-slate-50'}`}>
+                {item.icon} {item.label}
+              </NavLink>
+            ))}
+            {isAdmin && (
+              <NavLink to="/teachers" className={({isActive}) => `flex items-center gap-3 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${isActive ? 'bg-indigo-50 text-indigo-600 border border-indigo-100/50' : 'text-slate-500 hover:bg-slate-50'}`}>
+                <ShieldCheck size={20} /> الإدارة
+              </NavLink>
+            )}
           </nav>
-          <button onClick={() => supabase.auth.signOut()} className="mt-8 flex items-center gap-4 px-6 py-4 rounded-2xl text-rose-500 font-black hover:bg-rose-50">
-            تسجيل الخروج
-          </button>
+
+          <div className="p-6 border-t border-slate-50">
+             <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl text-rose-500 font-bold hover:bg-rose-50 transition-colors">
+               <LogOut size={20} /> تسجيل الخروج
+             </button>
+          </div>
         </aside>
 
-        <main className="flex-1 flex flex-col min-h-screen bg-slate-50/50">
-          <header className={`h-20 bg-white border-b border-slate-100 flex items-center justify-between px-6 lg:px-12 z-40 sticky top-0 ${supervisedTeacher ? 'mt-11' : ''}`}>
-             <div className="bg-indigo-600 text-white px-5 py-2 rounded-2xl text-[10px] font-black shadow-lg">
-                {isAdmin ? "بصلاحيات المدير العام" : "بصلاحيات المحتوى"}
-             </div>
-             <div className="flex gap-4">
-                <select value={currentSemester} onChange={e => { setCurrentSemester(e.target.value); localStorage.setItem('selectedSemester', e.target.value); }} className="bg-slate-50 text-[11px] font-black px-4 py-2 rounded-xl outline-none border border-slate-100">
+        {/* Mobile Navbar */}
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur-xl border-t border-slate-100 flex justify-around items-center px-2 py-3 z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.03)]">
+          {navItems.slice(0, 5).map(item => (
+            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-all ${isActive ? 'text-indigo-600 scale-110' : 'text-slate-400 opacity-60'}`}>
+              {item.icon} <span className="text-[10px] font-black">{item.label}</span>
+            </NavLink>
+          ))}
+          {isAdmin && (
+            <NavLink to="/teachers" className={({isActive}) => `flex flex-col items-center gap-1 px-3 py-1 rounded-xl transition-all ${isActive ? 'text-indigo-600 scale-110' : 'text-slate-400 opacity-60'}`}>
+              <Settings size={20} /> <span className="text-[10px] font-black">الإدارة</span>
+            </NavLink>
+          )}
+        </nav>
+
+        {/* Content Area */}
+        <main className="flex-1 min-h-screen pb-24 lg:pb-0">
+          <header className="h-20 bg-white/50 backdrop-blur-md sticky top-0 z-40 px-6 lg:px-12 flex items-center justify-between border-b border-slate-100/50">
+            <div className="flex items-center gap-4">
+              <div className="hidden md:flex gap-2">
+                <select value={currentSemester} onChange={e => { setCurrentSemester(e.target.value); localStorage.setItem('selectedSemester', e.target.value); }} className="bg-slate-100/50 border-none text-[11px] font-black px-4 py-2 rounded-xl outline-none">
                   <option value="1">الفصل 1</option>
                   <option value="2">الفصل 2</option>
-                  <option value="صيفي">صيفي</option>
                 </select>
-                <select value={currentYear} onChange={e => { setCurrentYear(e.target.value); localStorage.setItem('selectedYear', e.target.value); }} className="bg-slate-50 text-[11px] font-black px-4 py-2 rounded-xl outline-none border border-slate-100">
-                  <option value="2023-2024">2023-2024</option>
+                <select value={currentYear} onChange={e => { setCurrentYear(e.target.value); localStorage.setItem('selectedYear', e.target.value); }} className="bg-slate-100/50 border-none text-[11px] font-black px-4 py-2 rounded-xl outline-none">
                   <option value="2024-2025">2024-2025</option>
                   <option value="2025-2026">2025-2026</option>
                 </select>
-                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black">
-                  {profile?.full_name?.[0] || 'U'}
-                </div>
-             </div>
+              </div>
+              <div className="text-left">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{profile?.role === 'admin' ? 'المدير العام' : 'مدير محتوى'}</p>
+                <p className="text-sm font-black text-slate-900">{profile?.full_name}</p>
+              </div>
+            </div>
+            <div className="bg-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center text-white font-black shadow-lg shadow-indigo-100">
+               {profile?.full_name?.[0]?.toUpperCase() || 'U'}
+            </div>
           </header>
 
-          <div className="flex-1 p-6 lg:p-10">
+          <div className="p-6 lg:p-12 max-w-7xl mx-auto">
+            {supervisedTeacher && (
+              <div className="mb-8 p-4 bg-amber-500 text-white rounded-2xl flex items-center justify-between shadow-lg shadow-amber-100 animate-pulse">
+                <span className="font-black text-xs">وضع الرقابة نشط: {supervisedTeacher.name}</span>
+                <button onClick={() => setSupervisedTeacher(null)} className="bg-white/20 px-4 py-1.5 rounded-xl font-black text-[10px] hover:bg-white/30 transition-all">إلغاء الرقابة</button>
+              </div>
+            )}
+            
             <Routes>
               <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} onYearChange={setCurrentYear} onSemesterChange={setCurrentSemester} />} />
               <Route path="/students" element={<Students isAdmin={isAdmin} role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />

@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { 
-  Users, Calendar, Clock, DollarSign, AlertCircle, TrendingUp, BarChart3, 
-  ArrowUpRight, GraduationCap, Target, Zap, Info, Sun, Moon, Coffee, 
-  Sparkles, SearchX, Search, Database, ArrowRight, Layers, RefreshCw, 
-  ShieldAlert, Link as LinkIcon 
+  Users, Calendar, Clock, DollarSign, ArrowUpRight, GraduationCap, 
+  Zap, Sun, Moon, Coffee, Sparkles, RefreshCw, Layers, TrendingUp,
+  Target, Award, CreditCard, ChevronRight
 } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
@@ -14,8 +13,7 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
   });
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [allDataFound, setAllDataFound] = useState<any[]>([]);
-  const [orphanCount, setOrphanCount] = useState(0);
+  const [dataAudit, setDataAudit] = useState<any[]>([]);
 
   const isAdmin = role === 'admin';
 
@@ -29,30 +27,18 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. فحص شامل للسنوات (Deep Archive Scan)
-      let finderQuery = supabase.from('students').select('academic_year, semester');
-      if (!isAdmin) finderQuery = finderQuery.eq('teacher_id', uid);
-      const { data: allStds } = await finderQuery;
-
-      if (allStds && allStds.length > 0) {
-        const periods = allStds.reduce((acc: any[], curr: any) => {
-           const key = `${curr.academic_year}-${curr.semester}`;
-           const existing = acc.find(p => p.key === key);
-           if (existing) existing.count++;
-           else acc.push({ key, year: curr.academic_year, semester: curr.semester, count: 1 });
-           return acc;
-        }, []);
-        setAllDataFound(periods.sort((a, b) => b.year.localeCompare(a.year)));
-      } else {
-        setAllDataFound([]);
+      // 1. فحص شامل لوجود البيانات (لراحة المستخدم)
+      const { data: allStds } = await supabase.from('students').select('academic_year, semester');
+      if (allStds) {
+        const counts = allStds.reduce((acc: any, curr) => {
+          const key = `${curr.academic_year} - الفصل ${curr.semester}`;
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+        setDataAudit(Object.entries(counts).map(([label, count]) => ({ label, count: count as number })));
       }
 
-      // 2. البحث عن بيانات "يتيمة" (قد تكون مفقودة بسبب تغيير الـ ID)
-      // نبحث عن أي طلاب لا يملكون teacher_id أو يملكون ID غير موجود
-      const { count: orphans } = await supabase.from('students').select('*', { count: 'exact', head: true }).is('teacher_id', null);
-      setOrphanCount(orphans || 0);
-
-      // 3. جلب إحصائيات الفترة المختارة
+      // 2. إحصائيات الفترة الحالية
       let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
       if (!isAdmin) query = query.eq('teacher_id', uid);
       const { data: stdData } = await query;
@@ -75,8 +61,8 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
         completedStudents: totals.completed
       });
 
-      // 4. بيانات الرسم البياني
-      let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(30);
+      // 3. الرسم البياني للنشاط
+      let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(14);
       if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
       const { data: lsns } = await lQuery;
 
@@ -86,31 +72,10 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
         return acc;
       }, {});
       setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })));
-    } catch (err) { 
-      console.error("Dashboard Error:", err); 
-    } finally { 
-      setLoading(false); 
-    }
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [role, uid, year, semester, isAdmin]);
-
-  const handleRescueData = async () => {
-    if (!confirm("هل تريد محاولة استعادة كافة البيانات اليتيمة وربطها بحسابك؟")) return;
-    setLoading(true);
-    try {
-      const { error } = await supabase.from('students').update({ teacher_id: uid }).is('teacher_id', null);
-      if (error) throw error;
-      alert("تمت محاولة الربط بنجاح. يرجى تحديث الصفحة.");
-      fetchData();
-    } catch (e: any) {
-      alert("خطأ أثناء الاستعادة: " + e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => { fetchData(); }, [year, semester, uid]);
 
   const collectionRate = Math.round((stats.totalIncome / (stats.totalIncome + stats.pendingPayments || 1)) * 100);
 
@@ -121,181 +86,128 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
   );
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 text-right">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
       
-      {/* منقذ البيانات: يظهر فقط إذا وجدنا طلاب بلا صاحب */}
-      {orphanCount > 0 && (
-        <div className="bg-rose-600 p-8 rounded-[3rem] text-white shadow-2xl animate-pulse flex flex-col md:flex-row items-center justify-between gap-6">
-           <div className="flex items-center gap-6">
-              <div className="bg-white/20 p-4 rounded-2xl"><ShieldAlert size={32}/></div>
-              <div>
-                 <h2 className="text-xl font-black">تحذير: وجدنا {orphanCount} سجل مفقود!</h2>
-                 <p className="text-sm font-bold opacity-80">هناك بيانات في النظام غير مرتبطة بأي معلم، قد تكون بياناتك القديمة.</p>
-              </div>
-           </div>
-           <button onClick={handleRescueData} className="bg-white text-rose-600 px-8 py-4 rounded-2xl font-black shadow-xl hover:scale-105 transition-all flex items-center gap-2">
-              <LinkIcon size={20}/> اربط البيانات بحسابي الآن
-           </button>
-        </div>
-      )}
-
-      {/* كاشف الأرشيف */}
-      {allDataFound.length > 0 && stats.totalStudents === 0 && (
-        <div className="bg-indigo-900 p-10 rounded-[4rem] text-white shadow-2xl relative overflow-hidden">
-           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500/20 to-transparent opacity-50"></div>
+      {/* Hero Header */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 lg:p-12 rounded-[3rem] text-white shadow-xl shadow-indigo-100 relative overflow-hidden flex flex-col justify-center min-h-[300px]">
            <div className="relative z-10">
-              <div className="flex items-center gap-6 mb-8">
-                 <div className="bg-white/10 p-5 rounded-3xl backdrop-blur-md border border-white/20">
-                    <Layers size={32} className="text-indigo-300" />
-                 </div>
-                 <div>
-                    <h2 className="text-2xl font-black">تم العثور على أرشيفك!</h2>
-                    <p className="text-indigo-200 font-bold text-sm">بياناتك مخزنة في فترات زمنية سابقة، اختر واحدة للعرض:</p>
-                 </div>
+              <div className="flex items-center gap-3 mb-6">
+                <span className="bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                  <Sparkles size={14} className="text-amber-300" /> السنة الأكاديمية: {year}
+                </span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 {allDataFound.map(p => (
-                   <button 
-                     key={p.key} 
-                     onClick={() => { onYearChange(p.year); onSemesterChange(p.semester); }}
-                     className="bg-white/10 hover:bg-white/20 border border-white/10 p-6 rounded-3xl flex items-center justify-between transition-all group"
-                   >
-                      <div className="text-right">
-                         <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">{p.year}</p>
-                         <p className="text-lg font-black">الفصل {p.semester}</p>
-                         <p className="text-[10px] font-bold text-indigo-400 mt-1">{p.count} طالب مسجل</p>
-                      </div>
-                      <ArrowRight size={20} className="rotate-180 group-hover:translate-x-[-10px] transition-transform" />
-                   </button>
-                 ))}
+              <div className="flex items-center gap-4 mb-4">
+                <span className="text-4xl">{greeting.icon}</span>
+                <h1 className="text-3xl lg:text-5xl font-black tracking-tight">{greeting.text}</h1>
               </div>
+              <p className="text-indigo-100 font-bold max-w-md leading-relaxed opacity-90">
+                 نظام الإدارة الرقمي للمحتوى التعليمي. لديك حالياً <span className="text-white underline decoration-amber-400 decoration-4 underline-offset-4">{stats.totalStudents} طالب</span> مسجل في الفترة المختارة.
+              </p>
            </div>
+           <GraduationCap className="absolute -bottom-12 -left-12 text-white/10 w-64 h-64 -rotate-12" />
         </div>
-      )}
 
-      {/* الحالة عندما تكون القاعدة فارغة تماماً */}
-      {allDataFound.length === 0 && orphanCount === 0 && (
-        <div className="bg-white p-12 lg:p-20 rounded-[4.5rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center text-center gap-8 shadow-sm">
-           <div className="bg-slate-50 p-10 rounded-full text-slate-200"><Database size={80}/></div>
-           <div className="space-y-3">
-              <h2 className="text-3xl font-black text-slate-900">قاعدة البيانات فارغة تماماً</h2>
-              <p className="text-slate-400 font-bold max-w-md mx-auto">لم نعثر على أي بيانات تخص رقم هاتفك أو حتى بيانات يتيمة. يرجى التأكد من تشغيل كود SQL V13 في الإعدادات.</p>
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col justify-between group overflow-hidden relative">
+           <div className="flex justify-between items-start relative z-10">
+              <div className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl group-hover:scale-110 transition-transform"><DollarSign size={28}/></div>
+              <div className="bg-emerald-500 text-white px-3 py-1 rounded-full text-[9px] font-black tracking-widest">مكتمل بنسبة {collectionRate}%</div>
            </div>
-           <button onClick={() => fetchData()} className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 active:scale-95 transition-all"><RefreshCw size={20}/> إعادة المحاولة</button>
+           <div className="mt-8 relative z-10">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">صافي التحصيل</p>
+              <h2 className="text-5xl font-black text-slate-900">${stats.totalIncome.toLocaleString()}</h2>
+              <p className="text-[11px] font-bold text-slate-400 mt-2">من إجمالي مستحق { (stats.totalIncome + stats.pendingPayments).toLocaleString() }</p>
+           </div>
+           <div className="absolute -right-8 -bottom-8 bg-emerald-50 w-32 h-32 rounded-full opacity-50 group-hover:scale-150 transition-transform"></div>
         </div>
-      )}
+      </div>
 
-      {stats.totalStudents > 0 && (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <div className="lg:col-span-3 bg-gradient-to-br from-indigo-700 via-indigo-800 to-slate-900 p-12 lg:p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-10">
-                  <span className="bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                    <Sparkles size={14} className="text-amber-400" /> السنة الأكاديمية: {year}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 mb-6">
-                  <span className="text-4xl lg:text-5xl">{greeting.icon}</span>
-                  <h1 className="text-4xl lg:text-7xl font-black leading-tight tracking-tighter">
-                    {greeting.text}،<br/> <span className="text-indigo-300">بياناتك استُرجعت</span>
-                  </h1>
-                </div>
-              </div>
-              <GraduationCap className="absolute -bottom-16 -left-16 text-white/5 w-96 h-96 -rotate-12 group-hover:rotate-0 transition-transform duration-[2s]" />
-            </div>
+      {/* Stats Cards Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard label="إجمالي الطلاب" value={stats.totalStudents} sub={`${stats.completedStudents} منجز`} icon={<Users size={22}/>} color="bg-blue-600" />
+        <StatCard label="الحصص المنفذة" value={stats.totalLessons} sub="حصة درسية" icon={<Calendar size={22}/>} color="bg-indigo-600" />
+        <StatCard label="ساعات العمل" value={stats.totalHours.toFixed(1)} sub="ساعة تعليمية" icon={<Clock size={22}/>} color="bg-orange-500" />
+        <StatCard label="المستحقات" value={`$${stats.pendingPayments.toLocaleString()}`} sub="لم يتم تحصيلها" icon={<Zap size={22}/>} color="bg-rose-500" />
+      </div>
 
-            <div className="bg-white/80 backdrop-blur-2xl p-12 rounded-[4rem] border border-white shadow-2xl flex flex-col justify-between items-center text-center group hover:shadow-indigo-200/50 transition-all border-b-[12px] border-b-emerald-500 relative overflow-hidden">
-              <div className="bg-emerald-50 text-emerald-600 p-10 rounded-[2.5rem] shadow-inner group-hover:scale-110 group-hover:rotate-6 transition-all duration-700 relative z-10">
-                 <DollarSign size={56} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Performance Chart */}
+        <div className="lg:col-span-2 bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-sm">
+           <div className="flex justify-between items-center mb-10">
+              <div>
+                 <h3 className="text-xl font-black text-slate-900">مؤشر الإنتاجية</h3>
+                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">تتبع ساعات العمل لآخر 14 يوماً</p>
               </div>
-              <div className="relative z-10 mt-8">
-                <p className="text-slate-400 font-black text-[11px] uppercase tracking-[0.3em] mb-2">الدخل الصافي</p>
-                <h2 className="text-6xl font-black text-slate-900 leading-none">${stats.totalIncome.toLocaleString()}</h2>
-              </div>
-              <div className="mt-8 flex items-center gap-2 text-emerald-600 font-black text-[11px] bg-emerald-50 px-6 py-3 rounded-2xl relative z-10 uppercase tracking-widest">
-                <Zap size={16} fill="currentColor"/> إدارة مالية
-              </div>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <StatBento label="إجمالي الطلاب" value={stats.totalStudents} sub={`${stats.completedStudents} مكتمل`} icon={<Users size={28}/>} color="bg-blue-600" />
-            <StatBento label="ساعات المحتوى" value={stats.totalHours.toFixed(1)} sub="ساعة تعليمية" icon={<Clock size={28}/>} color="bg-orange-500" />
-            <StatBento label="الحصص" value={stats.totalLessons} sub="عملية منجزة" icon={<Calendar size={28}/>} color="bg-indigo-600" />
-            <StatBento label="المستحقات" value={`$${stats.pendingPayments.toLocaleString()}`} sub="غير محصلة" icon={<AlertCircle size={28}/>} color="bg-rose-500" />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-            <div className="lg:col-span-2 bg-white/90 backdrop-blur-xl p-12 lg:p-16 rounded-[4.5rem] border border-white shadow-2xl relative overflow-hidden">
-              <div className="flex items-center justify-between mb-16">
-                <div>
-                  <h3 className="text-3xl font-black text-slate-900 mb-2">مؤشر الأداء</h3>
-                  <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.3em]">تحليل نشاط المحتوى خلال آخر 30 يوماً</p>
-                </div>
-                <div className="bg-indigo-50 p-4 rounded-3xl text-indigo-600"><TrendingUp size={32} /></div>
-              </div>
-              <div className="h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
+              <div className="bg-indigo-50 p-3 rounded-2xl text-indigo-600"><TrendingUp size={24}/></div>
+           </div>
+           <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                 <AreaChart data={chartData}>
                     <defs>
                       <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.4}/>
+                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
                         <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 900}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 900}} />
-                    <Tooltip 
-                      contentStyle={{borderRadius: '30px', border: 'none', boxShadow: '0 25px 60px -12px rgba(0,0,0,0.2)', fontFamily: 'Cairo', fontWeight: 900, padding: '20px', backgroundColor: 'rgba(255,255,255,0.9)'}} 
-                      cursor={{stroke: '#4f46e5', strokeWidth: 2, strokeDasharray: '6 6'}}
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="hours" 
-                      stroke="#4f46e5" 
-                      fillOpacity={1} 
-                      fill="url(#colorHours)" 
-                      strokeWidth={6} 
-                      dot={{ r: 8, fill: '#4f46e5', strokeWidth: 5, stroke: '#fff' }} 
-                      activeDot={{ r: 10, stroke: '#4f46e5', strokeWidth: 4, fill: '#fff' }} 
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                    <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', fontFamily: 'Cairo', fontWeight: 900}} />
+                    <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={4} fill="url(#colorHours)" />
+                 </AreaChart>
+              </ResponsiveContainer>
+           </div>
+        </div>
 
-            <div className="bg-slate-950 p-14 rounded-[4.5rem] text-white shadow-2xl flex flex-col justify-between relative overflow-hidden group border border-white/5">
-              <div className="absolute -top-24 -right-24 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px] group-hover:bg-indigo-500/20 transition-all duration-1000"></div>
-              <div className="relative z-10">
-                <p className="text-indigo-400 font-black uppercase text-[12px] tracking-[0.4em] mb-10">الكفاءة المالية</p>
-                <div className="flex items-baseline gap-4 mb-6">
-                   <h2 className="text-8xl font-black text-white tracking-tighter">{collectionRate}%</h2>
-                   <div className="bg-emerald-500/20 text-emerald-400 p-2 rounded-xl"><ArrowUpRight size={28}/></div>
-                </div>
-                <p className="text-slate-400 text-sm font-bold leading-relaxed">تحصيل ذكي لمستحقات المحتوى التعليمي بمعدل استقرار مرتفع.</p>
+        {/* Data Audit Panel */}
+        <div className="bg-slate-900 p-10 rounded-[3.5rem] text-white shadow-xl relative overflow-hidden flex flex-col">
+           <div className="relative z-10 mb-8">
+              <h3 className="text-xl font-black flex items-center gap-3"><Layers size={24} className="text-indigo-400"/> أرشيف البيانات</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">فحص التواجد في السنوات الأخرى</p>
+           </div>
+           
+           <div className="flex-1 space-y-4 relative z-10 overflow-y-auto no-scrollbar">
+              {dataAudit.length > 0 ? dataAudit.map((item, i) => (
+                <button key={i} onClick={() => { 
+                   const parts = item.label.split(' - الفصل ');
+                   onYearChange(parts[0]);
+                   onSemesterChange(parts[1]);
+                }} className="w-full bg-white/5 hover:bg-white/10 p-5 rounded-3xl border border-white/5 flex items-center justify-between transition-all group">
+                   <div className="text-right">
+                      <p className="text-sm font-black">{item.label}</p>
+                      <p className="text-[10px] text-slate-500 font-black uppercase mt-1">{item.count} سجل موجود</p>
+                   </div>
+                   <ChevronRight size={18} className="text-indigo-500 group-hover:translate-x-[-4px] transition-transform rotate-180"/>
+                </button>
+              )) : (
+                <p className="text-slate-500 text-center py-10 font-bold italic">لا توجد بيانات مسجلة في أي فترة.</p>
+              )}
+           </div>
+
+           <div className="mt-8 pt-8 border-t border-white/5 relative z-10 flex flex-col gap-4">
+              <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                 <span>الحالة الكلية للبيانات</span>
+                 <span className="text-emerald-400">آمنة</span>
               </div>
-            </div>
-          </div>
-        </>
-      )}
+              <button onClick={() => window.location.reload()} className="w-full bg-indigo-600 py-4 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/40">
+                <RefreshCw size={14}/> تحديث حالة الاتصال
+              </button>
+           </div>
+        </div>
+      </div>
     </div>
   );
 };
 
-const StatBento = ({ label, value, sub, icon, color }: any) => (
-  <div className="bg-white/90 backdrop-blur-xl p-10 rounded-[3.5rem] border border-white shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-700 group overflow-hidden relative text-right">
-    <div className={`${color} w-20 h-20 rounded-[2rem] flex items-center justify-center mb-10 group-hover:scale-110 group-hover:rotate-12 transition-all duration-700 relative z-10 text-white shadow-2xl`}>{icon}</div>
+const StatCard = ({ label, value, sub, icon, color }: any) => (
+  <div className="bg-white p-6 lg:p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
+    <div className={`${color} w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform shadow-lg relative z-10`}>{icon}</div>
     <div className="relative z-10">
-      <p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.25em] mb-2">{label}</p>
-      <p className="text-5xl font-black text-slate-900 mb-3 tracking-tighter">{value}</p>
-      <div className="flex items-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{sub}</p>
-      </div>
+       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+       <h4 className="text-3xl font-black text-slate-900 mb-1">{value}</h4>
+       <p className="text-[9px] font-bold text-slate-400">{sub}</p>
     </div>
+    <div className={`absolute -right-8 -bottom-8 w-24 h-24 opacity-5 group-hover:scale-150 transition-transform ${color.replace('bg-', 'text-')}`}>{icon}</div>
   </div>
 );
 
