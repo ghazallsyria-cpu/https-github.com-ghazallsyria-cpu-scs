@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
-  ShieldCheck, Trash2, Phone, UserCircle, CheckCircle, XCircle, AlertCircle, Eye, Plus, Copy, Check, RefreshCw, Edit3, Save, X
+  ShieldCheck, Trash2, Phone, UserCircle, CheckCircle, XCircle, AlertCircle, Eye, Plus, Copy, Check, RefreshCw, Edit3, Save, X, Database
 } from 'lucide-react';
 
 const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: string} | null) => void }) => {
@@ -158,6 +158,23 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
         <button onClick={() => setActiveTab('list')} className={`flex-1 sm:px-12 py-3.5 lg:py-4 rounded-[1.5rem] lg:rounded-[2rem] font-black text-[11px] lg:text-sm transition-all ${activeTab === 'list' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:bg-slate-50'}`}>مديرو المحتوى النشطون</button>
         <button onClick={() => setActiveTab('codes')} className={`flex-1 sm:px-12 py-3.5 lg:py-4 rounded-[1.5rem] lg:rounded-[2rem] font-black text-[11px] lg:text-sm transition-all ${activeTab === 'codes' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:bg-slate-50'}`}>سجل الأكواد</button>
       </div>
+      
+      {activeTab === 'list' && (
+        <Link to="/database-viewer" className="block bg-gradient-to-tr from-slate-800 to-slate-900 p-8 rounded-[3rem] text-white shadow-2xl hover:shadow-indigo-200/50 transition-all group animate-in slide-in-from-bottom duration-500">
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-5">
+                    <div className="bg-white/10 p-5 rounded-3xl border border-white/10 group-hover:scale-110 transition-transform">
+                        <Database size={28} />
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-black">إعداد قاعدة البيانات</h3>
+                        <p className="text-xs font-bold text-slate-400">عرض ونسخ كود SQL الأساسي لتشغيل النظام</p>
+                    </div>
+                </div>
+                <span className="text-xs font-black bg-indigo-600 px-5 py-2 rounded-2xl hidden md:block group-hover:bg-indigo-500 transition-colors">عرض الكود</span>
+            </div>
+        </Link>
+      )}
 
       {activeTab === 'list' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
