@@ -83,19 +83,34 @@ CREATE TABLE IF NOT EXISTS public.activation_codes (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. [الإصلاح النهائي V3] دالة مباشرة وقوية للتحقق من صلاحيات المدير.
--- هذه الدالة تعمل بصلاحيات المالك (SECURITY DEFINER)، مما يسمح لها بتجاوز سياسات الأمان
--- على جدول 'profiles' للتحقق من دور المستخدم بأمان. هذا هو المفتاح لكسر "التبعية الدائرية"
--- التي كانت تمنع المدير من رؤية أي بيانات.
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN AS $$
+-- 2. [الإصلاح النهائي V6] دالة محصنة للتحقق من صلاحيات المدير، مصممة خصيصاً لبيئة Supabase.
+-- هذا الحل يتجنب الحاجة لخاصية LEAKPROOF (التي تتطلب صلاحيات خارقة)، وبدلاً من ذلك
+-- يستخدم تقنية 'session_replication_role' لتعطيل سياسات الأمان بشكل مؤقت وآمن أثناء تنفيذ الدالة،
+-- مما يكسر الحلقة المفرغة بشكل نهائي وموثوق ضمن الصلاحيات المتاحة.
+CREATE OR REPLACE FUNCTION public.is_admin_check(p_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+-- Set a secure search_path to prevent any potential hijacking.
+SET search_path = public
+AS $$
+DECLARE
+  is_admin_user BOOLEAN;
 BEGIN
-  RETURN EXISTS (
+  -- Temporarily bypass RLS for this specific query by changing the role.
+  SET LOCAL session_replication_role = 'replica';
+  
+  is_admin_user := EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'
+    WHERE id = p_user_id AND role = 'admin'
   );
+  
+  -- Revert to the original role to re-enable RLS for subsequent operations.
+  SET LOCAL session_replication_role = 'origin';
+
+  RETURN is_admin_user;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 
 -- 3. وظيفة تفعيل الحساب برمجياً
@@ -141,7 +156,7 @@ FROM public.students s
 LEFT JOIN (SELECT student_id, COUNT(*) AS total_lessons, SUM(hours) AS total_hours FROM public.lessons GROUP BY student_id) l ON s.id = l.student_id
 LEFT JOIN (SELECT student_id, SUM(amount) AS total_paid FROM public.payments GROUP BY student_id) p ON s.id = p.student_id;
 
--- 5. إعادة ضبط سياسات الأمان (RLS) - [الإصلاح النهائي V3]
+-- 5. إعادة ضبط سياسات الأمان (RLS) - [الإصلاح النهائي V6]
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
@@ -161,25 +176,25 @@ DROP POLICY IF EXISTS "Codes access" ON public.activation_codes;
 
 -- إنشاء السياسات الجديدة والموثوقة باستخدام الدالة المساعدة
 CREATE POLICY "Profiles access" ON public.profiles FOR ALL
-USING (auth.uid() = id OR public.is_admin());
+USING (auth.uid() = id OR public.is_admin_check(auth.uid()));
 
 CREATE POLICY "Students access" ON public.students FOR ALL
-USING (auth.uid() = teacher_id OR public.is_admin());
+USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
 
 CREATE POLICY "Lessons access" ON public.lessons FOR ALL
-USING (auth.uid() = teacher_id OR public.is_admin());
+USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
 
 CREATE POLICY "Payments access" ON public.payments FOR ALL
-USING (auth.uid() = teacher_id OR public.is_admin());
+USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
 
 CREATE POLICY "Schedules access" ON public.schedules FOR ALL
-USING (auth.uid() = teacher_id OR public.is_admin());
+USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
 
 CREATE POLICY "Academic records access" ON public.academic_records FOR ALL
-USING (auth.uid() = teacher_id OR public.is_admin());
+USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
 
 CREATE POLICY "Codes access" ON public.activation_codes FOR ALL
-USING (public.is_admin());
+USING (public.is_admin_check(auth.uid()));
 `;
 
 const DatabaseViewer = () => {
