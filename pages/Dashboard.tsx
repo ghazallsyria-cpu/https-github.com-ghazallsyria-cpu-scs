@@ -151,7 +151,16 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
                   contentStyle={{borderRadius: '30px', border: 'none', boxShadow: '0 25px 60px -12px rgba(0,0,0,0.2)', fontFamily: 'Cairo', fontWeight: 900, padding: '20px', backgroundColor: 'rgba(255,255,255,0.9)'}} 
                   cursor={{stroke: '#4f46e5', strokeWidth: 2, strokeDasharray: '6 6'}}
                 />
-                <Area type="monotone" dataKey="hours" stroke="#4f46e5" fillOpacity={1} fill="url(#colorHours)" strokeWidth={6} dot={{ r: 8, fill: '#4f46e5', strokeWidth: 5, stroke: '#fff' }} activeDot={{ r: 12, shadow: '0 0 20px rgba(79,70,229,0.5)' }} />
+                <Area 
+                  type="monotone" 
+                  dataKey="hours" 
+                  stroke="#4f46e5" 
+                  fillOpacity={1} 
+                  fill="url(#colorHours)" 
+                  strokeWidth={6} 
+                  dot={{ r: 8, fill: '#4f46e5', strokeWidth: 5, stroke: '#fff' }} 
+                  activeDot={{ r: 10, stroke: '#4f46e5', strokeWidth: 4, fill: '#fff' }} 
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
