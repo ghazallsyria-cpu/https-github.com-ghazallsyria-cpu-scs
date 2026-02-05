@@ -1,7 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabase';
-// Added RefreshCw to imports
-import { Users, Calendar, Clock, DollarSign, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, GraduationCap, Target, Zap, Info, Sun, Moon, Coffee, Sparkles, SearchX, Search, Database, ArrowRight, Layers, RefreshCw } from 'lucide-react';
+import { 
+  Users, Calendar, Clock, DollarSign, AlertCircle, TrendingUp, BarChart3, 
+  ArrowUpRight, GraduationCap, Target, Zap, Info, Sun, Moon, Coffee, 
+  Sparkles, SearchX, Search, Database, ArrowRight, Layers, RefreshCw, 
+  ShieldAlert, Link as LinkIcon 
+} from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }: any) => {
@@ -11,6 +15,7 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [allDataFound, setAllDataFound] = useState<any[]>([]);
+  const [orphanCount, setOrphanCount] = useState(0);
 
   const isAdmin = role === 'admin';
 
@@ -21,67 +26,91 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
     return { text: 'طاب مساؤك يا بطل', icon: <Moon className="text-indigo-400 animate-pulse"/> };
   }, []);
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // 1. فحص شامل للسنوات (Deep Archive Scan)
+      let finderQuery = supabase.from('students').select('academic_year, semester');
+      if (!isAdmin) finderQuery = finderQuery.eq('teacher_id', uid);
+      const { data: allStds } = await finderQuery;
+
+      if (allStds && allStds.length > 0) {
+        const periods = allStds.reduce((acc: any[], curr: any) => {
+           const key = `${curr.academic_year}-${curr.semester}`;
+           const existing = acc.find(p => p.key === key);
+           if (existing) existing.count++;
+           else acc.push({ key, year: curr.academic_year, semester: curr.semester, count: 1 });
+           return acc;
+        }, []);
+        setAllDataFound(periods.sort((a, b) => b.year.localeCompare(a.year)));
+      } else {
+        setAllDataFound([]);
+      }
+
+      // 2. البحث عن بيانات "يتيمة" (قد تكون مفقودة بسبب تغيير الـ ID)
+      // نبحث عن أي طلاب لا يملكون teacher_id أو يملكون ID غير موجود
+      const { count: orphans } = await supabase.from('students').select('*', { count: 'exact', head: true }).is('teacher_id', null);
+      setOrphanCount(orphans || 0);
+
+      // 3. جلب إحصائيات الفترة المختارة
+      let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
+      if (!isAdmin) query = query.eq('teacher_id', uid);
+      const { data: stdData } = await query;
+
+      const totals = (stdData || []).reduce((acc, curr) => ({
+        students: acc.students + 1,
+        lessons: acc.lessons + (curr.total_lessons || 0),
+        hours: acc.hours + (curr.total_hours || 0),
+        income: acc.income + (curr.total_paid || 0),
+        debts: acc.debts + Math.max(0, curr.remaining_balance || 0),
+        completed: acc.completed + (curr.is_completed ? 1 : 0)
+      }), { students: 0, lessons: 0, hours: 0, income: 0, debts: 0, completed: 0 });
+
+      setStats({
+        totalStudents: totals.students,
+        totalLessons: totals.lessons,
+        totalHours: totals.hours,
+        totalIncome: totals.income,
+        pendingPayments: totals.debts,
+        completedStudents: totals.completed
+      });
+
+      // 4. بيانات الرسم البياني
+      let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(30);
+      if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
+      const { data: lsns } = await lQuery;
+
+      const grouped = (lsns || []).reverse().reduce((acc: any, curr) => {
+        const date = new Date(curr.lesson_date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
+        acc[date] = (acc[date] || 0) + Number(curr.hours);
+        return acc;
+      }, {});
+      setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })));
+    } catch (err) { 
+      console.error("Dashboard Error:", err); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // 1. الكاشف الشامل (Deep Scan): البحث في كل السنوات والفصول
-        // نقوم بجلب كل الطلاب المرتبطين بهذا المعلم أياً كانت السنة
-        let finderQuery = supabase.from('students').select('academic_year, semester');
-        if (!isAdmin) finderQuery = finderQuery.eq('teacher_id', uid);
-        const { data: allStds } = await finderQuery;
-
-        if (allStds && allStds.length > 0) {
-          const periods = allStds.reduce((acc: any[], curr: any) => {
-             const key = `${curr.academic_year}-${curr.semester}`;
-             const existing = acc.find(p => p.key === key);
-             if (existing) existing.count++;
-             else acc.push({ key, year: curr.academic_year, semester: curr.semester, count: 1 });
-             return acc;
-          }, []);
-          setAllDataFound(periods.sort((a, b) => b.year.localeCompare(a.year)));
-        } else {
-          setAllDataFound([]);
-        }
-
-        // 2. جلب إحصائيات الفترة المختارة حالياً
-        let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
-        if (!isAdmin) query = query.eq('teacher_id', uid);
-        const { data: stdData } = await query;
-
-        const totals = (stdData || []).reduce((acc, curr) => ({
-          students: acc.students + 1,
-          lessons: acc.lessons + (curr.total_lessons || 0),
-          hours: acc.hours + (curr.total_hours || 0),
-          income: acc.income + (curr.total_paid || 0),
-          debts: acc.debts + Math.max(0, curr.remaining_balance || 0),
-          completed: acc.completed + (curr.is_completed ? 1 : 0)
-        }), { students: 0, lessons: 0, hours: 0, income: 0, debts: 0, completed: 0 });
-
-        setStats({
-          totalStudents: totals.students,
-          totalLessons: totals.lessons,
-          totalHours: totals.hours,
-          totalIncome: totals.income,
-          pendingPayments: totals.debts,
-          completedStudents: totals.completed
-        });
-
-        // 3. بيانات الرسم البياني
-        let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(30);
-        if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
-        const { data: lsns } = await lQuery;
-
-        const grouped = (lsns || []).reverse().reduce((acc: any, curr) => {
-          const date = new Date(curr.lesson_date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
-          acc[date] = (acc[date] || 0) + Number(curr.hours);
-          return acc;
-        }, {});
-        setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })));
-      } catch (err) { console.error("Dashboard Error:", err); } finally { setLoading(false); }
-    };
     fetchData();
   }, [role, uid, year, semester, isAdmin]);
+
+  const handleRescueData = async () => {
+    if (!confirm("هل تريد محاولة استعادة كافة البيانات اليتيمة وربطها بحسابك؟")) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('students').update({ teacher_id: uid }).is('teacher_id', null);
+      if (error) throw error;
+      alert("تمت محاولة الربط بنجاح. يرجى تحديث الصفحة.");
+      fetchData();
+    } catch (e: any) {
+      alert("خطأ أثناء الاستعادة: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const collectionRate = Math.round((stats.totalIncome / (stats.totalIncome + stats.pendingPayments || 1)) * 100);
 
@@ -94,9 +123,25 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 text-right">
       
-      {/* تنبيه ذكي في حال وجود بيانات في فترات أخرى */}
+      {/* منقذ البيانات: يظهر فقط إذا وجدنا طلاب بلا صاحب */}
+      {orphanCount > 0 && (
+        <div className="bg-rose-600 p-8 rounded-[3rem] text-white shadow-2xl animate-pulse flex flex-col md:flex-row items-center justify-between gap-6">
+           <div className="flex items-center gap-6">
+              <div className="bg-white/20 p-4 rounded-2xl"><ShieldAlert size={32}/></div>
+              <div>
+                 <h2 className="text-xl font-black">تحذير: وجدنا {orphanCount} سجل مفقود!</h2>
+                 <p className="text-sm font-bold opacity-80">هناك بيانات في النظام غير مرتبطة بأي معلم، قد تكون بياناتك القديمة.</p>
+              </div>
+           </div>
+           <button onClick={handleRescueData} className="bg-white text-rose-600 px-8 py-4 rounded-2xl font-black shadow-xl hover:scale-105 transition-all flex items-center gap-2">
+              <LinkIcon size={20}/> اربط البيانات بحسابي الآن
+           </button>
+        </div>
+      )}
+
+      {/* كاشف الأرشيف */}
       {allDataFound.length > 0 && stats.totalStudents === 0 && (
-        <div className="bg-indigo-900 p-10 rounded-[4rem] text-white shadow-2xl relative overflow-hidden animate-in zoom-in duration-700">
+        <div className="bg-indigo-900 p-10 rounded-[4rem] text-white shadow-2xl relative overflow-hidden">
            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500/20 to-transparent opacity-50"></div>
            <div className="relative z-10">
               <div className="flex items-center gap-6 mb-8">
@@ -104,8 +149,8 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
                     <Layers size={32} className="text-indigo-300" />
                  </div>
                  <div>
-                    <h2 className="text-2xl font-black">بياناتك موجودة في الأرشيف!</h2>
-                    <p className="text-indigo-200 font-bold text-sm">لم نجد طلاباً في {year} الفصل {semester}، ولكننا عثرنا عليهم في الفترات التالية:</p>
+                    <h2 className="text-2xl font-black">تم العثور على أرشيفك!</h2>
+                    <p className="text-indigo-200 font-bold text-sm">بياناتك مخزنة في فترات زمنية سابقة، اختر واحدة للعرض:</p>
                  </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -128,16 +173,15 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
         </div>
       )}
 
-      {/* الحالة عندما تكون القاعدة فارغة تماماً حتى من الأرشيف */}
-      {allDataFound.length === 0 && (
+      {/* الحالة عندما تكون القاعدة فارغة تماماً */}
+      {allDataFound.length === 0 && orphanCount === 0 && (
         <div className="bg-white p-12 lg:p-20 rounded-[4.5rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center text-center gap-8 shadow-sm">
            <div className="bg-slate-50 p-10 rounded-full text-slate-200"><Database size={80}/></div>
            <div className="space-y-3">
-              <h2 className="text-3xl font-black text-slate-900">قاعدة البيانات فارغة</h2>
-              <p className="text-slate-400 font-bold max-w-md">لم يتم العثور على أي بيانات مرتبطة بحسابك في أي سنة أو فصل دراسي. إذا كان لديك بيانات سابقة، يرجى تشغيل كود SQL V12 من الإعدادات.</p>
+              <h2 className="text-3xl font-black text-slate-900">قاعدة البيانات فارغة تماماً</h2>
+              <p className="text-slate-400 font-bold max-w-md mx-auto">لم نعثر على أي بيانات تخص رقم هاتفك أو حتى بيانات يتيمة. يرجى التأكد من تشغيل كود SQL V13 في الإعدادات.</p>
            </div>
-           {/* Fixed RefreshCw not being imported */}
-           <button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 flex items-center gap-3 active:scale-95 transition-all"><RefreshCw size={20}/> تحديث المحاولة</button>
+           <button onClick={() => fetchData()} className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 active:scale-95 transition-all"><RefreshCw size={20}/> إعادة المحاولة</button>
         </div>
       )}
 
@@ -149,18 +193,15 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-10">
                   <span className="bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                    <Sparkles size={14} className="text-amber-400" /> إدارة المحتوى: نشطة
+                    <Sparkles size={14} className="text-amber-400" /> السنة الأكاديمية: {year}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 mb-6">
                   <span className="text-4xl lg:text-5xl">{greeting.icon}</span>
                   <h1 className="text-4xl lg:text-7xl font-black leading-tight tracking-tighter">
-                    {greeting.text}،<br/> <span className="text-indigo-300">أهلاً بك مجدداً</span>
+                    {greeting.text}،<br/> <span className="text-indigo-300">بياناتك استُرجعت</span>
                   </h1>
                 </div>
-                <p className="text-indigo-100/60 font-bold max-w-xl text-lg lg:text-xl leading-relaxed mt-4">
-                  أداء المنصة اليوم ممتاز في <span className="text-white border-b-4 border-indigo-500 pb-1">{year}</span>، تم تسجيل <span className="text-white border-b-4 border-indigo-500 pb-1">{stats.totalLessons}</span> عملية تعليمية بنجاح.
-                </p>
               </div>
               <GraduationCap className="absolute -bottom-16 -left-16 text-white/5 w-96 h-96 -rotate-12 group-hover:rotate-0 transition-transform duration-[2s]" />
             </div>
@@ -236,25 +277,6 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
                 </div>
                 <p className="text-slate-400 text-sm font-bold leading-relaxed">تحصيل ذكي لمستحقات المحتوى التعليمي بمعدل استقرار مرتفع.</p>
               </div>
-              
-              <div className="space-y-10 relative z-10 pt-16">
-                 <div className="w-full bg-white/5 h-10 rounded-full overflow-hidden p-2.5 border border-white/10 ring-4 ring-white/5">
-                   <div 
-                     className="bg-gradient-to-r from-indigo-600 via-violet-500 to-emerald-400 h-full rounded-full transition-all duration-[2s] shadow-[0_0_40px_rgba(79,70,229,0.6)]" 
-                     style={{ width: `${collectionRate}%` }}
-                   />
-                 </div>
-                 <div className="flex justify-between items-center">
-                    <div className="text-right">
-                       <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">المبلغ المتبقي</p>
-                       <p className="text-rose-400 font-black text-2xl">${stats.pendingPayments.toLocaleString()}</p>
-                    </div>
-                    <div className="text-left">
-                       <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">المحصل فعلياً</p>
-                       <p className="text-emerald-400 font-black text-2xl">${stats.totalIncome.toLocaleString()}</p>
-                    </div>
-                 </div>
-              </div>
             </div>
           </div>
         </>
@@ -274,7 +296,6 @@ const StatBento = ({ label, value, sub, icon, color }: any) => (
         <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{sub}</p>
       </div>
     </div>
-    <div className={`absolute -right-12 -bottom-12 w-48 h-48 opacity-[0.03] group-hover:opacity-[0.08] group-hover:scale-150 transition-all duration-1000`}>{icon}</div>
   </div>
 );
 
