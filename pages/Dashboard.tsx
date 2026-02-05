@@ -1,7 +1,6 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabase';
-import { Users, Calendar, Clock, DollarSign, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, GraduationCap, Target, Zap, Info, Sun, Moon, Coffee, Sparkles } from 'lucide-react';
+import { Users, Calendar, Clock, DollarSign, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, GraduationCap, Target, Zap, Info, Sun, Moon, Coffee, Sparkles, SearchX } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
@@ -10,6 +9,7 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
   });
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasDataAnywhere, setHasDataAnywhere] = useState(false);
 
   const isAdmin = role === 'admin';
 
@@ -24,6 +24,12 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
     const fetchData = async () => {
       setLoading(true);
       try {
+        // التحقق أولاً: هل يوجد أي بيانات لهذا المعلم في أي سنة؟
+        let checkQuery = supabase.from('students').select('id', { count: 'exact', head: true });
+        if (!isAdmin) checkQuery = checkQuery.eq('teacher_id', uid);
+        const { count } = await checkQuery;
+        setHasDataAnywhere((count || 0) > 0);
+
         let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
         if (!isAdmin) query = query.eq('teacher_id', uid);
         const { data: stdData } = await query;
@@ -73,11 +79,19 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 text-right">
       
       {stats.totalStudents === 0 && (
-        <div className="bg-indigo-600/5 backdrop-blur-xl border border-indigo-200/50 p-8 rounded-[3rem] flex items-center gap-6 animate-pulse">
-           <div className="bg-indigo-600 text-white p-5 rounded-2xl shadow-xl"><Info size={28}/></div>
+        <div className={`p-8 rounded-[3rem] border flex items-center gap-6 ${hasDataAnywhere ? 'bg-amber-50 border-amber-200 animate-pulse' : 'bg-indigo-600/5 border-indigo-200/50'}`}>
+           <div className={`${hasDataAnywhere ? 'bg-amber-500' : 'bg-indigo-600'} text-white p-5 rounded-2xl shadow-xl`}>
+             {hasDataAnywhere ? <SearchX size={28}/> : <Info size={28}/>}
+           </div>
            <div>
-              <h4 className="font-black text-indigo-900 text-lg">لم نعثر على بيانات في {year}</h4>
-              <p className="text-sm font-bold text-indigo-500/80">ربما تحتاج لتبديل "السنة الدراسية" من أعلى الصفحة لاسترجاع سجلاتك السابقة.</p>
+              <h4 className={`font-black text-lg ${hasDataAnywhere ? 'text-amber-900' : 'text-indigo-900'}`}>
+                {hasDataAnywhere ? 'تنبيه: تم العثور على بيانات في أرشيفك!' : `لم نعثر على بيانات في ${year}`}
+              </h4>
+              <p className={`text-sm font-bold ${hasDataAnywhere ? 'text-amber-700' : 'text-indigo-500/80'}`}>
+                {hasDataAnywhere 
+                  ? 'لديك طلاب مسجلون في سنوات سابقة، يرجى تغيير "السنة الدراسية" من أعلى الصفحة لإظهارهم.' 
+                  : 'ربما تحتاج لتبديل "السنة الدراسية" من أعلى الصفحة لاسترجاع سجلاتك السابقة.'}
+              </p>
            </div>
         </div>
       )}
@@ -87,7 +101,7 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
           <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-10">
-              <span className="bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-2.5 rounded-full text-[11px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
+              <span className="bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
                 <Sparkles size={14} className="text-amber-400" /> إدارة المحتوى: نشطة
               </span>
             </div>
