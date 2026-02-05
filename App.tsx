@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, FileText, Settings, Bell, Star, Menu, X, ShieldAlert, Key, RefreshCw, CheckCircle, Sparkles, BarChart3
+  BookOpen, Calendar, FileText, Settings, Bell, Star, Menu, X, ShieldAlert, Key, RefreshCw, CheckCircle, Sparkles, BarChart3, Send
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -16,6 +16,7 @@ import Teachers from './pages/Teachers';
 import Schedule from './pages/Schedule';
 import Reports from './pages/Reports';
 import Statistics from './pages/Statistics';
+import Messaging from './pages/Messaging';
 
 const ADMIN_PHONE = '55315661';
 
@@ -32,17 +33,33 @@ const App: React.FC = () => {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
-      if (s) fetchProfile(s.user);
+      if (s) {
+        fetchProfile(s.user);
+        requestNotificationPermission();
+      }
       else setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, ns) => {
       setSession(ns);
-      if (ns) fetchProfile(ns.user);
+      if (ns) {
+        fetchProfile(ns.user);
+        requestNotificationPermission();
+      }
       else { setProfile(null); setLoading(false); }
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted' && 'serviceWorker' in navigator) {
+        // هنا يتم منطق تسجيل الـ Push Subscription وحفظه في السوبابيس
+        console.log('Notification permission granted.');
+      }
+    }
+  };
 
   const fetchProfile = async (user: any) => {
     const userPhone = user.user_metadata?.phone || '';
@@ -129,7 +146,7 @@ const App: React.FC = () => {
     <HashRouter>
       <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row text-right font-['Cairo']" dir="rtl">
         
-        {/* RIGHT SIDEBAR - MODERN VERSION */}
+        {/* RIGHT SIDEBAR */}
         <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-[10px_0_40px_rgba(0,0,0,0.02)]">
           <div className="p-10 flex flex-col items-center text-center gap-4 border-b border-slate-50/50">
             <div className="bg-gradient-to-tr from-indigo-700 to-indigo-500 p-5 rounded-[2.5rem] text-white shadow-2xl shadow-indigo-200">
@@ -148,9 +165,14 @@ const App: React.FC = () => {
               </NavLink>
             ))}
             {isAdmin && (
-              <NavLink to="/teachers" className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all duration-500 ${isActive ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 -translate-x-2' : 'text-slate-400 hover:bg-slate-50 hover:text-indigo-600'}`}>
-                <ShieldCheck size={24} /> المعلمين
-              </NavLink>
+              <>
+                <NavLink to="/messaging" className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all duration-500 ${isActive ? 'bg-amber-600 text-white shadow-2xl shadow-amber-200 -translate-x-2' : 'text-amber-500 hover:bg-amber-50 hover:-translate-x-1'}`}>
+                  <Send size={24} /> مركز البث
+                </NavLink>
+                <NavLink to="/teachers" className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all duration-500 ${isActive ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 -translate-x-2' : 'text-slate-400 hover:bg-slate-50 hover:text-indigo-600'}`}>
+                  <ShieldCheck size={24} /> المعلمين
+                </NavLink>
+              </>
             )}
           </nav>
 
@@ -161,13 +183,18 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* MOBILE BOTTOM NAV - GHOST STYLE */}
+        {/* MOBILE BOTTOM NAV */}
         <nav className="lg:hidden fixed bottom-6 inset-x-6 bg-slate-900/90 backdrop-blur-3xl border border-white/10 flex justify-around items-center px-4 py-5 z-[100] shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-[3rem]">
-          {navItems.slice(0, 6).map(item => (
+          {navItems.slice(0, 5).map(item => (
             <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all duration-500 ${isActive ? 'text-indigo-400 scale-125 -translate-y-2' : 'text-slate-500 opacity-60'}`}>
               {item.icon}
             </NavLink>
           ))}
+          {isAdmin && (
+             <NavLink to="/messaging" className={({isActive}) => `flex flex-col items-center gap-1 transition-all duration-500 ${isActive ? 'text-amber-400 scale-125 -translate-y-2' : 'text-amber-500 opacity-40'}`}>
+                <Send size={24} />
+             </NavLink>
+          )}
         </nav>
 
         {/* MAIN CONTENT AREA */}
@@ -220,6 +247,7 @@ const App: React.FC = () => {
                   <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                   <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                   <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                  <Route path="/messaging" element={isAdmin ? <Messaging /> : <Navigate to="/" />} />
                   <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
                   <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                   {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
