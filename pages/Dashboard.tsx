@@ -2,12 +2,12 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { 
   Users, Calendar, Clock, DollarSign, ArrowUpRight, GraduationCap, 
-  Zap, Sun, Moon, Coffee, Sparkles, RefreshCw, Layers, TrendingUp,
-  Target, Award, CreditCard, ChevronRight, Activity, PieChart, ShieldCheck
+  Sun, Moon, Coffee, RefreshCw, TrendingUp, Award, CreditCard, 
+  Activity, PieChart, ShieldCheck, Sparkles, Zap
 } from 'lucide-react';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
-const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }: any) => {
+const Dashboard = ({ role, uid, year, semester }: any) => {
   const [stats, setStats] = useState({
     totalStudents: 0, totalLessons: 0, totalHours: 0, totalIncome: 0, pendingPayments: 0, completedStudents: 0
   });
@@ -18,15 +18,14 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return { text: 'يومك سعيد يا أستاذ', icon: <Coffee className="text-amber-500 animate-bounce"/> };
-    if (hour < 18) return { text: 'يوم مليء بالإنجاز', icon: <Sun className="text-orange-500 animate-spin-slow"/> };
-    return { text: 'طاب مساؤك يا بطل', icon: <Moon className="text-indigo-400 animate-pulse"/> };
+    if (hour < 12) return { text: 'يوم سعيد يا أستاذ', icon: <Coffee className="text-amber-500 animate-bounce"/> };
+    if (hour < 18) return { text: 'مساء مليء بالتميز', icon: <Sun className="text-orange-500 animate-spin-slow"/> };
+    return { text: 'ليلة هادئة ومثمرة', icon: <Moon className="text-indigo-400 animate-pulse"/> };
   }, []);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      // جلب الإحصائيات
       let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
       if (!isAdmin) query = query.eq('teacher_id', uid);
       const { data: stdData } = await query;
@@ -49,7 +48,6 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
         completedStudents: totals.completed
       });
 
-      // جلب بيانات الرسم البياني (آخر 14 يوم)
       let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(20);
       if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
       const { data: lsns } = await lQuery;
@@ -75,101 +73,102 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
   );
 
   return (
-    <div className="space-y-6 lg:space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-10">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-1000">
       
-      {/* Bento Grid Header */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* Upper Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         
-        {/* Welcome Section */}
-        <div className="md:col-span-3 bg-gradient-to-br from-slate-900 to-indigo-950 p-10 lg:p-14 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center min-h-[350px]">
+        {/* Hero Card */}
+        <div className="lg:col-span-3 bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 p-12 lg:p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center min-h-[400px]">
+           <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
            <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-8">
-                <span className="bg-indigo-500/20 backdrop-blur-xl border border-white/10 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                  <Activity size={14} className="text-indigo-400" /> النظام النشط V15
+              <div className="flex items-center gap-4 mb-10">
+                <span className="bg-white/10 backdrop-blur-3xl border border-white/20 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3">
+                  <Sparkles size={16} className="text-amber-400" /> الحالة الفعالة للنظام
                 </span>
               </div>
-              <div className="flex items-center gap-5 mb-6">
-                <span className="text-4xl lg:text-5xl">{greeting.icon}</span>
-                <h1 className="text-4xl lg:text-7xl font-black tracking-tighter leading-none">{greeting.text}</h1>
+              <div className="flex items-center gap-6 mb-8">
+                <span className="text-5xl lg:text-6xl">{greeting.icon}</span>
+                <h1 className="text-4xl lg:text-7xl font-black leading-none">{greeting.text}</h1>
               </div>
-              <p className="text-indigo-200/60 font-bold max-w-lg text-lg leading-relaxed">
-                قاعدة البيانات جاهزة الآن للعمل من الصفر. لقد قمنا بتصفير كافة الجداول وضبط الصلاحيات لضمان أقصى درجات الخصوصية والأداء.
+              <p className="text-indigo-100/60 font-bold max-w-xl text-xl leading-relaxed">
+                مرحباً بك في لوحة تحكم القمة. إليك نظرة سريعة على أدائك التعليمي والمالي اليوم.
               </p>
            </div>
-           <PieChart className="absolute -bottom-20 -left-20 text-white/5 w-[500px] h-[500px]" />
+           <Zap className="absolute -bottom-20 -left-20 text-white/5 w-[500px] h-[500px] -rotate-12" />
         </div>
 
-        {/* Financial Overview Card */}
-        <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-sm flex flex-col justify-between group relative overflow-hidden">
-           <div className="bg-emerald-50 text-emerald-600 w-16 h-16 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500 shadow-inner">
-             <DollarSign size={32}/>
+        {/* Profit Bento */}
+        <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-2xl flex flex-col justify-between group overflow-hidden relative">
+           <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-50 rounded-full blur-3xl group-hover:bg-emerald-100 transition-all duration-700"></div>
+           <div className="bg-emerald-500 text-white w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl shadow-emerald-100 group-hover:scale-110 transition-transform duration-500 relative z-10">
+             <DollarSign size={40}/>
            </div>
-           <div>
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">صافي الأرباح</p>
-              <h2 className="text-6xl font-black text-slate-900 leading-none">${stats.totalIncome.toLocaleString()}</h2>
-              <div className="mt-6 flex items-center gap-2 text-emerald-600 font-black text-[10px] bg-emerald-50 px-4 py-2 rounded-xl w-fit">
-                <ArrowUpRight size={14}/> {collectionRate}% محصل
+           <div className="relative z-10">
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">إجمالي التحصيل</p>
+              <h2 className="text-6xl font-black text-slate-900 leading-none mb-6 tracking-tighter">${stats.totalIncome.toLocaleString()}</h2>
+              <div className="flex items-center gap-3 text-emerald-600 font-black text-xs bg-emerald-50 px-6 py-3 rounded-2xl w-fit shadow-inner">
+                <TrendingUp size={18}/> {collectionRate}% محصل
               </div>
            </div>
         </div>
 
       </div>
 
-      {/* Modern Stats Bento */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatBento label="طلابك" value={stats.totalStudents} sub={`${stats.completedStudents} منتهٍ`} icon={<Users size={22}/>} color="bg-blue-600" />
-        <StatBento label="الحصص" value={stats.totalLessons} sub="عملية مسجلة" icon={<Calendar size={22}/>} color="bg-indigo-600" />
-        <StatBento label="ساعاتك" value={stats.totalHours.toFixed(1)} sub="ساعة تدريس" icon={<Clock size={22}/>} color="bg-orange-500" />
-        <StatBento label="ديون" value={`$${stats.pendingPayments.toLocaleString()}`} sub="غير محصلة" icon={<CreditCard size={22}/>} color="bg-rose-500" />
+      {/* Stats Quick Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+        <StatBento label="إجمالي الطلاب" value={stats.totalStudents} sub={`${stats.completedStudents} مكتمل`} icon={<Users size={28}/>} color="bg-indigo-600" />
+        <StatBento label="الحصص المنفذة" value={stats.totalLessons} sub="حصة مسجلة" icon={<Calendar size={28}/>} color="bg-blue-500" />
+        <StatBento label="ساعات التدريس" value={stats.totalHours.toFixed(1)} sub="ساعة فعلية" icon={<Clock size={28}/>} color="bg-amber-500" />
+        <StatBento label="مستحقات معلقة" value={`$${stats.pendingPayments.toLocaleString()}`} sub="ديون طلاب" icon={<CreditCard size={28}/>} color="bg-rose-500" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Productivity Chart Card */}
-        <div className="lg:col-span-2 bg-white p-10 lg:p-14 rounded-[4rem] border border-slate-100 shadow-sm">
-           <div className="flex justify-between items-center mb-12">
+        {/* Productivity Chart */}
+        <div className="lg:col-span-2 bg-white p-12 lg:p-16 rounded-[4.5rem] border border-slate-100 shadow-2xl">
+           <div className="flex justify-between items-center mb-16">
               <div>
-                 <h3 className="text-2xl font-black text-slate-900">منحنى الإنتاجية</h3>
-                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">توزيع الساعات التدريسية زمنياً</p>
+                 <h3 className="text-3xl font-black text-slate-900">مؤشر الإنتاجية</h3>
+                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.25em] mt-2">معدل الحصص خلال الـ 15 يوماً الماضية</p>
               </div>
-              <div className="bg-slate-50 p-4 rounded-2xl text-slate-400"><TrendingUp size={24}/></div>
+              <div className="bg-indigo-50 p-5 rounded-3xl text-indigo-600 shadow-inner"><Activity size={32}/></div>
            </div>
            <div className="h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
                  <AreaChart data={chartData}>
                     <defs>
                       <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.2}/>
+                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
                         <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 900}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 900}} />
-                    <Tooltip contentStyle={{borderRadius: '25px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', fontFamily: 'Cairo', fontWeight: 900}} />
-                    <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={5} fill="url(#colorHours)" dot={{r: 6, fill: '#fff', strokeWidth: 3, stroke: '#4f46e5'}} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 900}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 900}} />
+                    <Tooltip contentStyle={{borderRadius: '30px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', fontFamily: 'Cairo', fontWeight: 900, padding: '20px'}} />
+                    <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={6} fill="url(#colorHours)" dot={{r: 7, fill: '#fff', strokeWidth: 4, stroke: '#4f46e5'}} />
                  </AreaChart>
               </ResponsiveContainer>
            </div>
         </div>
 
-        {/* Quick Access or Info Card */}
-        <div className="bg-indigo-600 p-12 rounded-[4rem] text-white shadow-2xl flex flex-col justify-between relative overflow-hidden group">
-           <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+        {/* Tip/Info Card */}
+        <div className="bg-slate-900 p-14 rounded-[4.5rem] text-white shadow-2xl flex flex-col justify-between relative overflow-hidden group border border-white/10">
+           <div className="absolute top-0 right-0 w-full h-full bg-indigo-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
            <div className="relative z-10">
-              <h3 className="text-3xl font-black mb-6">جاهز للبدء؟</h3>
-              <p className="text-indigo-100 font-bold leading-relaxed mb-10 opacity-80">
-                النظام الآن في حالة النقاء التام. يمكنك البدء بإضافة طلابك وتوزيعهم على الفصول الدراسية.
+              <h3 className="text-3xl font-black mb-8 leading-tight">جاهز للحصة <br/>القادمة؟</h3>
+              <p className="text-slate-400 font-bold leading-relaxed mb-12 text-lg">
+                لقد قمت بإنجاز {stats.totalLessons} حصة هذا الفصل الدراسي. حافظ على هذا المستوى المرتفع من الأداء.
               </p>
               <div className="space-y-4">
-                 <div className="flex items-center gap-4 bg-white/10 p-5 rounded-3xl border border-white/5 backdrop-blur-md">
-                    <div className="bg-white/20 p-2 rounded-xl text-white"><Award size={20}/></div>
-                    <p className="text-xs font-black uppercase tracking-widest">أداء محسن بنسبة 40%</p>
+                 <div className="flex items-center gap-5 bg-white/5 p-6 rounded-3xl border border-white/5 backdrop-blur-md hover:bg-white/10 transition-colors">
+                    <div className="bg-indigo-600/40 p-3 rounded-2xl text-white shadow-lg"><Award size={24}/></div>
+                    <p className="text-[11px] font-black uppercase tracking-widest text-indigo-300">أعلى أداء شهري</p>
                  </div>
-                 <div className="flex items-center gap-4 bg-white/10 p-5 rounded-3xl border border-white/5 backdrop-blur-md">
-                    {/* Fix: Replaced missing 'ShieldLog' with 'ShieldCheck' */}
-                    <div className="bg-white/20 p-2 rounded-xl text-white"><ShieldCheck size={20}/></div>
-                    <p className="text-xs font-black uppercase tracking-widest">حماية بيانات مشفرة</p>
+                 <div className="flex items-center gap-5 bg-white/5 p-6 rounded-3xl border border-white/5 backdrop-blur-md hover:bg-white/10 transition-colors">
+                    <div className="bg-emerald-600/40 p-3 rounded-2xl text-white shadow-lg"><ShieldCheck size={24}/></div>
+                    <p className="text-[11px] font-black uppercase tracking-widest text-emerald-300">البيانات محمية بالكامل</p>
                  </div>
               </div>
            </div>
@@ -181,14 +180,14 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
 };
 
 const StatBento = ({ label, value, sub, icon, color }: any) => (
-  <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden text-right">
-    <div className={`${color} w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-6 group-hover:rotate-12 transition-transform shadow-lg relative z-10`}>{icon}</div>
+  <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-700 group relative overflow-hidden">
+    <div className={`${color} w-16 h-16 rounded-2xl flex items-center justify-center text-white mb-8 group-hover:rotate-12 transition-transform shadow-xl relative z-10`}>{icon}</div>
     <div className="relative z-10">
-       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-       <h4 className="text-4xl font-black text-slate-900 mb-1 leading-none">{value}</h4>
-       <p className="text-[10px] font-bold text-slate-400">{sub}</p>
+       <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{label}</p>
+       <h4 className="text-5xl font-black text-slate-900 mb-2 leading-none tracking-tighter">{value}</h4>
+       <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{sub}</p>
     </div>
-    <div className={`absolute -right-10 -bottom-10 w-32 h-32 opacity-[0.03] group-hover:scale-150 transition-transform ${color.replace('bg-', 'text-')}`}>{icon}</div>
+    <div className={`absolute -right-12 -bottom-12 w-40 h-40 opacity-[0.03] group-hover:opacity-[0.08] group-hover:scale-150 transition-all duration-1000 ${color.replace('bg-', 'text-')}`}>{icon}</div>
   </div>
 );
 
