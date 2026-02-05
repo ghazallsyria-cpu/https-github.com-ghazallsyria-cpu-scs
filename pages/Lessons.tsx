@@ -183,7 +183,11 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredStudents.map(s => (
-              <div key={s.id} onClick={() => setSelectedStudent(s)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 hover:border-indigo-600 cursor-pointer transition-all shadow-sm group animate-in zoom-in duration-300">
+              <button
+                key={s.id}
+                onClick={() => setSelectedStudent(s)}
+                className="block w-full text-right bg-white p-6 rounded-[2.5rem] border border-slate-100 hover:border-indigo-600 cursor-pointer transition-all shadow-sm group animate-in zoom-in duration-300 focus:outline-none focus:ring-4 focus:ring-indigo-200"
+              >
                  <div className="flex justify-between items-start mb-4">
                    <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{s.name}</h3>
                    <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black">الصف {s.grade}</span>
@@ -196,7 +200,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
                     </div>
                     <ChevronLeft size={18} className="text-indigo-300 group-hover:text-indigo-600 transition-all"/>
                  </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
