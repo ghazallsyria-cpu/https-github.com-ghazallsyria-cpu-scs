@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { 
   Calendar, Clock, BookOpen, ChevronLeft, Plus, Info, 
-  Wallet, MessageCircle, School, Star, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, History, DollarSign, Folder, FolderOpen
+  Wallet, MessageCircle, School, Star, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, History, DollarSign, Folder, FolderOpen, RefreshCw
 } from 'lucide-react';
 
 const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
@@ -15,8 +14,16 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'lessons' | 'payments' | 'academic'>('lessons');
   const [selectedGradeFolder, setSelectedGradeFolder] = useState<string>('الكل');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
+
+  const [lessonForm, setLessonForm] = useState({
+    lesson_date: new Date().toISOString().split('T')[0],
+    hours: '2',
+    notes: ''
+  });
 
   const [paymentForm, setPaymentForm] = useState({
     amount: '', payment_date: new Date().toISOString().split('T')[0],
@@ -56,6 +63,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
   };
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
+  
   useEffect(() => { 
     if (selectedStudent) {
       fetchRecords(selectedStudent.id);
@@ -63,6 +71,30 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
       if (updated) setSelectedStudent(updated);
     }
   }, [selectedStudent?.id, students]);
+
+  const handleAddLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('lessons').insert([{
+        student_id: selectedStudent.id,
+        teacher_id: uid,
+        lesson_date: lessonForm.lesson_date,
+        hours: parseFloat(lessonForm.hours),
+        notes: lessonForm.notes
+      }]);
+      if (error) throw error;
+      showFeedback("تم تسجيل الحصة بنجاح");
+      setIsLessonModalOpen(false);
+      setLessonForm({ lesson_date: new Date().toISOString().split('T')[0], hours: '2', notes: '' });
+      await fetchStudents(); // Refresh balance
+      await fetchRecords(selectedStudent.id);
+    } catch (err: any) {
+      showFeedback(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +107,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
       }]);
       if (error) throw error;
       showFeedback("تم تسجيل الدفعة بنجاح");
-      setIsModalOpen(false); 
+      setIsPaymentModalOpen(false); 
       setPaymentForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], payment_method: 'كاش', payment_number: 'الأولى', is_final: false, notes: '' });
       await fetchStudents();
     } catch (err: any) { showFeedback(err.message, "error"); }
@@ -109,7 +141,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
     : null;
 
   return (
-    <div className="space-y-6 text-right pb-20 animate-in fade-in duration-500">
+    <div className="space-y-6 text-right pb-20 animate-in fade-in duration-500 font-['Cairo']">
       {feedback && (
         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all ${feedback.type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'} text-white`}>
           {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
@@ -149,7 +181,6 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
             })}
           </div>
 
-          {/* List of Students in Folder */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredStudents.map(s => (
               <div key={s.id} onClick={() => setSelectedStudent(s)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 hover:border-indigo-600 cursor-pointer transition-all shadow-sm group animate-in zoom-in duration-300">
@@ -167,12 +198,6 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
                  </div>
               </div>
             ))}
-            {filteredStudents.length === 0 && (
-              <div className="col-span-full py-20 text-center bg-white rounded-[3.5rem] border-4 border-dashed border-slate-50">
-                <Folder size={64} className="mx-auto text-slate-100 mb-4" />
-                <p className="text-slate-400 font-black text-lg">هذا المجلد لا يحتوي على طلاب مسجلين.</p>
-              </div>
-            )}
           </div>
         </div>
       ) : (
@@ -188,29 +213,16 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
                      <p className="text-slate-400 text-sm font-bold flex items-center gap-2"><School size={16}/> {selectedStudent.school_name || 'لم تحدد المدرسة'}</p>
                      <p className="text-slate-400 text-sm font-bold flex items-center gap-2"><Target size={16}/> الصف {selectedStudent.grade}</p>
                    </div>
-                   <div className="flex flex-wrap justify-center md:justify-start gap-2 mt-6">
-                      {selectedStudent.phones?.map((p:any, i:number) => (
-                        <a key={i} href={`https://wa.me/${p.number}`} target="_blank" className="bg-white/10 px-4 py-2 rounded-xl text-[10px] font-black flex items-center gap-2 hover:bg-emerald-500/20 transition-all border border-white/5"><MessageCircle size={14} className="text-emerald-400"/> {p.label}: {p.number}</a>
-                      ))}
-                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
                    <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 text-center backdrop-blur-sm">
-                      <p className="text-[9px] text-slate-400 font-black mb-1 uppercase tracking-widest">ميزانية الفصل</p>
-                      <p className="text-3xl font-black text-indigo-400">${selectedStudent.expected_income}</p>
+                      <p className="text-[9px] text-slate-400 font-black mb-1 uppercase tracking-widest">إجمالي الحصص</p>
+                      <p className="text-3xl font-black text-indigo-400">{selectedStudent.total_lessons}</p>
                    </div>
                    <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 text-center backdrop-blur-sm">
-                      <p className="text-[9px] text-slate-400 font-black mb-1 uppercase tracking-widest">إجمالي المدفوع</p>
-                      <p className="text-3xl font-black text-emerald-400">${selectedStudent.total_paid}</p>
+                      <p className="text-[9px] text-slate-400 font-black mb-1 uppercase tracking-widest">المبلغ المتبقي</p>
+                      <p className="text-3xl font-black text-rose-400">${selectedStudent.remaining_balance}</p>
                    </div>
-                   {averagePrice && (
-                     <div className="bg-indigo-600/30 p-6 rounded-[2.5rem] col-span-2 border border-indigo-500/40 flex justify-between items-center px-10 animate-in zoom-in duration-500 shadow-xl shadow-indigo-900/20">
-                        <div className="w-full text-center">
-                          <p className="text-[10px] text-indigo-200 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 mb-1"><Star size={16} className="text-amber-400 fill-amber-400"/> معدل ثمن الحصة الواحدة</p>
-                          <p className="text-4xl font-black text-white">${averagePrice}</p>
-                        </div>
-                     </div>
-                   )}
                 </div>
              </div>
           </div>
@@ -228,46 +240,43 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
           </div>
 
           <div className="bg-white rounded-[3.5rem] border border-slate-200 shadow-sm p-8 min-h-[500px]">
-            {activeTab === 'academic' && (
-              <div className="space-y-8 animate-in slide-in-from-bottom duration-500">
-                 <form onSubmit={handleAddAcademic} className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 space-y-5">
-                    <h4 className="font-black text-slate-900 text-lg flex items-center gap-3"><TrendingUp size={20} className="text-indigo-600"/> تقرير حالة الطالب</h4>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">ملاحظات عامة عن التقدم الدراسي</label>
-                       <textarea required placeholder="اكتب ملاحظاتك عن أداء الطالب في الحصص الأخيرة.." className="w-full p-5 border-2 border-slate-100 rounded-[2rem] h-28 font-bold text-sm focus:border-indigo-500 outline-none transition-all" value={academicForm.status_notes} onChange={e => setAcademicForm({...academicForm, status_notes: e.target.value})} />
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-rose-400 mr-4 uppercase">نقاط الضعف (تحتاج متابعة مكثفة)</label>
-                       <textarea required placeholder="مثال: صعوبة في قوانين الحركة، ضعف في النحو.." className="w-full p-5 border-2 border-rose-100 bg-rose-50/20 rounded-[2rem] h-28 font-bold text-sm text-rose-700 focus:border-rose-500 outline-none transition-all" value={academicForm.weaknesses} onChange={e => setAcademicForm({...academicForm, weaknesses: e.target.value})} />
-                    </div>
-                    <button className="w-full py-5 bg-indigo-600 text-white font-black rounded-3xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">حفظ التقرير الدراسي</button>
-                 </form>
+            {activeTab === 'lessons' && (
+              <div className="space-y-6 animate-in fade-in duration-500">
+                <div className="flex justify-between items-center bg-indigo-50 p-6 rounded-[2.5rem] border border-indigo-100 mb-6">
+                  <div>
+                    <h3 className="text-lg font-black text-indigo-900">سجل الحصص المنفذة</h3>
+                    <p className="text-[10px] font-bold text-indigo-400">سجل كافة الدروس التي تم إعطاؤها للطالب.</p>
+                  </div>
+                  <button 
+                    onClick={() => setIsLessonModalOpen(true)}
+                    className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black shadow-xl shadow-indigo-100 flex items-center gap-2 hover:bg-indigo-700 transition-all active:scale-95 text-xs"
+                  >
+                    <Plus size={18}/> تسجيل حصة جديدة
+                  </button>
+                </div>
 
-                 <div className="space-y-6">
-                   <h3 className="font-black text-slate-900 flex items-center gap-2 px-4"><History size={18}/> السجل الدراسي السابق</h3>
-                   {academicRecords.map(r => (
-                     <div key={r.id} className="p-8 border border-slate-100 rounded-[3rem] bg-white hover:shadow-xl transition-all relative group">
-                        <div className="flex justify-between items-center mb-6">
-                           <span className="text-[11px] font-black text-slate-400 bg-slate-100 px-4 py-1.5 rounded-full">{new Date(r.created_at).toLocaleDateString('ar-EG', {dateStyle:'full'})}</span>
-                           <Target size={20} className="text-indigo-200 group-hover:text-indigo-500 transition-colors"/>
-                        </div>
-                        <div className="mb-6">
-                           <p className="text-[10px] font-black text-slate-400 uppercase mb-2">الحالة الدراسية</p>
-                           <p className="font-bold text-slate-700 leading-relaxed">{r.status_notes}</p>
-                        </div>
-                        <div className="bg-rose-50 p-6 rounded-[2rem] border border-rose-100/50">
-                           <p className="text-[11px] font-black text-rose-500 uppercase mb-2 flex items-center gap-2"><AlertCircle size={14}/> نقاط الضعف المسجلة</p>
-                           <p className="text-sm font-black text-rose-700">{r.weaknesses}</p>
-                        </div>
-                     </div>
-                   ))}
-                   {academicRecords.length === 0 && (
-                     <div className="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed">
-                        <Target size={48} className="mx-auto text-slate-200 mb-4" />
-                        <p className="text-slate-400 font-bold">لا توجد سجلات دراسية محفوظة بعد.</p>
-                     </div>
-                   )}
-                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {studentLessons.map(l => (
+                    <div key={l.id} className="p-5 border border-slate-100 rounded-[2rem] flex justify-between items-center group hover:bg-slate-50 transition-all">
+                       <div className="flex items-center gap-4">
+                          <div className="bg-slate-50 text-indigo-600 w-12 h-12 rounded-xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all"><BookOpen size={20}/></div>
+                          <div>
+                            <p className="font-black text-slate-900 text-sm">{new Date(l.lesson_date).toLocaleDateString('ar-EG', {dateStyle:'full'})}</p>
+                            <p className="text-[10px] text-slate-400 font-bold">المدة: {l.hours} ساعة</p>
+                          </div>
+                       </div>
+                       {/* Fix: Wrap icon in span to handle native title tooltip since icons don't support it directly */}
+                       {l.notes && (
+                         <span title={l.notes}>
+                           <Info size={16} className="text-slate-200 group-hover:text-indigo-300" />
+                         </span>
+                       )}
+                    </div>
+                  ))}
+                  {studentLessons.length === 0 && (
+                    <div className="col-span-full py-20 text-center text-slate-400 font-bold">لا توجد حصص مسجلة بعد.</div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -278,68 +287,87 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
                     <h3 className="text-xl font-black text-emerald-900 mb-1">الإدارة المالية</h3>
                     <p className="text-xs font-bold text-emerald-600">تسجيل ومراجعة كافة الدفعات النقدية المسددة.</p>
                   </div>
-                  <button onClick={() => setIsModalOpen(true)} className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-emerald-100 flex items-center gap-2 hover:bg-emerald-700 transition-all active:scale-95 text-sm">+ تسجيل دفعة نقدية</button>
+                  <button onClick={() => setIsPaymentModalOpen(true)} className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-emerald-100 flex items-center gap-2 hover:bg-emerald-700 transition-all active:scale-95 text-sm">+ تسجيل دفعة نقدية</button>
                 </div>
-
                 <div className="space-y-4">
                    {studentPayments.map(p => (
-                     <div key={p.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-6 hover:shadow-lg transition-all">
-                        <div className="flex items-center gap-6 w-full md:w-auto">
+                     <div key={p.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div className="flex items-center gap-6">
                            <div className="bg-emerald-50 p-4 rounded-3xl text-emerald-600 font-black border border-emerald-100 text-xl shadow-inner min-w-[80px] text-center">${p.amount}</div>
                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <p className="font-black text-slate-900 text-lg">الدفعة {p.payment_number}</p>
-                                {p.is_final && <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-[9px] font-black shadow-lg shadow-indigo-100">الدفعة الأخيرة</span>}
-                              </div>
-                              <div className="flex items-center gap-3 text-[11px] text-slate-400 font-bold uppercase tracking-widest">
-                                <span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md text-slate-600">{p.payment_method}</span>
-                                <span>|</span>
-                                <span>{new Date(p.payment_date).toLocaleDateString('ar-EG', {dateStyle:'medium'})}</span>
-                              </div>
+                              <p className="font-black text-slate-900 text-lg">الدفعة {p.payment_number}</p>
+                              <p className="text-[11px] text-slate-400 font-bold">{p.payment_date}</p>
                            </div>
                         </div>
-                        {p.notes && <p className="text-xs text-slate-500 font-medium italic bg-slate-50 px-6 py-3 rounded-2xl border border-slate-50 flex-1 text-center md:text-right">{p.notes}</p>}
                      </div>
                    ))}
-                   {studentPayments.length === 0 && (
-                     <div className="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed">
-                        <Wallet size={48} className="mx-auto text-slate-200 mb-4" />
-                        <p className="text-slate-400 font-bold">لم يتم استلام أي دفعات مالية من هذا الطالب بعد.</p>
-                     </div>
-                   )}
                 </div>
               </div>
             )}
 
-            {activeTab === 'lessons' && (
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-500">
-                  {studentLessons.map(l => (
-                    <div key={l.id} className="p-6 border border-slate-100 rounded-[2.5rem] flex justify-between items-center group hover:bg-slate-50 hover:border-indigo-200 transition-all shadow-sm">
-                       <div className="flex items-center gap-5">
-                          <div className="bg-slate-50 text-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner border border-slate-100"><BookOpen size={24}/></div>
-                          <div>
-                            <p className="font-black text-slate-900 text-lg">{new Date(l.lesson_date).toLocaleDateString('ar-EG', {dateStyle:'full'})}</p>
-                            <p className="text-xs text-slate-400 font-bold flex items-center gap-1 mt-1"><Clock size={12}/> مدة الحصة: {l.hours} ساعة</p>
-                          </div>
-                       </div>
+            {activeTab === 'academic' && (
+              <div className="space-y-8 animate-in slide-in-from-bottom duration-500">
+                 <form onSubmit={handleAddAcademic} className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 space-y-5">
+                    <h4 className="font-black text-slate-900 text-lg flex items-center gap-3"><TrendingUp size={20} className="text-indigo-600"/> تقرير حالة الطالب</h4>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">ملاحظات عامة</label>
+                       <textarea required placeholder="اكتب ملاحظاتك..." className="w-full p-5 border rounded-[2rem] h-28 font-bold text-sm focus:border-indigo-500 outline-none transition-all" value={academicForm.status_notes} onChange={e => setAcademicForm({...academicForm, status_notes: e.target.value})} />
                     </div>
-                  ))}
-                  {studentLessons.length === 0 && (
-                     <div className="col-span-full text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed">
-                        <Calendar size={48} className="mx-auto text-slate-200 mb-4" />
-                        <p className="text-slate-400 font-bold">لا يوجد سجل حصص لهذا الطالب حالياً.</p>
-                     </div>
-                  )}
-               </div>
+                    <button className="w-full py-5 bg-indigo-600 text-white font-black rounded-3xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">حفظ التقرير الدراسي</button>
+                 </form>
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {isModalOpen && (
+      {/* Lesson Modal */}
+      {isLessonModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 text-right">
+          <form onSubmit={handleAddLesson} className="bg-white w-full max-w-md p-10 rounded-[3.5rem] shadow-2xl relative animate-in zoom-in duration-300 border border-slate-100">
+            <button type="button" onClick={() => setIsLessonModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500"><X size={28}/></button>
+            <h2 className="text-2xl font-black mb-10 text-slate-900">تسجيل حصة درسية</h2>
+            
+            <div className="space-y-6">
+               <div className="space-y-1">
+                 <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">تاريخ الحصة</label>
+                 <input required type="date" className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black outline-none focus:bg-white focus:border-indigo-500 transition-all" value={lessonForm.lesson_date} onChange={e => setLessonForm({...lessonForm, lesson_date: e.target.value})} />
+               </div>
+
+               <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">عدد الساعات / المدة</label>
+                  <div className="flex gap-2">
+                    {['1', '1.5', '2', '2.5', '3'].map(h => (
+                      <button 
+                        key={h} 
+                        type="button" 
+                        onClick={() => setLessonForm({...lessonForm, hours: h})}
+                        className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${lessonForm.hours === h ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                      >
+                        {h} س
+                      </button>
+                    ))}
+                  </div>
+               </div>
+
+               <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">ملاحظات عما تم شرحه (اختياري)</label>
+                  <textarea placeholder="مثال: شرح قوانين الحركة، حل مسائل صفحة 20.." className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-bold h-24 focus:bg-white focus:border-indigo-500 outline-none transition-all resize-none" value={lessonForm.notes} onChange={e => setLessonForm({...lessonForm, notes: e.target.value})} />
+               </div>
+            </div>
+
+            <button disabled={loading} className="w-full py-6 bg-indigo-600 text-white font-black rounded-3xl mt-8 shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 text-lg">
+              {loading ? <RefreshCw className="animate-spin mx-auto" /> : "تأكيد تسجيل الحصة"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {isPaymentModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 text-right">
           <form onSubmit={handleAddPayment} className="bg-white w-full max-md p-10 rounded-[3.5rem] shadow-2xl relative animate-in zoom-in duration-300 border border-slate-100">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500"><X size={28}/></button>
+            <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500"><X size={28}/></button>
             <h2 className="text-2xl font-black mb-10 text-slate-900">تسجيل دفعة نقدية</h2>
             
             <div className="space-y-6">
@@ -350,44 +378,8 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
                    <input required type="number" className="w-full p-5 pl-12 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black text-2xl focus:bg-white focus:border-emerald-500 outline-none transition-all" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} />
                  </div>
                </div>
-
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">وسيلة الدفع</label>
-                    <select className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black text-sm appearance-none focus:bg-white focus:border-indigo-500 outline-none transition-all" value={paymentForm.payment_method} onChange={e => setPaymentForm({...paymentForm, payment_method: e.target.value as any})}>
-                       <option value="كاش">كاش (نقدي)</option>
-                       <option value="كي نت">كي نت (Knet)</option>
-                       <option value="ومض">ومض (Womda)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">رقم الدفعة</label>
-                    <select className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black text-sm appearance-none focus:bg-white focus:border-indigo-500 outline-none transition-all" value={paymentForm.payment_number} onChange={e => setPaymentForm({...paymentForm, payment_number: e.target.value})}>
-                       <option value="الأولى">الدفعة الأولى</option>
-                       <option value="الثانية">الدفعة الثانية</option>
-                       <option value="الثالثة">الدفعة الثالثة</option>
-                       <option value="الرابعة">الدفعة الرابعة</option>
-                       <option value="الخامسة">الدفعة الخامسة</option>
-                    </select>
-                  </div>
-               </div>
-
-               <div className="flex items-center gap-4 p-5 bg-amber-50 rounded-[2rem] border-2 border-amber-100/50">
-                  <input type="checkbox" className="w-6 h-6 rounded accent-amber-600" checked={paymentForm.is_final} onChange={e => setPaymentForm({...paymentForm, is_final: e.target.checked})} />
-                  <div>
-                    <label className="text-xs font-black text-amber-800">هل هذه هي الدفعة الأخيرة؟</label>
-                    <p className="text-[9px] text-amber-600 font-bold">عند اختيارها، سيتم تمييز الدفعة في السجل المالي.</p>
-                  </div>
-               </div>
-
-               <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">ملاحظات إضافية</label>
-                  <textarea placeholder="مثال: تسوية حساب شهر كذا.." className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-bold h-24 focus:bg-white focus:border-indigo-500 outline-none transition-all resize-none" value={paymentForm.notes} onChange={e => setPaymentForm({...paymentForm, notes: e.target.value})} />
-               </div>
+               <button className="w-full py-6 bg-emerald-600 text-white font-black rounded-3xl mt-8 shadow-2xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95 text-lg">تأكيد استلام المبلغ</button>
             </div>
-
-            <button className="w-full py-6 bg-emerald-600 text-white font-black rounded-3xl mt-8 shadow-2xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95 text-lg">تأكيد استلام المبلغ</button>
-            <button type="button" onClick={() => setIsModalOpen(false)} className="w-full py-3 text-slate-400 font-bold mt-2 hover:text-rose-500 transition-colors">إغلاق النافذة</button>
           </form>
         </div>
       )}
