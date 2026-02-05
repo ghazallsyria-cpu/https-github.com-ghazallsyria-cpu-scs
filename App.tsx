@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
-  LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Code2, Clock, FileDown, Database
+  LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Code2, Clock, FileDown, Database, Search
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -31,12 +31,10 @@ const App: React.FC = () => {
     const isDirectAdmin = userPhone === ADMIN_PHONE;
 
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (data) {
         setProfile({ ...data, role: (isDirectAdmin || data.role === 'admin') ? 'admin' : 'teacher' });
       } else {
-        // إذا لم يوجد بروفايل أو فشل RLS، نعتمد على رقم الهاتف من Metadata
         setProfile({ 
           id: user.id,
           role: isDirectAdmin ? 'admin' : 'teacher', 
@@ -75,7 +73,6 @@ const App: React.FC = () => {
 
   if (!session) return <Login />;
 
-  // منطق التحقق "الفولاذي" من رتبة المدير
   const userMetadataPhone = session.user.user_metadata?.phone;
   const isAdmin = userMetadataPhone === ADMIN_PHONE || profile?.phone === ADMIN_PHONE || profile?.role === 'admin';
   const effectiveUid = supervisedTeacher ? supervisedTeacher.id : session.user.id;
@@ -96,7 +93,7 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100"><GraduationCap size={28} /></div>
             <h1 className="text-xl font-black text-slate-900">إدارة الطلاب</h1>
           </div>
-          <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
+          <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar text-right">
             <Link to="/" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الرئيسية</Link>
             <Link to="/schedule" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الجدول</Link>
             <Link to="/students" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الطلاب</Link>
@@ -115,7 +112,13 @@ const App: React.FC = () => {
                 {isAdmin ? "بصلاحيات المدير العام" : "بصلاحيات المحتوى"}
              </div>
              <div className="flex gap-4">
+                <select value={currentSemester} onChange={e => { setCurrentSemester(e.target.value); localStorage.setItem('selectedSemester', e.target.value); }} className="bg-slate-50 text-[11px] font-black px-4 py-2 rounded-xl outline-none border border-slate-100">
+                  <option value="1">الفصل 1</option>
+                  <option value="2">الفصل 2</option>
+                  <option value="صيفي">صيفي</option>
+                </select>
                 <select value={currentYear} onChange={e => { setCurrentYear(e.target.value); localStorage.setItem('selectedYear', e.target.value); }} className="bg-slate-50 text-[11px] font-black px-4 py-2 rounded-xl outline-none border border-slate-100">
+                  <option value="2023-2024">2023-2024</option>
                   <option value="2024-2025">2024-2025</option>
                   <option value="2025-2026">2025-2026</option>
                 </select>
@@ -127,7 +130,7 @@ const App: React.FC = () => {
 
           <div className="flex-1 p-6 lg:p-10">
             <Routes>
-              <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} onYearChange={setCurrentYear} onSemesterChange={setCurrentSemester} />} />
               <Route path="/students" element={<Students isAdmin={isAdmin} role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
