@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabase';
-import { Users, Calendar, Clock, DollarSign, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, GraduationCap, Target, Zap, Info, Sun, Moon, Coffee, Sparkles, SearchX, Search, Database, ArrowRight } from 'lucide-react';
+// Added RefreshCw to imports
+import { Users, Calendar, Clock, DollarSign, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, GraduationCap, Target, Zap, Info, Sun, Moon, Coffee, Sparkles, SearchX, Search, Database, ArrowRight, Layers, RefreshCw } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }: any) => {
@@ -9,7 +10,7 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
   });
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [foundDataPeriods, setFoundDataPeriods] = useState<any[]>([]);
+  const [allDataFound, setAllDataFound] = useState<any[]>([]);
 
   const isAdmin = role === 'admin';
 
@@ -24,12 +25,13 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 1. الكاشف الشامل: البحث عن بيانات في جميع السنوات
+        // 1. الكاشف الشامل (Deep Scan): البحث في كل السنوات والفصول
+        // نقوم بجلب كل الطلاب المرتبطين بهذا المعلم أياً كانت السنة
         let finderQuery = supabase.from('students').select('academic_year, semester');
         if (!isAdmin) finderQuery = finderQuery.eq('teacher_id', uid);
         const { data: allStds } = await finderQuery;
 
-        if (allStds) {
+        if (allStds && allStds.length > 0) {
           const periods = allStds.reduce((acc: any[], curr: any) => {
              const key = `${curr.academic_year}-${curr.semester}`;
              const existing = acc.find(p => p.key === key);
@@ -37,10 +39,12 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
              else acc.push({ key, year: curr.academic_year, semester: curr.semester, count: 1 });
              return acc;
           }, []);
-          setFoundDataPeriods(periods);
+          setAllDataFound(periods.sort((a, b) => b.year.localeCompare(a.year)));
+        } else {
+          setAllDataFound([]);
         }
 
-        // 2. جلب إحصائيات الفترة الحالية
+        // 2. جلب إحصائيات الفترة المختارة حالياً
         let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
         if (!isAdmin) query = query.eq('teacher_id', uid);
         const { data: stdData } = await query;
@@ -74,7 +78,7 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
           return acc;
         }, {});
         setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })));
-      } catch (err) { console.error(err); } finally { setLoading(false); }
+      } catch (err) { console.error("Dashboard Error:", err); } finally { setLoading(false); }
     };
     fetchData();
   }, [role, uid, year, semester, isAdmin]);
@@ -90,43 +94,50 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 text-right">
       
-      {/* قسم كاشف البيانات المفقودة */}
-      {stats.totalStudents === 0 && foundDataPeriods.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 p-8 rounded-[3rem] animate-in zoom-in duration-500 shadow-xl shadow-amber-100/50">
-           <div className="flex items-center gap-6 mb-6">
-              <div className="bg-amber-500 text-white p-4 rounded-2xl shadow-lg"><SearchX size={32}/></div>
-              <div>
-                 <h3 className="text-xl font-black text-amber-900">أين بياناتك؟ لقد عثرنا عليها!</h3>
-                 <p className="text-sm font-bold text-amber-700 leading-relaxed">السنة الدراسية الحالية ({year}) فارغة، ولكننا وجدنا سجلاتك في السنوات التالية:</p>
+      {/* تنبيه ذكي في حال وجود بيانات في فترات أخرى */}
+      {allDataFound.length > 0 && stats.totalStudents === 0 && (
+        <div className="bg-indigo-900 p-10 rounded-[4rem] text-white shadow-2xl relative overflow-hidden animate-in zoom-in duration-700">
+           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500/20 to-transparent opacity-50"></div>
+           <div className="relative z-10">
+              <div className="flex items-center gap-6 mb-8">
+                 <div className="bg-white/10 p-5 rounded-3xl backdrop-blur-md border border-white/20">
+                    <Layers size={32} className="text-indigo-300" />
+                 </div>
+                 <div>
+                    <h2 className="text-2xl font-black">بياناتك موجودة في الأرشيف!</h2>
+                    <p className="text-indigo-200 font-bold text-sm">لم نجد طلاباً في {year} الفصل {semester}، ولكننا عثرنا عليهم في الفترات التالية:</p>
+                 </div>
               </div>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {foundDataPeriods.map(p => (
-                <button 
-                  key={p.key} 
-                  onClick={() => { onYearChange(p.year); onSemesterChange(p.semester); }}
-                  className="flex items-center justify-between bg-white border border-amber-200 p-5 rounded-2xl hover:bg-amber-100 hover:border-amber-400 transition-all group shadow-sm"
-                >
-                   <div className="text-right">
-                      <p className="text-xs font-black text-amber-600 uppercase tracking-widest">{p.year}</p>
-                      <p className="font-black text-slate-800 text-lg">الفصل {p.semester}</p>
-                      <p className="text-[10px] font-bold text-slate-400 mt-1">يحتوي على {p.count} طالب</p>
-                   </div>
-                   <div className="bg-amber-50 p-2 rounded-xl text-amber-600 group-hover:translate-x-[-10px] transition-transform"><ArrowRight size={20} className="rotate-180"/></div>
-                </button>
-              ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                 {allDataFound.map(p => (
+                   <button 
+                     key={p.key} 
+                     onClick={() => { onYearChange(p.year); onSemesterChange(p.semester); }}
+                     className="bg-white/10 hover:bg-white/20 border border-white/10 p-6 rounded-3xl flex items-center justify-between transition-all group"
+                   >
+                      <div className="text-right">
+                         <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">{p.year}</p>
+                         <p className="text-lg font-black">الفصل {p.semester}</p>
+                         <p className="text-[10px] font-bold text-indigo-400 mt-1">{p.count} طالب مسجل</p>
+                      </div>
+                      <ArrowRight size={20} className="rotate-180 group-hover:translate-x-[-10px] transition-transform" />
+                   </button>
+                 ))}
+              </div>
            </div>
         </div>
       )}
 
-      {stats.totalStudents === 0 && foundDataPeriods.length === 0 && (
-        <div className="bg-slate-900 p-12 rounded-[4rem] text-white flex flex-col items-center justify-center text-center gap-6 shadow-2xl relative overflow-hidden">
-           <div className="absolute top-0 right-0 w-full h-full bg-indigo-600/10 opacity-50 blur-3xl"></div>
-           <div className="bg-white/10 p-8 rounded-[2rem] border border-white/20 relative z-10"><Database size={64} className="text-indigo-400"/></div>
-           <div className="relative z-10 space-y-2">
-             <h2 className="text-3xl font-black">قاعدة البيانات فارغة تماماً</h2>
-             <p className="text-slate-400 font-bold max-w-md mx-auto">لم نعثر على أي طلاب مرتبطين برقم هاتفك في أي سنة سابقة. إذا كنت متأكداً من وجود بيانات، يرجى مراجعة كود SQL V11 في الإعدادات.</p>
+      {/* الحالة عندما تكون القاعدة فارغة تماماً حتى من الأرشيف */}
+      {allDataFound.length === 0 && (
+        <div className="bg-white p-12 lg:p-20 rounded-[4.5rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center text-center gap-8 shadow-sm">
+           <div className="bg-slate-50 p-10 rounded-full text-slate-200"><Database size={80}/></div>
+           <div className="space-y-3">
+              <h2 className="text-3xl font-black text-slate-900">قاعدة البيانات فارغة</h2>
+              <p className="text-slate-400 font-bold max-w-md">لم يتم العثور على أي بيانات مرتبطة بحسابك في أي سنة أو فصل دراسي. إذا كان لديك بيانات سابقة، يرجى تشغيل كود SQL V12 من الإعدادات.</p>
            </div>
+           {/* Fixed RefreshCw not being imported */}
+           <button onClick={() => window.location.reload()} className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 flex items-center gap-3 active:scale-95 transition-all"><RefreshCw size={20}/> تحديث المحاولة</button>
         </div>
       )}
 
@@ -148,7 +159,7 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
                   </h1>
                 </div>
                 <p className="text-indigo-100/60 font-bold max-w-xl text-lg lg:text-xl leading-relaxed mt-4">
-                  أداء المنصة اليوم ممتاز، تم تسجيل <span className="text-white border-b-4 border-indigo-500 pb-1">{stats.totalLessons}</span> عملية تعليمية بنجاح.
+                  أداء المنصة اليوم ممتاز في <span className="text-white border-b-4 border-indigo-500 pb-1">{year}</span>، تم تسجيل <span className="text-white border-b-4 border-indigo-500 pb-1">{stats.totalLessons}</span> عملية تعليمية بنجاح.
                 </p>
               </div>
               <GraduationCap className="absolute -bottom-16 -left-16 text-white/5 w-96 h-96 -rotate-12 group-hover:rotate-0 transition-transform duration-[2s]" />
@@ -165,7 +176,6 @@ const Dashboard = ({ role, uid, year, semester, onYearChange, onSemesterChange }
               <div className="mt-8 flex items-center gap-2 text-emerald-600 font-black text-[11px] bg-emerald-50 px-6 py-3 rounded-2xl relative z-10 uppercase tracking-widest">
                 <Zap size={16} fill="currentColor"/> إدارة مالية
               </div>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-16 -mt-16"></div>
             </div>
           </div>
           
