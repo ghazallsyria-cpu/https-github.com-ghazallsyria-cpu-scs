@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { 
@@ -42,8 +41,9 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
       const { data, error } = await query.order('is_completed', { ascending: true }).order('name');
       if (error) throw error;
       setStudents(data || []);
-    } catch (e) { 
-      showFeedback("خطأ في جلب البيانات", "error"); 
+    } catch (e: any) { 
+      console.error("Fetch students error:", e);
+      showFeedback(`خطأ في جلب البيانات: ${e.message || 'فشل الاتصال'}`, "error");
     } finally { 
       setLoading(false); 
     }
