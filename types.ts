@@ -1,5 +1,5 @@
 
-export type UserRole = 'admin' | 'teacher';
+export type UserRole = 'admin' | 'teacher' | 'parent';
 
 export interface Profile {
   id: string;
@@ -56,19 +56,13 @@ export interface Payment {
   created_at: string;
 }
 
-export interface AcademicRecord {
+export interface ParentRequest {
   id: string;
   student_id: string;
-  teacher_id: string;
-  status_notes: string;
-  weaknesses: string;
+  parent_phone: string;
+  type: 'apology' | 'payment_intent' | 'note';
+  content: string;
+  amount?: number;
+  status: 'pending' | 'accepted' | 'rejected';
   created_at: string;
-}
-
-export interface StudentStats extends Student {
-  total_lessons: number;
-  total_hours: number;
-  total_paid: number;
-  expected_income: number;
-  remaining_balance: number;
 }
