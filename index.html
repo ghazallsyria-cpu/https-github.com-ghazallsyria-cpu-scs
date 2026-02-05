@@ -4,17 +4,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>ادارة تحكم الطلاب في النظام الخصوصي</title>
+    <title>نظام إدارة الطلاب - الخصوصي</title>
     
-    <!-- PWA Tags -->
+    <!-- PWA & Mobile Optimization -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#4f46e5">
     
-    <!-- Tailwind & Fonts -->
+    <!-- Fonts & Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
+    <!-- Babel for In-Browser TSX Transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <style>
       body { 
         font-family: 'Cairo', sans-serif; 
@@ -49,6 +52,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="index.tsx"></script>
+    <!-- استخدام type="text/babel" مع data-type="module" للسماح لـ Babel بمعالجة الملف -->
+    <script type="text/babel" data-type="module" src="index.tsx"></script>
   </body>
 </html>
