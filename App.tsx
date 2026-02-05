@@ -1,10 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-// Fix: Import from 'react-router' instead of 'react-router-dom' to resolve missing export errors in v7 environments
-import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router';
+import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, CheckCircle, KeyRound, Clock, FileDown, RefreshCw
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, KeyRound, Clock, FileDown, RefreshCw
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
