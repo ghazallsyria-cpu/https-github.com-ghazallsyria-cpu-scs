@@ -44,15 +44,24 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
 
   const fetchCodes = useCallback(async () => {
     try {
+      // نقوم بجلب البيانات مع التأكد من جلب الاسم لمن استخدم الكود
       const { data, error } = await supabase
         .from('activation_codes')
-        .select('*, used_profile:used_by(full_name)')
+        .select(`
+          id, 
+          code, 
+          is_used, 
+          created_at,
+          used_by,
+          profiles:used_by (full_name)
+        `)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       setActivationCodes(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching codes:", err);
+      // لا نعطل الواجهة ولكن نسجل الخطأ
     }
   }, []);
 
@@ -105,7 +114,9 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
   const handleGenerateCode = async () => {
     if (isGenerating) return;
     setIsGenerating(true);
+    // توليد كود عشوائي مكون من 8 أرقام وحروف
     const newCode = Array.from({ length: 8 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
+    
     try {
       const { error } = await supabase.from('activation_codes').insert([{ 
         code: newCode, 
@@ -115,11 +126,11 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
       if (error) throw error;
       
       showFeedback("تم توليد الكود بنجاح: " + newCode);
-      // تحديث القائمة فوراً بعد الإضافة
+      // تحديث القائمة فوراً بعد الإضافة لضمان الظهور
       await fetchCodes();
     } catch (err: any) {
       console.error("Code generation error:", err);
-      showFeedback("فشل الحفظ في قاعدة البيانات. تأكد من صلاحيات SQL.", 'error');
+      showFeedback("فشل حفظ الكود في السجل. يرجى مراجعة صلاحيات SQL.", 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -205,6 +216,12 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
               </div>
             </div>
           ))}
+          {teachers.length === 0 && !loading && (
+             <div className="col-span-full py-20 text-center">
+               <UserCircle size={64} className="mx-auto text-slate-100 mb-4" />
+               <p className="text-slate-400 font-bold italic">لا توجد طلبات انضمام أو معلمين حالياً.</p>
+             </div>
+          )}
         </div>
       ) : (
         <div className="space-y-8 animate-in slide-in-from-bottom duration-700">
@@ -238,7 +255,9 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
                           {code.is_used ? 'مستخدَم مسبقاً' : 'جاهز للتفعيل'}
                         </span>
                       </td>
-                      <td className="p-10 font-black text-slate-600 text-sm">{code.used_profile?.full_name || '—'}</td>
+                      <td className="p-10 font-black text-slate-600 text-sm">
+                        {code.profiles?.full_name || '—'}
+                      </td>
                       <td className="p-10 text-center">
                         <button onClick={() => copyToClipboard(code.code)} className={`p-5 rounded-[1.5rem] transition-all shadow-xl ${copiedCode === code.code ? 'bg-emerald-600 text-white' : 'bg-white text-indigo-600 border border-slate-100 hover:border-indigo-600'}`}>
                           {copiedCode === code.code ? <Check size={24}/> : <Copy size={24}/>}
