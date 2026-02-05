@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, Menu, X, CalendarDays, Layers, CheckCircle, KeyRound, ArrowLeft, Clock, FileDown
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, CalendarDays, Layers, CheckCircle, KeyRound, Clock, FileDown
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard.tsx';
@@ -30,13 +30,13 @@ const Footer: React.FC = () => (
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 2.6.0 (نظام التصدير الذكي) &copy; {new Date().getFullYear()}
+        الإصدار 2.7.0 (الاستقرار والأمان) &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
 );
 
-const MobileNav: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
+const MobileNav: React.FC = () => {
   const location = useLocation();
   const navItems = [
     { to: '/', icon: <LayoutDashboard size={20} />, label: 'الرئيسية' },
@@ -47,7 +47,7 @@ const MobileNav: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
   ];
 
   return (
-    <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-2 py-3 z-[60] flex justify-around items-center rounded-t-3xl shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)]">
+    <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-200 px-2 py-3 z-[60] flex justify-around items-center rounded-t-3xl shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)]">
       {navItems.map((item) => {
         const isActive = location.pathname === item.to;
         return (
@@ -83,13 +83,16 @@ const App: React.FC = () => {
     }
 
     try {
-      const { data, error } = await supabase.from('profiles').select('id, role, full_name, is_approved').eq('id', uid).maybeSingle();
+      // جلب البيانات من الجداول مباشرة لضمان الدقة
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
       if (error) throw error;
+      
       const profileData = data || { role: 'teacher', is_approved: false };
       cache.profile = profileData;
       cache.lastUid = uid;
       setProfile(profileData);
     } catch (e) {
+      console.error("Profile fetch error:", e);
       setProfile({ role: 'teacher', is_approved: false }); 
     } finally {
       setLoading(false);
@@ -107,8 +110,9 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
-      if (newSession) fetchProfile(newSession.user.id);
-      else {
+      if (newSession) {
+        fetchProfile(newSession.user.id, true); // فرض التحديث عند تغيير الجلسة
+      } else {
         setProfile(null);
         cache.profile = null;
         setLoading(false);
@@ -120,13 +124,17 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white">
       <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="font-bold text-slate-400 font-['Cairo']">تحميل النظام...</p>
+      <p className="font-bold text-slate-400 font-['Cairo']">جاري الدخول...</p>
     </div>
   );
 
   if (!session) return <Login />;
-  if (profile && !profile.is_approved && profile.role !== 'admin' && !supervisedTeacher) {
-    return <ActivationOverlay profileName={profile.full_name} onActivated={() => fetchProfile(session.user.id, true)} />;
+
+  // إخفاء الـ Overlay إذا كان مفعلاً أو كان المدير
+  const isApproved = profile?.is_approved === true || profile?.role === 'admin';
+  
+  if (!isApproved && !supervisedTeacher) {
+    return <ActivationOverlay profileName={profile?.full_name} onActivated={() => fetchProfile(session.user.id, true)} />;
   }
 
   const isAdmin = profile?.role === 'admin';
@@ -210,7 +218,7 @@ const App: React.FC = () => {
             </div>
             <Footer />
           </div>
-          <MobileNav isAdmin={isAdmin} />
+          <MobileNav />
         </main>
       </div>
     </HashRouter>
@@ -230,32 +238,47 @@ const ActivationOverlay = ({ onActivated, profileName }: any) => {
     try {
       const { data, error: funcError } = await supabase.rpc('activate_account_with_code', { provided_code: code.trim().toUpperCase() });
       if (funcError) throw funcError;
+      
       if (data.success) {
         setSuccess(true);
+        // مسح الـ Cache لضمان تحديث الحالة
         cache.profile = null;
-        setTimeout(() => onActivated(), 2000);
-      } else setError(data.message);
+        cache.lastUid = null;
+        setTimeout(() => onActivated(), 1500);
+      } else {
+        setError(data.message);
+      }
     } catch (err: any) {
-      setError(err.message);
+      setError("حدث خطأ في الاتصال بالخادم");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 text-right">
+    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 text-right font-['Cairo']">
       <div className="bg-white w-full max-w-lg p-10 md:p-14 rounded-[3.5rem] shadow-2xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3"><KeyRound size={40} /></div>
-          <h2 className="text-3xl font-black text-slate-900 mb-2 font-['Cairo']">تنشيط الحساب</h2>
-          <p className="text-slate-500 font-bold mb-8 font-['Cairo']">أهلاً <span className="text-indigo-600">{profileName}</span>. أدخل كود التفعيل لتشغيل النظام.</p>
-          {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100 font-['Cairo']"><ShieldAlert size={20} /><span>{error}</span></div>}
-          {success && <div className="bg-emerald-50 text-emerald-600 p-6 rounded-[2rem] mb-6 text-center animate-bounce font-['Cairo']"><CheckCircle size={48} className="mx-auto mb-3" /><p className="font-black">تم التفعيل بنجاح!</p></div>}
+          <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط الحساب</h2>
+          <p className="text-slate-500 font-bold mb-8">أهلاً <span className="text-indigo-600">{profileName || 'بك'}</span>. أدخل كود التفعيل لتشغيل النظام.</p>
+          
+          {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100"><ShieldAlert size={20} /><span>{error}</span></div>}
+          
+          {success && (
+            <div className="bg-emerald-50 text-emerald-600 p-6 rounded-[2rem] mb-6 text-center animate-bounce">
+              <CheckCircle size={48} className="mx-auto mb-3" />
+              <p className="font-black">تم التفعيل بنجاح! جاري الدخول...</p>
+            </div>
+          )}
+
           {!success && (
             <form onSubmit={handleActivate} className="space-y-6">
-              <input required maxLength={8} placeholder="ABC123XY" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-3xl tracking-[0.3em] uppercase outline-none focus:border-indigo-500 transition-all font-['Cairo']" value={code} onChange={(e) => setCode(e.target.value)} />
-              <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 disabled:opacity-50 text-lg font-['Cairo']">{loading ? "جاري المعالجة..." : "تنشيط الحساب الآن"}</button>
-              <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold hover:text-rose-500 transition-colors flex items-center justify-center gap-2 font-['Cairo']"><LogOut size={18} /> تسجيل الخروج</button>
+              <input required maxLength={8} placeholder="أدخل الكود هنا" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-3xl tracking-[0.3em] uppercase outline-none focus:border-indigo-500 transition-all" value={code} onChange={(e) => setCode(e.target.value)} />
+              <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 disabled:opacity-50 text-lg">
+                {loading ? "جاري المعالجة..." : "تنشيط الحساب الآن"}
+              </button>
+              <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold hover:text-rose-500 transition-colors flex items-center justify-center gap-2"><LogOut size={18} /> تسجيل الخروج</button>
             </form>
           )}
         </div>
