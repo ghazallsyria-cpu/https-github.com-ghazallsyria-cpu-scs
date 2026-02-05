@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { 
-  Clock, Plus, X, Trash2, Calendar, CheckCircle, AlertCircle, User, Info, Search, ChevronLeft, CalendarDays
+  Clock, Plus, X, Trash2, CalendarDays, CheckCircle, AlertCircle, User, Info, RefreshCw, Edit3, Save
 } from 'lucide-react';
 
 const DAYS = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
@@ -16,6 +16,8 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   const [form, setForm] = useState({
@@ -58,33 +60,61 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleAddSchedule = async (e: React.FormEvent) => {
+  const handleOpenAdd = () => {
+    setIsEditMode(false);
+    setEditingId(null);
+    setForm({ student_id: '', start_time: '14:00', duration_hours: '1', notes: '' });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (item: any) => {
+    setIsEditMode(true);
+    setEditingId(item.id);
+    setForm({
+      student_id: item.student_id,
+      start_time: item.start_time,
+      duration_hours: item.duration_hours.toString(),
+      notes: item.notes || ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.student_id) return showFeedback("يرجى اختيار طالب أولاً", "error");
     
+    setLoading(true);
     try {
-      const { error } = await supabase.from('schedules').insert([{
+      const payload = {
         teacher_id: uid,
         student_id: form.student_id,
         day_of_week: selectedDay,
         start_time: form.start_time,
         duration_hours: parseFloat(form.duration_hours),
         notes: form.notes
-      }]);
+      };
+
+      if (isEditMode && editingId) {
+        const { error } = await supabase.from('schedules').update(payload).eq('id', editingId);
+        if (error) throw error;
+        showFeedback("تم تحديث الموعد بنجاح");
+      } else {
+        const { error } = await supabase.from('schedules').insert([payload]);
+        if (error) throw error;
+        showFeedback("تمت إضافة الموعد للجدول");
+      }
       
-      if (error) throw error;
-      
-      showFeedback("تمت إضافة الحصة للجدول بنجاح");
       setIsModalOpen(false);
-      setForm({ student_id: '', start_time: '14:00', duration_hours: '1', notes: '' });
       fetchData();
     } catch (err: any) {
       showFeedback(err.message, 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا الموعد من الجدول؟')) return;
+    if (!confirm('هل أنت متأكد من حذف هذا الموعد؟')) return;
     try {
       const { error } = await supabase.from('schedules').delete().eq('id', id);
       if (error) throw error;
@@ -98,15 +128,13 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':');
     let h = parseInt(hours);
-    const m = minutes;
     const ampm = h >= 12 ? 'مساءً' : 'صباحاً';
-    h = h % 12;
-    h = h ? h : 12;
-    return `${h}:${m} ${ampm}`;
+    h = h % 12 || 12;
+    return `${h}:${minutes} ${ampm}`;
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-20 text-right">
+    <div className="space-y-8 animate-in fade-in slide-in-from-top duration-700 pb-20 text-right font-['Cairo']">
       {feedback && (
         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all ${feedback.type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'} text-white`}>
           {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
@@ -114,125 +142,111 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
         </div>
       )}
 
-      {/* Header Section */}
-      <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
-        <div className="flex items-center gap-4">
-          <div className="p-4 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-100 ring-4 ring-indigo-50">
-            <CalendarDays size={28} />
+      <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="flex items-center gap-5">
+          <div className="p-5 bg-indigo-600 text-white rounded-[2rem] shadow-xl shadow-indigo-100 ring-4 ring-indigo-50">
+            <CalendarDays size={32} />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 leading-tight">الجدول الأسبوعي</h1>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">تنسيق مواعيد الحصص اليومية</p>
+            <h1 className="text-3xl font-black text-slate-900 leading-tight">الجدول الأسبوعي</h1>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">تنسيق مواعيد الحصص اليومية</p>
           </div>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-slate-900 hover:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl transition-all active:scale-95 text-sm flex items-center gap-3 group"
+          onClick={handleOpenAdd}
+          className="bg-slate-900 hover:bg-indigo-600 text-white px-10 py-5 rounded-[2rem] font-black shadow-xl transition-all active:scale-95 text-sm flex items-center gap-3 group"
         >
-          <Plus size={20} className="group-hover:rotate-90 transition-transform" /> 
-          إضافة حصة مجدولة
+          <Plus size={24} className="group-hover:rotate-90 transition-transform" /> 
+          حصة مجدولة جديدة
         </button>
       </div>
 
-      {/* Days Tabs */}
-      <div className="flex overflow-x-auto gap-2 p-2 bg-white rounded-[2rem] border border-slate-200 shadow-sm no-scrollbar">
+      <div className="flex overflow-x-auto gap-2 p-2 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm no-scrollbar">
          {DAYS.map(day => (
            <button 
              key={day} 
              onClick={() => setSelectedDay(day)}
-             className={`flex-1 min-w-[90px] md:min-w-0 py-4 rounded-[1.5rem] font-black text-xs md:text-sm transition-all ${selectedDay === day ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50'}`}
+             className={`flex-1 min-w-[100px] py-5 rounded-[2rem] font-black text-xs md:text-sm transition-all ${selectedDay === day ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50'}`}
            >
              {day}
            </button>
          ))}
       </div>
 
-      {/* Schedule Items List */}
-      <div className="space-y-4 animate-in fade-in duration-500 text-right">
-         {scheduleItems.length > 0 ? (
-           scheduleItems.map((item) => (
-             <div key={item.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 hover:border-indigo-500 transition-all group relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-1.5 h-full bg-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="flex items-center gap-6 w-full md:w-auto">
-                   <div className="bg-slate-50 text-indigo-600 w-20 h-20 rounded-3xl flex flex-col items-center justify-center font-black group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner border border-slate-100">
-                      <span className="text-xl leading-none">{formatTime(item.start_time).split(' ')[0]}</span>
-                      <span className="text-[9px] mt-1">{formatTime(item.start_time).split(' ')[1]}</span>
-                   </div>
-                   <div>
-                      <h4 className="text-xl font-black text-slate-900 mb-1">{item.students?.name}</h4>
-                      <div className="flex flex-wrap items-center gap-3 text-slate-400 font-bold text-xs">
-                         <span className="bg-slate-100 px-3 py-1 rounded-full text-slate-500">{item.students?.grade}</span>
-                         <span className="flex items-center gap-1"><Clock size={12}/> {item.duration_hours} حصة/ساعة</span>
-                         {item.notes && <span className="text-indigo-500 italic flex items-center gap-1">| <Info size={12}/> {item.notes}</span>}
-                      </div>
-                   </div>
-                </div>
-                <div className="flex items-center gap-4 w-full md:w-auto justify-end">
-                   <button 
-                     onClick={() => handleDelete(item.id)}
-                     className="p-4 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all shadow-sm"
-                     title="إلغاء الموعد"
-                   >
-                      <Trash2 size={20}/>
-                   </button>
-                </div>
-             </div>
-           ))
+      <div className="space-y-6">
+         {loading ? (
+           <div className="py-20 flex justify-center"><RefreshCw className="animate-spin text-indigo-600" size={40} /></div>
+         ) : scheduleItems.length > 0 ? (
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             {scheduleItems.map((item) => (
+               <div key={item.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex items-center justify-between group hover:border-indigo-500 transition-all relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-2 h-full bg-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="flex items-center gap-6">
+                     <div className="bg-slate-50 text-indigo-600 w-24 h-24 rounded-[2.5rem] flex flex-col items-center justify-center font-black group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner border border-slate-100">
+                        <span className="text-2xl leading-none">{formatTime(item.start_time).split(' ')[0]}</span>
+                        <span className="text-[10px] mt-2 uppercase tracking-widest">{formatTime(item.start_time).split(' ')[1]}</span>
+                     </div>
+                     <div>
+                        <h4 className="text-2xl font-black text-slate-900 mb-1">{item.students?.name}</h4>
+                        <div className="flex flex-wrap items-center gap-3 text-slate-400 font-bold text-[11px] uppercase tracking-wide">
+                           <span className="bg-slate-100 px-3 py-1 rounded-full text-slate-500">الصف {item.students?.grade}</span>
+                           <span className="flex items-center gap-1"><Clock size={12}/> {item.duration_hours} س</span>
+                           {item.notes && <span className="text-indigo-500 italic flex items-center gap-1">| {item.notes}</span>}
+                        </div>
+                     </div>
+                  </div>
+                  <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100">
+                     <button onClick={() => handleOpenEdit(item)} className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><Edit3 size={20}/></button>
+                     <button onClick={() => handleDelete(item.id)} className="p-4 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all shadow-sm"><Trash2 size={20}/></button>
+                  </div>
+               </div>
+             ))}
+           </div>
          ) : (
-           <div className="py-24 text-center bg-white rounded-[3.5rem] border-4 border-dashed border-slate-50 flex flex-col items-center">
-              <div className="bg-slate-50 p-6 rounded-full mb-6">
-                <Clock size={64} className="text-slate-200" />
-              </div>
-              <p className="text-slate-400 font-black text-xl">لا توجد حصص مجدولة لهذا اليوم.</p>
-              <button onClick={() => setIsModalOpen(true)} className="mt-4 text-indigo-600 font-bold text-sm hover:underline">أضف موعدك الأول ليوم {selectedDay}</button>
+           <div className="py-24 text-center bg-white rounded-[4rem] border-4 border-dashed border-slate-100 flex flex-col items-center">
+              <Clock size={80} className="text-slate-100 mb-6" />
+              <p className="text-slate-400 font-black text-2xl">يوم {selectedDay} فارغ حالياً.</p>
+              <button onClick={handleOpenAdd} className="mt-4 text-indigo-600 font-black text-sm hover:underline">سجل أول موعد الآن</button>
            </div>
          )}
       </div>
 
-      {/* Add Schedule Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <form 
-            onSubmit={handleAddSchedule} 
-            className="bg-white w-full max-w-md p-10 rounded-[3.5rem] shadow-2xl relative animate-in zoom-in duration-300 text-right border border-slate-100"
-          >
-            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500 transition-colors">
-              <X size={28}/>
-            </button>
-            <h2 className="text-2xl font-black mb-8 text-slate-900 flex items-center gap-3">
-              <Plus className="text-indigo-600" /> موعد جديد ({selectedDay})
+          <form onSubmit={handleSaveSchedule} className="bg-white w-full max-w-md p-12 rounded-[4rem] shadow-2xl relative animate-in zoom-in duration-300 text-right">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-12 left-12 text-slate-300 hover:text-rose-500"><X size={32}/></button>
+            <h2 className="text-2xl font-black mb-10 text-slate-900 flex items-center gap-4">
+              <div className="bg-indigo-600 p-2 rounded-xl text-white">
+                {isEditMode ? <Edit3 size={24}/> : <Plus size={24}/>}
+              </div>
+              {isEditMode ? 'تعديل موعد' : 'إضافة موعد لليوم'}
             </h2>
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-3">اختيار الطالب من القائمة</label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                  <select 
-                    required 
-                    className="w-full p-5 pl-12 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all appearance-none" 
-                    value={form.student_id} 
-                    onChange={e => setForm({...form, student_id: e.target.value})}
-                  >
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-4">الطالب</label>
+                <select required className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-black focus:bg-white focus:border-indigo-500 outline-none transition-all appearance-none" value={form.student_id} onChange={e => setForm({...form, student_id: e.target.value})}>
                     <option value="">-- اختر طالب --</option>
-                    {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
-                  </select>
-                </div>
+                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-2">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-3">وقت البدء</label>
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-4">البدء</label>
                    <input required type="time" className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all" value={form.start_time} onChange={e => setForm({...form, start_time: e.target.value})} />
                  </div>
                  <div className="space-y-2">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-3">عدد الحصص/المدة</label>
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-4">المدة (س)</label>
                    <input required type="number" step="0.5" className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all" value={form.duration_hours} onChange={e => setForm({...form, duration_hours: e.target.value})} />
                  </div>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-3">ملاحظات (اختياري)</label>
-                <textarea placeholder="مثال: مراجعة الوحدة الثانية.." className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all h-28 resize-none" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-4">ملاحظات</label>
+                <textarea placeholder="اختياري..." className="w-full p-6 bg-slate-50 border-2 border-slate-50 rounded-[2.5rem] font-bold focus:bg-white focus:border-indigo-500 outline-none transition-all h-28 resize-none" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
               </div>
-              <button type="submit" className="w-full py-6 bg-indigo-600 text-white font-black rounded-3xl shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 text-lg">تأكيد الإضافة للجدول</button>
+              <button type="submit" className="w-full py-6 bg-indigo-600 text-white font-black rounded-[2.5rem] shadow-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 text-lg">
+                {isEditMode ? <Save size={24}/> : <Plus size={24}/>}
+                {isEditMode ? 'حفظ التعديلات' : 'تأكيد الإضافة'}
+              </button>
             </div>
           </form>
         </div>

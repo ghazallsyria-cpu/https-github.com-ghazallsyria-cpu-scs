@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 import { 
   Plus, Trash2, CheckCircle, X, AlertCircle, Users, School, MessageCircle, 
   Phone, MapPin, Search, Folder, FolderOpen, Layers, RefreshCw, MoreVertical, 
-  Edit3, Copy, MoveRight, Settings2, Save
+  Edit3, Copy, MoveRight, Settings2, Save, Lock, Unlock, CheckCircle2
 } from 'lucide-react';
 
 const Students = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
@@ -31,7 +31,7 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
 
   const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
     setFeedback({ msg, type });
-    setTimeout(() => setFeedback(null), 5000);
+    setTimeout(() => setFeedback(null), 4000);
   };
 
   const fetchStudents = useCallback(async () => {
@@ -39,11 +39,10 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
     try {
       let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
       if (!isAdmin) query = query.eq('teacher_id', uid);
-      const { data, error } = await query.order('name');
+      const { data, error } = await query.order('is_completed', { ascending: true }).order('name');
       if (error) throw error;
       setStudents(data || []);
     } catch (e) { 
-      console.error(e);
       showFeedback("خطأ في جلب البيانات", "error"); 
     } finally { 
       setLoading(false); 
@@ -52,39 +51,23 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
-  const handleOpenAdd = () => {
-    setIsEditMode(false);
-    setSelectedStudentId(null);
-    setForm({ name: '', address: '', school_name: '', grade: '12', agreed_amount: '', is_hourly: false, price_per_hour: '', phones: [{ number: '', label: 'الطالب' }] });
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEdit = (student: any) => {
-    setIsEditMode(true);
-    setSelectedStudentId(student.id);
-    setForm({ 
-      name: student.name, 
-      address: student.address || '', 
-      school_name: student.school_name || '', 
-      grade: student.grade,
-      agreed_amount: student.agreed_amount?.toString() || '', 
-      is_hourly: student.is_hourly, 
-      price_per_hour: student.price_per_hour?.toString() || '',
-      phones: student.phones || [{ number: '', label: 'الطالب' }]
-    });
-    setIsModalOpen(true);
-    setActiveMenu(null);
+  const handleToggleCompleted = async (studentId: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase.from('students').update({ is_completed: !currentStatus }).eq('id', studentId);
+      if (error) throw error;
+      showFeedback(!currentStatus ? "تم قفل ملف الطالب بنجاح" : "تم إعادة فتح ملف الطالب");
+      fetchStudents();
+      setActiveMenu(null);
+    } catch (err: any) {
+      showFeedback(err.message, 'error');
+    }
   };
 
   const handleSaveStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uid) return showFeedback("خطأ في جلسة الدخول", "error");
-    
     setIsSubmitting(true);
     try {
       const validPhones = form.phones.filter(p => p.number.trim() !== '');
-      if (validPhones.length === 0) throw new Error("يجب إضافة رقم هاتف واحد على الأقل");
-
       const studentData = { 
         name: form.name, 
         address: form.address, 
@@ -99,89 +82,30 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
         semester: semester
       };
 
-      let error;
       if (isEditMode && selectedStudentId) {
-        const { error: err } = await supabase.from('students').update(studentData).eq('id', selectedStudentId);
-        error = err;
+        const { error } = await supabase.from('students').update(studentData).eq('id', selectedStudentId);
+        if (error) throw error;
       } else {
-        const { error: err } = await supabase.from('students').insert([studentData]);
-        error = err;
+        const { error } = await supabase.from('students').insert([studentData]);
+        if (error) throw error;
       }
       
-      if (error) throw error;
-      
-      showFeedback(isEditMode ? 'تم تحديث البيانات بنجاح' : 'تمت إضافة الطالب بنجاح');
+      showFeedback(isEditMode ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح');
       setIsModalOpen(false);
       fetchStudents();
     } catch (err: any) { 
       showFeedback(err.message, 'error'); 
-    } finally {
-      setIsSubmitting(false);
-    }
+    } finally { setIsSubmitting(false); }
   };
 
   const handleDeleteStudent = async (studentId: string) => {
-    if (!confirm('هل أنت متأكد من حذف الطالب؟ سيتم حذف كافة الحصص والمدفوعات المرتبطة به بشكل نهائي.')) return;
-    
-    setLoading(true);
+    if (!confirm('تنبيه: سيتم حذف كافة البيانات المالية والدروس نهائياً. هل أنت متأكد؟')) return;
     try {
       const { error } = await supabase.from('students').delete().eq('id', studentId);
       if (error) throw error;
-      showFeedback('تم حذف الطالب وجميع بياناته بنجاح');
+      showFeedback('تم حذف الطالب نهائياً');
       fetchStudents();
-    } catch (err: any) {
-      showFeedback(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMoveCopy = async () => {
-    if (!selectedStudentId) return;
-    setIsSubmitting(true);
-    try {
-      const student = students.find(s => s.id === selectedStudentId);
-      if (!student) throw new Error("لم يتم العثور على بيانات الطالب");
-
-      if (moveData.action === 'move') {
-        const { error } = await supabase.from('students').update({
-          academic_year: moveData.year,
-          semester: moveData.semester
-        }).eq('id', selectedStudentId);
-        if (error) throw error;
-        showFeedback('تم نقل الطالب بنجاح (مع كافة بياناته السابقة)');
-      } else {
-        const { 
-          id, created_at, 
-          total_lessons, total_hours, total_paid, expected_income, remaining_balance, 
-          ...studentCleanData 
-        } = student;
-
-        const newData = {
-          ...studentCleanData,
-          teacher_id: uid, 
-          academic_year: moveData.year,
-          semester: moveData.semester
-        };
-
-        const { error } = await supabase.from('students').insert([newData]);
-        if (error) throw error;
-        showFeedback('تم نسخ الطالب كملف جديد نظيف (بدون حصص أو دفعات سابقة)');
-      }
-
-      setIsMoveModalOpen(false);
-      fetchStudents();
-    } catch (err: any) {
-      showFeedback(err.message, 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const updatePhone = (index: number, field: string, value: string) => {
-    const newPhones = [...form.phones];
-    newPhones[index][field] = value;
-    setForm({ ...form, phones: newPhones });
+    } catch (err: any) { showFeedback(err.message, 'error'); }
   };
 
   const filteredStudents = useMemo(() => {
@@ -192,297 +116,208 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
     });
   }, [students, searchTerm, selectedGrade]);
 
-  const gradeCounts = useMemo(() => {
-    const counts: any = { '10': 0, '11': 0, '12': 0, 'الكل': students.length };
-    students.forEach(s => {
-      if (counts[s.grade] !== undefined) counts[s.grade]++;
-    });
-    return counts;
-  }, [students]);
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-20 text-right font-['Cairo']">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20 text-right font-['Cairo']">
       {feedback && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all ${feedback.type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'} text-white`}>
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all ${feedback.type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'} text-white animate-in slide-in-from-top-4`}>
           {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
           <span>{feedback.msg}</span>
         </div>
       )}
 
-      {/* Header & Main Actions */}
-      <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
-        <div className="flex items-center gap-4">
-          <div className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100"><Layers size={24} /></div>
+      <div className="bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-xl flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-700"></div>
+        <div className="flex items-center gap-6 relative z-10">
+          <div className="p-6 bg-indigo-600 text-white rounded-[2rem] shadow-2xl shadow-indigo-100"><Layers size={28} /></div>
           <div>
-            <h1 className="text-2xl font-black text-slate-900">مركز الطلاب</h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">إدارة الطلاب والتحكم الشامل</p>
+            <h1 className="text-3xl font-black text-slate-900 leading-tight">سجل الطلاب</h1>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">إدارة شاملة للملفات الأكاديمية</p>
           </div>
         </div>
-        <div className="flex gap-4 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+        <div className="flex gap-4 w-full md:w-auto relative z-10">
+          <div className="relative flex-1 md:w-80">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
             <input 
-              placeholder="ابحث عن اسم الطالب..." 
-              className="w-full pr-10 pl-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold focus:bg-white transition-all outline-none"
+              placeholder="ابحث عن اسم طالب..." 
+              className="w-full pr-12 pl-4 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl font-bold focus:bg-white focus:border-indigo-500 transition-all outline-none text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button onClick={handleOpenAdd} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-black shadow-lg flex items-center gap-2 whitespace-nowrap active:scale-95 transition-all"><Plus size={18}/> إضافة طالب</button>
+          <button onClick={() => { setIsEditMode(false); setIsModalOpen(true); }} className="bg-slate-900 hover:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 active:scale-95 transition-all text-sm"><Plus size={20}/> إضافة طالب</button>
         </div>
       </div>
 
-      {/* Grade Folders View */}
       <div className="flex flex-wrap gap-4">
-        {[
-          { id: 'الكل', label: 'كافة الطلاب' },
-          { id: '10', label: 'الصف العاشر (10)' },
-          { id: '11', label: 'الحادي عشر (11)' },
-          { id: '12', label: 'الثاني عشر (12)' },
-        ].map((folder) => {
-          const isActive = selectedGrade === folder.id;
-          const count = gradeCounts[folder.id];
-          return (
-            <button
-              key={folder.id}
-              onClick={() => setSelectedGrade(folder.id)}
-              className={`flex-1 min-w-[140px] p-4 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-2 ${
-                isActive 
-                  ? 'border-indigo-600 bg-white shadow-xl -translate-y-1' 
-                  : 'border-slate-100 bg-slate-50 hover:border-slate-200 shadow-sm'
-              }`}
-            >
-              <div className={`p-3 rounded-2xl ${isActive ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400 shadow-sm'}`}>
-                {isActive ? <FolderOpen size={20} /> : <Folder size={20} />}
-              </div>
-              <div className="text-center">
-                <p className={`text-[11px] font-black ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>{folder.label}</p>
-                <p className={`text-[9px] font-bold ${isActive ? 'text-indigo-400' : 'text-slate-400'}`}>{count} طالب</p>
-              </div>
-            </button>
-          );
-        })}
+        {['الكل', '10', '11', '12'].map(grade => (
+          <button
+            key={grade}
+            onClick={() => setSelectedGrade(grade)}
+            className={`flex-1 min-w-[140px] p-6 rounded-[2.5rem] border-2 transition-all flex flex-col items-center gap-3 ${
+              selectedGrade === grade ? 'border-indigo-600 bg-white shadow-2xl -translate-y-2' : 'border-slate-50 bg-slate-50/50 hover:border-slate-200'
+            }`}
+          >
+            <div className={`p-4 rounded-[1.5rem] ${selectedGrade === grade ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-300 shadow-sm'}`}>
+              {selectedGrade === grade ? <FolderOpen size={24} /> : <Folder size={24} />}
+            </div>
+            <span className={`text-[11px] font-black uppercase tracking-widest ${selectedGrade === grade ? 'text-indigo-600' : 'text-slate-400'}`}>
+              {grade === 'الكل' ? 'كافة المراحل' : `الصف ${grade}`}
+            </span>
+          </button>
+        ))}
       </div>
 
-      {/* Student Cards List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {loading ? (
-          <div className="col-span-full py-20 flex justify-center"><RefreshCw className="animate-spin text-indigo-600" size={40} /></div>
+          <div className="col-span-full py-20 flex justify-center"><RefreshCw className="animate-spin text-indigo-600" size={48} /></div>
         ) : filteredStudents.map(s => (
-          <div key={s.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 hover:border-indigo-500 transition-all shadow-sm group animate-in zoom-in duration-300 relative">
+          <div key={s.id} className={`bg-white p-8 rounded-[3.5rem] border transition-all duration-500 shadow-sm group hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden ${s.is_completed ? 'opacity-70 border-emerald-100 bg-emerald-50/10' : 'border-slate-100'}`}>
             
-            {/* Context Menu Button */}
-            <div className="absolute top-6 left-6 z-10">
+            {s.is_completed && (
+              <div className="absolute top-0 left-0 bg-emerald-500 text-white px-6 py-2 rounded-br-[2rem] text-[9px] font-black z-10 flex items-center gap-2">
+                <CheckCircle2 size={12}/> تم الإنجاز
+              </div>
+            )}
+
+            <div className="absolute top-8 left-8 z-20">
               <button 
                 onClick={() => setActiveMenu(activeMenu === s.id ? null : s.id)}
-                className={`p-2 rounded-xl transition-all ${activeMenu === s.id ? 'bg-slate-900 text-white shadow-xl' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                className={`p-3 rounded-2xl transition-all ${activeMenu === s.id ? 'bg-slate-900 text-white shadow-xl rotate-90' : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-indigo-600'}`}
               >
-                <Settings2 size={18} />
+                <Settings2 size={20} />
               </button>
               
               {activeMenu === s.id && (
-                <div className="absolute left-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-3 z-[20] overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                  <button onClick={() => handleOpenEdit(s)} className="w-full px-5 py-3 text-right hover:bg-indigo-50 text-slate-700 font-bold text-xs flex items-center justify-between gap-3 group/item transition-colors">
-                    <span className="group-hover/item:text-indigo-600">تعديل البيانات</span>
-                    <Edit3 size={14} className="text-slate-300 group-hover/item:text-indigo-500" />
+                <div className="absolute left-0 mt-3 w-56 bg-white rounded-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.2)] border border-slate-100 py-3 z-[100] overflow-hidden animate-in zoom-in duration-200">
+                  <button onClick={() => { setIsEditMode(true); setSelectedStudentId(s.id); setForm({ ...s, agreed_amount: s.agreed_amount.toString(), price_per_hour: s.price_per_hour.toString() }); setIsModalOpen(true); setActiveMenu(null); }} className="w-full px-6 py-4 text-right hover:bg-indigo-50 text-slate-700 font-black text-xs flex items-center justify-between group/item transition-colors">
+                    <span>تعديل الملف</span>
+                    <Edit3 size={16} className="text-slate-300 group-hover/item:text-indigo-600" />
                   </button>
-                  <button onClick={() => { setSelectedStudentId(s.id); setIsMoveModalOpen(true); setActiveMenu(null); }} className="w-full px-5 py-3 text-right hover:bg-emerald-50 text-slate-700 font-bold text-xs flex items-center justify-between gap-3 group/item transition-colors">
-                    <span className="group-hover/item:text-emerald-600">نقل / نسخ الطالب</span>
-                    <Copy size={14} className="text-slate-300 group-hover/item:text-emerald-500" />
+                  <button onClick={() => handleToggleCompleted(s.id, s.is_completed)} className={`w-full px-6 py-4 text-right font-black text-xs flex items-center justify-between group/item transition-colors ${s.is_completed ? 'hover:bg-amber-50 text-amber-600' : 'hover:bg-emerald-50 text-emerald-600'}`}>
+                    <span>{s.is_completed ? 'إعادة فتح الملف' : 'إتمام وقفل الملف'}</span>
+                    {s.is_completed ? <Unlock size={16} /> : <Lock size={16} />}
                   </button>
-                  <div className="h-px bg-slate-50 my-1 mx-4"></div>
-                  <button onClick={() => handleDeleteStudent(s.id)} className="w-full px-5 py-3 text-right hover:bg-rose-50 text-rose-600 font-bold text-xs flex items-center justify-between gap-3 group/item transition-colors">
-                    <span>حذف الطالب نهائياً</span>
-                    <Trash2 size={14} className="text-rose-300" />
+                  <div className="h-px bg-slate-50 my-2 mx-6"></div>
+                  <button onClick={() => handleDeleteStudent(s.id)} className="w-full px-6 py-4 text-right hover:bg-rose-50 text-rose-600 font-black text-xs flex items-center justify-between group/item transition-colors">
+                    <span>حذف نهائي</span>
+                    <Trash2 size={16} className="text-rose-300" />
                   </button>
                 </div>
               )}
             </div>
 
-            <div className="flex justify-between items-start mb-6 pt-2">
-               <div>
-                 <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors pr-2">{s.name}</h3>
-                 <div className="flex items-center gap-2 mt-2">
-                   <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black">الصف {s.grade}</span>
-                   {s.school_name && <span className="text-slate-400 text-[10px] font-bold flex items-center gap-1"><School size={12}/> {s.school_name}</span>}
-                 </div>
+            <div className="mb-8 mt-4">
+               <h3 className="text-2xl font-black text-slate-900 mb-3">{s.name}</h3>
+               <div className="flex flex-wrap gap-2">
+                 <span className="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black">الصف {s.grade}</span>
+                 {s.school_name && <span className="bg-slate-50 text-slate-400 px-4 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-2"><School size={12}/> {s.school_name}</span>}
                </div>
             </div>
             
-            <div className="space-y-2.5 mb-8">
+            <div className="space-y-3 mb-8">
               {s.phones?.map((p: any, idx: number) => (
-                <div key={idx} className="flex justify-between items-center text-[11px] font-bold text-slate-500 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <span className="text-indigo-600">{p.label}:</span>
-                    <span>{p.number}</span>
-                  </div>
-                  <a href={`https://wa.me/${p.number.replace(/\s/g, '')}`} target="_blank" className="bg-emerald-100 text-emerald-600 p-2 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><MessageCircle size={14}/></a>
+                <div key={idx} className="flex justify-between items-center text-[11px] font-black text-slate-500 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 hover:bg-white transition-colors">
+                  <span className="flex items-center gap-3">
+                    <span className="text-indigo-400 opacity-50"><Phone size={14}/></span>
+                    {p.label}: {p.number}
+                  </span>
+                  <a href={`https://wa.me/${p.number.replace(/\s/g, '')}`} target="_blank" className="text-emerald-500 hover:scale-110 transition-transform"><MessageCircle size={18} fill="currentColor" fillOpacity={0.1}/></a>
                 </div>
               ))}
             </div>
 
-            <div className="pt-5 border-t border-slate-50 flex justify-between items-center">
-              <div className="text-right">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">المتبقي في الذمة</p>
-                <p className={`text-xl font-black ${s.remaining_balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+            <div className="pt-6 border-t border-slate-50 flex justify-between items-end">
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">المبلغ المتبقي</p>
+                <p className={`text-2xl font-black ${s.remaining_balance > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                   ${s.remaining_balance.toLocaleString()}
                 </p>
               </div>
-              <div className="bg-slate-50 px-4 py-2 rounded-2xl text-center">
-                 <p className="text-[9px] font-black text-slate-400 uppercase">نظام المحاسبة</p>
-                 <p className="text-[10px] font-black text-slate-700">{s.is_hourly ? 'بالساعة' : 'اتفاق فصلي'}</p>
+              <div className="text-left">
+                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">نوع المحاسبة</p>
+                 <p className="text-[11px] font-black text-slate-800">{s.is_hourly ? 'خارجي (ساعة)' : 'اتفاق فصلي'}</p>
               </div>
             </div>
           </div>
         ))}
-        {!loading && filteredStudents.length === 0 && (
-          <div className="col-span-full py-24 text-center bg-white rounded-[3.5rem] border-4 border-dashed border-slate-50">
-            <Users size={64} className="mx-auto text-slate-100 mb-6" />
-            <p className="text-slate-400 font-black text-xl">لا يوجد طلاب في هذا المجلد حالياً.</p>
-            <button onClick={handleOpenAdd} className="mt-4 text-indigo-600 font-bold hover:underline">أضف طالبك الأول الآن</button>
-          </div>
-        )}
       </div>
 
-      {/* Move/Copy Modal */}
-      {isMoveModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md p-10 rounded-[3.5rem] shadow-2xl relative animate-in zoom-in duration-300 text-right">
-            <button onClick={() => setIsMoveModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500"><X size={28}/></button>
-            <h2 className="text-2xl font-black mb-2 text-slate-900">نقل / نسخ الطالب</h2>
-            <p className="text-slate-400 font-bold text-xs mb-8 uppercase tracking-widest">اختر السنة والفصل الدراسي الجديد</p>
-            
-            <div className="space-y-6">
-              <div className="flex gap-2 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
-                <button onClick={() => setMoveData({...moveData, action: 'move'})} className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${moveData.action === 'move' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>نقل (Move)</button>
-                <button onClick={() => setMoveData({...moveData, action: 'copy'})} className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${moveData.action === 'copy' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>نسخ (Copy)</button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">السنة الدراسية</label>
-                  <select className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:bg-white focus:border-indigo-500 appearance-none" value={moveData.year} onChange={e => setMoveData({...moveData, year: e.target.value})}>
-                    <option value="2023-2024">2023-2024</option>
-                    <option value="2024-2025">2024-2025</option>
-                    <option value="2025-2026">2025-2026</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">الفصل الدراسي</label>
-                  <select className="w-full p-4 bg-slate-50 border rounded-2xl font-bold outline-none focus:bg-white focus:border-indigo-500 appearance-none" value={moveData.semester} onChange={e => setMoveData({...moveData, semester: e.target.value})}>
-                    <option value="1">الفصل الأول</option>
-                    <option value="2">الفصل الثاني</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
-                <p className="text-[10px] font-black text-amber-600 leading-relaxed italic">
-                  {moveData.action === 'move' 
-                    ? '* تنبيه: النقل يحول الطالب الحالي لفترة أخرى مع الاحتفاظ بكامل سجله.' 
-                    : '* تنبيه: النسخ ينشئ ملفاً جديداً للطالب في الفترة المختارة بدون أي دروس أو دفعات سابقة.'}
-                </p>
-              </div>
-
-              <button 
-                onClick={handleMoveCopy}
-                disabled={isSubmitting}
-                className="w-full py-5 bg-slate-900 text-white font-black rounded-3xl shadow-xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"
-              >
-                {isSubmitting ? <RefreshCw className="animate-spin" size={20} /> : <Save size={20} />}
-                تأكيد العملية الآن
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add/Edit Student Modal */}
+      {/* Add/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <form onSubmit={handleSaveStudent} className="bg-white w-full max-w-xl p-10 rounded-[3.5rem] shadow-2xl relative animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] text-right">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500 transition-colors"><X size={28}/></button>
-            <h2 className="text-2xl font-black mb-8 text-slate-900 flex items-center gap-4">
-              <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-100">
-                {isEditMode ? <Edit3 size={24}/> : <Plus size={24}/>}
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
+          <form onSubmit={handleSaveStudent} className="bg-white w-full max-w-xl p-12 rounded-[4rem] shadow-2xl relative animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] text-right border border-white/20">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-12 left-12 text-slate-300 hover:text-rose-500 transition-all hover:rotate-90"><X size={32}/></button>
+            <h2 className="text-3xl font-black mb-10 text-slate-900 flex items-center gap-5">
+              <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-2xl shadow-indigo-100">
+                {isEditMode ? <Edit3 size={28}/> : <Plus size={28}/>}
               </div>
-              {isEditMode ? "تعديل بيانات الطالب" : "تسجيل طالب جديد"}
+              {isEditMode ? "تعديل الملف" : "تسجيل طالب جديد"}
             </h2>
             
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الاسم الكامل</label>
-                  <input required placeholder="محمد أحمد..." className="w-full p-5 bg-slate-50 border rounded-2xl font-bold outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-[0.2em]">الاسم بالكامل</label>
+                  <input required placeholder="الاسم ثلاثي..." className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الصف الدراسي</label>
-                  <select className="w-full p-5 bg-slate-50 border rounded-2xl font-bold appearance-none outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
-                    <option value="10">الصف العاشر (10)</option>
-                    <option value="11">الصف الحادي عشر (11)</option>
-                    <option value="12">الصف الثاني عشر (12)</option>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-[0.2em]">الصف الدراسي</label>
+                  <select className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black appearance-none outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
+                    <option value="10">العاشر</option>
+                    <option value="11">الحادي عشر</option>
+                    <option value="12">الثاني عشر</option>
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المدرسة</label>
-                  <input placeholder="المدرسة.." className="w-full p-5 bg-slate-50 border rounded-2xl font-bold outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.school_name} onChange={e => setForm({...form, school_name: e.target.value})} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">العنوان أو السكن</label>
-                  <input placeholder="المنطقة - الشارع" className="w-full p-5 bg-slate-50 border rounded-2xl font-bold outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
-                </div>
-              </div>
-
-              <div className="space-y-4 bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 shadow-inner">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-[11px] font-black text-indigo-900 flex items-center gap-2"><Phone size={16}/> أرقام هواتف التواصل</label>
-                  <button type="button" onClick={() => setForm({...form, phones: [...form.phones, {number: '', label: 'الطالب'}]})} className="text-indigo-600 font-black text-[10px] hover:bg-white px-3 py-1.5 rounded-full shadow-sm transition-all">+ إضافة هاتف آخر</button>
+              <div className="space-y-5 bg-indigo-50/50 p-8 rounded-[3rem] border border-indigo-100">
+                <div className="flex justify-between items-center mb-4">
+                  <label className="text-xs font-black text-indigo-900 flex items-center gap-3"><Phone size={18}/> هواتف التواصل</label>
+                  <button type="button" onClick={() => setForm({...form, phones: [...form.phones, {number: '', label: 'الطالب'}]})} className="bg-white text-indigo-600 font-black text-[10px] px-4 py-2 rounded-2xl shadow-sm hover:bg-indigo-600 hover:text-white transition-all">+ إضافة</button>
                 </div>
                 {form.phones.map((p, idx) => (
-                  <div key={idx} className="flex gap-2 animate-in slide-in-from-right-2">
-                    <select className="w-32 p-4 bg-white border rounded-2xl font-bold text-xs outline-none shadow-sm" value={p.label} onChange={e => updatePhone(idx, 'label', e.target.value)}>
+                  <div key={idx} className="flex gap-3 animate-in slide-in-from-right-2">
+                    <select className="w-32 p-4 bg-white border-2 border-white rounded-2xl font-black text-xs outline-none focus:border-indigo-500 shadow-sm" value={p.label} onChange={e => { const n = [...form.phones]; n[idx].label = e.target.value; setForm({...form, phones: n}); }}>
                       <option value="الطالب">الطالب</option>
                       <option value="الأب">الأب</option>
                       <option value="الأم">الأم</option>
                     </select>
-                    <input required placeholder="رقم الموبايل" className="flex-1 p-4 bg-white border rounded-2xl font-bold text-xs text-left outline-none shadow-sm" value={p.number} onChange={e => updatePhone(idx, 'number', e.target.value)} />
-                    {idx > 0 && <button type="button" onClick={() => setForm({...form, phones: form.phones.filter((_, i) => i !== idx)})} className="text-rose-500 p-3 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={18}/></button>}
+                    <input required placeholder="رقم الموبايل" className="flex-1 p-4 bg-white border-2 border-white rounded-2xl font-black text-xs text-left outline-none focus:border-indigo-500 shadow-sm" value={p.number} onChange={e => { const n = [...form.phones]; n[idx].number = e.target.value; setForm({...form, phones: n}); }} />
+                    {idx > 0 && <button type="button" onClick={() => setForm({...form, phones: form.phones.filter((_, i) => i !== idx)})} className="text-rose-400 p-3 hover:bg-rose-50 rounded-2xl transition-all"><Trash2 size={20}/></button>}
                   </div>
                 ))}
               </div>
 
-              <div className="flex items-center gap-4 p-5 bg-indigo-50 rounded-[2rem] border border-indigo-100 group cursor-pointer" onClick={() => setForm({...form, is_hourly: !form.is_hourly})}>
-                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${form.is_hourly ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200'}`}>
-                  {form.is_hourly && <CheckCircle size={14} />}
-                </div>
-                <label className="text-sm font-black text-indigo-700 cursor-pointer select-none">نظام المحاسبة بالساعة (نظام خارجي)</label>
-              </div>
-
-              <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group">
-                <div className="absolute top-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-10 -mt-10 transition-transform group-hover:scale-150 duration-700"></div>
-                <div className="relative z-10 space-y-2">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">{form.is_hourly ? 'سعر الساعة الدراسية' : 'المبلغ المتفق عليه للفصل'}</label>
-                   <div className="relative">
-                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 font-black text-3xl group-focus-within:text-indigo-500/50 transition-colors">$</span>
-                     <input 
-                      required 
-                      type="number" 
-                      placeholder="0.00" 
-                      className="w-full p-6 bg-white/5 border-2 border-white/10 rounded-[2rem] font-black text-4xl text-white outline-none focus:border-indigo-500 transition-all text-center placeholder:text-white/10" 
-                      value={form.is_hourly ? form.price_per_hour : form.agreed_amount} 
-                      onChange={e => setForm({...form, [form.is_hourly ? 'price_per_hour' : 'agreed_amount']: e.target.value})} 
-                     />
-                   </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+                 <div className="absolute top-0 left-0 w-32 h-32 bg-indigo-500/10 rounded-full -ml-16 -mt-16 blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700"></div>
+                 <div className="relative z-10 space-y-4">
+                    <div className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl cursor-pointer hover:bg-white/10 transition-all" onClick={() => setForm({...form, is_hourly: !form.is_hourly})}>
+                       <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${form.is_hourly ? 'bg-indigo-500 border-indigo-500' : 'border-white/20'}`}>
+                         {form.is_hourly && <CheckCircle size={14}/>}
+                       </div>
+                       <span className="text-xs font-black">نظام خارجي (بالساعة)</span>
+                    </div>
+                 </div>
+                 <div className="relative z-10 text-center">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{form.is_hourly ? 'سعر الساعة الدراسية' : 'إجمالي الاتفاق الفصلي'}</p>
+                    <div className="flex items-center justify-center gap-2">
+                       <span className="text-indigo-400 font-black text-3xl">$</span>
+                       <input 
+                         required 
+                         type="number" 
+                         className="bg-transparent text-5xl font-black text-white w-full outline-none text-center placeholder:text-white/10" 
+                         placeholder="0"
+                         value={form.is_hourly ? form.price_per_hour : form.agreed_amount}
+                         onChange={e => setForm({...form, [form.is_hourly ? 'price_per_hour' : 'agreed_amount']: e.target.value})}
+                       />
+                    </div>
+                 </div>
               </div>
             </div>
 
-            <button disabled={isSubmitting} type="submit" className="w-full py-6 bg-indigo-600 text-white font-black rounded-[2.5rem] mt-10 shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 active:scale-95 disabled:opacity-50 text-lg">
-              {isSubmitting ? <RefreshCw className="animate-spin" size={24} /> : (isEditMode ? <Save size={24} /> : <CheckCircle size={24} />)}
-              {isSubmitting ? "جاري الحفظ..." : (isEditMode ? "حفظ التغييرات" : "تأكيد تسجيل الطالب")}
+            <button disabled={isSubmitting} type="submit" className="w-full py-6 bg-indigo-600 text-white font-black rounded-[2.5rem] mt-12 shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 active:scale-95 disabled:opacity-50 text-xl">
+              {isSubmitting ? <RefreshCw className="animate-spin" size={28} /> : (isEditMode ? <Save size={28} /> : <CheckCircle size={28} />)}
+              {isSubmitting ? "جاري الحفظ..." : (isEditMode ? "تحديث البيانات" : "تأكيد تسجيل الطالب")}
             </button>
           </form>
         </div>
