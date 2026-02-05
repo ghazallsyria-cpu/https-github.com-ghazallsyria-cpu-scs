@@ -44,7 +44,7 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
 
   const fetchCodes = useCallback(async () => {
     try {
-      // نقوم بجلب البيانات مع التأكد من جلب الاسم لمن استخدم الكود
+      // استعلام بسيط ومباشر لضمان جلب البيانات حتى لو فشل الربط مع الجداول الأخرى
       const { data, error } = await supabase
         .from('activation_codes')
         .select(`
@@ -53,15 +53,19 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
           is_used, 
           created_at,
           used_by,
-          profiles:used_by (full_name)
+          profiles (full_name)
         `)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      setActivationCodes(data || []);
+      if (error) {
+        // محاولة جلب الأكواد بدون JOIN في حال الفشل
+        const { data: simpleData } = await supabase.from('activation_codes').select('*').order('created_at', { ascending: false });
+        setActivationCodes(simpleData || []);
+      } else {
+        setActivationCodes(data || []);
+      }
     } catch (err: any) {
-      console.error("Error fetching codes:", err);
-      // لا نعطل الواجهة ولكن نسجل الخطأ
+      console.error("Critical error fetching codes:", err);
     }
   }, []);
 
@@ -114,23 +118,25 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
   const handleGenerateCode = async () => {
     if (isGenerating) return;
     setIsGenerating(true);
-    // توليد كود عشوائي مكون من 8 أرقام وحروف
-    const newCode = Array.from({ length: 8 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
+    
+    // توليد كود سهل القراءة للمدير والمعلم
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const newCode = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
     
     try {
-      const { error } = await supabase.from('activation_codes').insert([{ 
+      const { data, error } = await supabase.from('activation_codes').insert([{ 
         code: newCode, 
         is_used: false 
-      }]);
+      }]).select();
       
       if (error) throw error;
       
-      showFeedback("تم توليد الكود بنجاح: " + newCode);
-      // تحديث القائمة فوراً بعد الإضافة لضمان الظهور
+      showFeedback("تم التوليد بنجاح: " + newCode);
+      // تحديث فوري للقائمة
       await fetchCodes();
     } catch (err: any) {
       console.error("Code generation error:", err);
-      showFeedback("فشل حفظ الكود في السجل. يرجى مراجعة صلاحيات SQL.", 'error');
+      showFeedback("فشل الحفظ. تأكد من صلاحيات SQL.", 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -216,12 +222,6 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
               </div>
             </div>
           ))}
-          {teachers.length === 0 && !loading && (
-             <div className="col-span-full py-20 text-center">
-               <UserCircle size={64} className="mx-auto text-slate-100 mb-4" />
-               <p className="text-slate-400 font-bold italic">لا توجد طلبات انضمام أو معلمين حالياً.</p>
-             </div>
-          )}
         </div>
       ) : (
         <div className="space-y-8 animate-in slide-in-from-bottom duration-700">
@@ -247,20 +247,20 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {activationCodes.map(code => (
-                    <tr key={code.id} className="hover:bg-slate-50/50 transition-all group">
-                      <td className="p-10 font-black text-2xl tracking-[0.3em] text-slate-900 group-hover:text-indigo-600">{code.code}</td>
+                  {activationCodes.map(item => (
+                    <tr key={item.id} className="hover:bg-slate-50/50 transition-all group">
+                      <td className="p-10 font-black text-2xl tracking-[0.3em] text-slate-900 group-hover:text-indigo-600">{item.code}</td>
                       <td className="p-10">
-                        <span className={`px-5 py-1.5 rounded-full text-[10px] font-black tracking-widest ${code.is_used ? 'bg-slate-100 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
-                          {code.is_used ? 'مستخدَم مسبقاً' : 'جاهز للتفعيل'}
+                        <span className={`px-5 py-1.5 rounded-full text-[10px] font-black tracking-widest ${item.is_used ? 'bg-slate-100 text-slate-400' : 'bg-emerald-100 text-emerald-600'}`}>
+                          {item.is_used ? 'مستخدَم مسبقاً' : 'جاهز للتفعيل'}
                         </span>
                       </td>
                       <td className="p-10 font-black text-slate-600 text-sm">
-                        {code.profiles?.full_name || '—'}
+                        {item.profiles?.full_name || '—'}
                       </td>
                       <td className="p-10 text-center">
-                        <button onClick={() => copyToClipboard(code.code)} className={`p-5 rounded-[1.5rem] transition-all shadow-xl ${copiedCode === code.code ? 'bg-emerald-600 text-white' : 'bg-white text-indigo-600 border border-slate-100 hover:border-indigo-600'}`}>
-                          {copiedCode === code.code ? <Check size={24}/> : <Copy size={24}/>}
+                        <button onClick={() => copyToClipboard(item.code)} className={`p-5 rounded-[1.5rem] transition-all shadow-xl ${copiedCode === item.code ? 'bg-emerald-600 text-white' : 'bg-white text-indigo-600 border border-slate-100 hover:border-indigo-600'}`}>
+                          {copiedCode === item.code ? <Check size={24}/> : <Copy size={24}/>}
                         </button>
                       </td>
                     </tr>
