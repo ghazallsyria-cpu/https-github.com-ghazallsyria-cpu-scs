@@ -2,9 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
-  Plus, Trash2, CheckCircle, X, AlertCircle, Users, School, MessageCircle, 
-  Phone, MapPin, Search, Folder, FolderOpen, Layers, RefreshCw, MoreVertical, 
-  Edit3, Copy, MoveRight, Settings2, Save, Lock, Unlock, CheckCircle2, ChevronLeft, ChevronRight
+  Plus, Trash2, CheckCircle, X, AlertCircle, Users, MessageCircle, 
+  Phone, Search, Folder, FolderOpen, RefreshCw, ChevronRight, Save
 } from 'lucide-react';
 
 const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, role: any, uid: string, year: string, semester: string }) => {
@@ -17,7 +16,6 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const navigate = useNavigate();
   
   const [form, setForm] = useState({ 
@@ -36,11 +34,12 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
     try {
       let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
       if (role !== 'admin') query = query.eq('teacher_id', uid);
+      
       const { data, error } = await query.order('is_completed', { ascending: true }).order('name');
       if (error) throw error;
       setStudents(data || []);
     } catch (e: any) { 
-      showFeedback(`فشل الاتصال بالقاعدة الجديدة: ${e.message}`, "error");
+      showFeedback(`فشل تحميل القائمة: ${e.message}`, "error");
     } finally { setLoading(false); }
   }, [uid, role, year, semester]);
 
@@ -50,21 +49,27 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      // Ensure the teacher_id is always present. For admin, it uses their current auth ID.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("يجب تسجيل الدخول أولاً");
+
       const studentData = { 
         name: form.name, address: form.address, school_name: form.school_name, grade: form.grade,
         phones: form.phones.filter(p => p.number),
         agreed_amount: form.is_hourly ? 0 : (parseFloat(form.agreed_amount) || 0),
         is_hourly: form.is_hourly, price_per_hour: form.is_hourly ? (parseFloat(form.price_per_hour) || 0) : 0,
-        teacher_id: uid, academic_year: year, semester: semester
+        teacher_id: uid || user.id, academic_year: year, semester: semester
       };
 
       if (isEditMode && selectedStudentId) {
-        await supabase.from('students').update(studentData).eq('id', selectedStudentId);
+        const { error } = await supabase.from('students').update(studentData).eq('id', selectedStudentId);
+        if (error) throw error;
       } else {
-        await supabase.from('students').insert([studentData]);
+        const { error } = await supabase.from('students').insert([studentData]);
+        if (error) throw error;
       }
       
-      showFeedback(isEditMode ? 'تم تحديث ملف الطالب' : 'تمت إضافة الطالب بنجاح');
+      showFeedback(isEditMode ? 'تم تحديث ملف الطالب بنجاح' : 'تمت إضافة الطالب بنجاح');
       setIsModalOpen(false);
       fetchStudents();
     } catch (err: any) { 
@@ -72,13 +77,16 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
     } finally { setIsSubmitting(false); }
   };
 
-  const handleDeleteStudent = async (studentId: string) => {
-    if (!confirm('هل أنت متأكد؟ سيتم مسح كافة حصص ومدفوعات الطالب نهائياً.')) return;
+  const handleDeleteStudent = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف الطالب نهائياً؟')) return;
     try {
-      await supabase.from('students').delete().eq('id', studentId);
-      showFeedback('تم حذف السجل');
+      const { error } = await supabase.from('students').delete().eq('id', id);
+      if (error) throw error;
+      showFeedback('تم حذف الطالب بنجاح');
       fetchStudents();
-    } catch (err: any) { showFeedback(err.message, 'error'); }
+    } catch (err: any) {
+      showFeedback('فشل حذف الطالب', 'error');
+    }
   };
 
   const filteredStudents = useMemo(() => {
@@ -90,40 +98,40 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
   }, [students, searchTerm, selectedGrade]);
 
   return (
-    <div className="space-y-6 lg:space-y-10 animate-in fade-in duration-700 text-right font-['Cairo'] pb-20">
+    <div className="space-y-8 animate-in fade-in duration-700 text-right font-['Cairo'] pb-24">
       
-      {/* Search & Actions Bar */}
-      <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
-        <div className="flex items-center gap-6">
-           <div className="bg-indigo-600 p-5 rounded-3xl text-white shadow-xl shadow-indigo-100"><Users size={28}/></div>
+      {/* Search & Actions Area */}
+      <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.02)] flex flex-col md:flex-row justify-between items-center gap-8">
+        <div className="flex items-center gap-8">
+           <div className="bg-indigo-600 p-6 rounded-[2rem] text-white shadow-2xl shadow-indigo-100 scale-110"><Users size={32}/></div>
            <div>
               <h1 className="text-3xl font-black text-slate-900 leading-tight">سجل الطلاب</h1>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">إدارة المحتوى التعليمي - النسخة V15</p>
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-2">إدارة طلاب المنصة المركزية</p>
            </div>
         </div>
         <div className="flex gap-4 w-full md:w-auto">
-          <div className="relative flex-1 md:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-            <input placeholder="ابحث عن اسم طالب..." className="w-full pr-12 pl-4 py-4 bg-slate-50 border-none rounded-2xl font-bold focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all outline-none text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <div className="relative flex-1 md:w-96">
+            <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={22} />
+            <input placeholder="ابحث عن طالب..." className="w-full pr-16 pl-6 py-5 bg-slate-50 border-none rounded-3xl font-black focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all outline-none text-base" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
-          <button onClick={() => { setIsEditMode(false); setIsModalOpen(true); }} className="bg-slate-900 hover:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 active:scale-95 transition-all text-sm"><Plus size={18}/> إضافة طالب</button>
+          <button onClick={() => { setIsEditMode(false); setIsModalOpen(true); }} className="bg-slate-900 hover:bg-indigo-600 text-white px-10 py-5 rounded-3xl font-black shadow-2xl transition-all flex items-center gap-4 active:scale-95 text-base"><Plus size={22}/> إضافة طالب</button>
         </div>
       </div>
 
-      {/* Modern Folders Filter */}
-      <div className="flex flex-wrap gap-4">
+      {/* Grade Bento Filters */}
+      <div className="flex flex-wrap gap-6">
         {['الكل', '10', '11', '12'].map(grade => (
           <button
             key={grade}
             onClick={() => setSelectedGrade(grade)}
-            className={`flex-1 min-w-[120px] p-6 rounded-[2.5rem] border-2 transition-all flex flex-col items-center gap-3 ${
-              selectedGrade === grade ? 'border-indigo-600 bg-white shadow-xl -translate-y-1' : 'border-slate-50 bg-slate-50/50 hover:border-slate-200 text-slate-400'
+            className={`flex-1 min-w-[150px] p-8 rounded-[3rem] border-2 transition-all duration-500 flex flex-col items-center gap-4 ${
+              selectedGrade === grade ? 'border-indigo-600 bg-white shadow-2xl -translate-y-2' : 'border-slate-50 bg-slate-50/50 hover:border-slate-200 text-slate-400'
             }`}
           >
-            <div className={`p-4 rounded-2xl ${selectedGrade === grade ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white shadow-sm'}`}>
-              {selectedGrade === grade ? <FolderOpen size={24} /> : <Folder size={24} />}
+            <div className={`p-5 rounded-3xl transition-all ${selectedGrade === grade ? 'bg-indigo-600 text-white shadow-xl' : 'bg-white shadow-sm'}`}>
+              {selectedGrade === grade ? <FolderOpen size={30} /> : <Folder size={30} />}
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest">
+            <span className="text-[12px] font-black uppercase tracking-[0.2em]">
               {grade === 'الكل' ? 'كافة الطلاب' : `الصف ${grade}`}
             </span>
           </button>
@@ -131,69 +139,68 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
       </div>
 
       {/* Students Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
         {loading ? (
-          <div className="col-span-full py-20 flex justify-center"><RefreshCw className="animate-spin text-indigo-600" size={40} /></div>
+          <div className="col-span-full py-24 flex justify-center"><RefreshCw className="animate-spin text-indigo-600" size={56} /></div>
         ) : filteredStudents.map(s => (
           <div 
             key={s.id} 
-            onClick={() => navigate('/lessons', { state: { studentToOpen: s } })}
-            className={`cursor-pointer bg-white p-8 rounded-[3.5rem] border-2 transition-all duration-500 shadow-sm hover:shadow-2xl hover:-translate-y-1 group relative overflow-hidden ${s.is_completed ? 'opacity-60 border-slate-100' : 'border-white hover:border-indigo-500'}`}
+            className={`cursor-pointer bg-white p-10 rounded-[4.5rem] border-2 transition-all duration-700 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.03)] hover:shadow-2xl hover:-translate-y-3 group relative overflow-hidden ${s.is_completed ? 'opacity-60 grayscale' : 'border-white hover:border-indigo-500'}`}
           >
-            {s.is_completed && <div className="absolute top-0 left-0 bg-slate-900 text-white px-6 py-2 rounded-br-3xl text-[9px] font-black">أرشيف مكتمل</div>}
-            
-            <div className="mb-8">
-               <h3 className="text-2xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors mb-2">{s.name}</h3>
-               <div className="flex gap-2">
-                 <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[10px] font-black tracking-widest">الصف {s.grade}</span>
-                 {s.school_name && <span className="bg-slate-50 text-slate-400 px-4 py-1 rounded-full text-[10px] font-bold truncate max-w-[150px]">{s.school_name}</span>}
-               </div>
+            <div className="flex justify-between items-start mb-8">
+              <div onClick={() => navigate('/lessons', { state: { studentToOpen: s } })}>
+                 <h3 className="text-3xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors mb-2 leading-tight">{s.name}</h3>
+                 <span className="bg-indigo-50 text-indigo-600 px-6 py-1.5 rounded-full text-[11px] font-black tracking-widest">الصف {s.grade}</span>
+              </div>
+              <div className="flex gap-2">
+                 <button onClick={(e) => { e.stopPropagation(); setSelectedStudentId(s.id); setForm({ ...s, agreed_amount: s.agreed_amount.toString(), price_per_hour: s.price_per_hour.toString() }); setIsEditMode(true); setIsModalOpen(true); }} className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all"><Plus size={18}/></button>
+                 <button onClick={(e) => { e.stopPropagation(); handleDeleteStudent(s.id); }} className="p-3 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-600 hover:text-white transition-all"><Trash2 size={18}/></button>
+              </div>
             </div>
 
-            <div className="space-y-3 mb-10">
+            <div className="space-y-4 mb-10" onClick={() => navigate('/lessons', { state: { studentToOpen: s } })}>
                {s.phones?.map((p: any, i: number) => (
-                 <div key={i} className="flex justify-between items-center text-[10px] font-black text-slate-500 bg-slate-50/50 p-4 rounded-2xl hover:bg-indigo-50 transition-colors">
+                 <div key={i} className="flex justify-between items-center text-[12px] font-black text-slate-500 bg-slate-50/50 p-5 rounded-3xl">
                     <span>{p.label}: {p.number}</span>
-                    <MessageCircle size={16} className="text-emerald-500" />
+                    <Phone size={16} className="text-indigo-400" />
                  </div>
                ))}
             </div>
 
-            <div className="pt-8 border-t border-slate-100 flex justify-between items-end">
+            <div className="pt-8 border-t border-slate-50 flex justify-between items-end" onClick={() => navigate('/lessons', { state: { studentToOpen: s } })}>
                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">المتبقي للتحصيل</p>
-                  <p className={`text-2xl font-black ${s.remaining_balance > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                  <p className="text-[10px] font-black text-slate-400 uppercase mb-1">المتبقي</p>
+                  <p className={`text-3xl font-black tracking-tighter ${s.remaining_balance > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                     ${s.remaining_balance.toLocaleString()}
                   </p>
                </div>
-               <div className="bg-slate-900 text-white p-3 rounded-2xl group-hover:bg-indigo-600 transition-colors">
-                 {/* Fix: 'ChevronRight' added to imports */}
-                 <ChevronRight size={18} className="rotate-180" />
+               <div className="bg-slate-900 text-white p-5 rounded-[2rem] group-hover:bg-indigo-600 transition-all shadow-xl">
+                 <ChevronRight size={22} className="rotate-180" />
                </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Modal - Add/Edit */}
+      {/* Student Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
-          <form onSubmit={handleSaveStudent} className="bg-white w-full max-w-xl p-12 rounded-[4rem] shadow-2xl relative animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto no-scrollbar border border-white/20">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500 transition-transform hover:rotate-90"><X size={32}/></button>
-            <h2 className="text-3xl font-black mb-10 text-slate-900 flex items-center gap-4">
-              <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-lg"><Plus size={24}/></div>
-              {isEditMode ? 'تعديل البيانات' : 'تسجيل طالب جديد'}
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-3xl z-[200] flex items-center justify-center p-6 text-right">
+          <form onSubmit={handleSaveStudent} className="bg-white w-full max-w-2xl p-14 lg:p-20 rounded-[5rem] shadow-2xl relative animate-in zoom-in duration-500 max-h-[90vh] overflow-y-auto no-scrollbar border border-white/20">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-12 left-12 text-slate-300 hover:text-rose-500 transition-all hover:rotate-90"><X size={40}/></button>
+            <h2 className="text-4xl font-black mb-14 text-slate-900 flex items-center gap-6">
+              <div className="bg-indigo-600 p-4 rounded-3xl text-white shadow-2xl shadow-indigo-100"><Plus size={32}/></div>
+              {isEditMode ? 'تعديل السجل' : 'إضافة طالب جديد'}
             </h2>
             
-            <div className="space-y-8">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">الاسم الكامل</label>
-                    <input required placeholder="الاسم ثلاثي..." className="w-full p-5 bg-slate-50 border-none rounded-3xl font-black outline-none focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+            <div className="space-y-10">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <label className="text-[12px] font-black text-slate-400 mr-6 uppercase tracking-widest">اسم الطالب</label>
+                    <input required placeholder="الاسم الكامل..." className="w-full p-6 bg-slate-50 border-none rounded-[2.5rem] font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all text-base" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">الصف</label>
-                    <select className="w-full p-5 bg-slate-50 border-none rounded-3xl font-black outline-none focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all appearance-none" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
+                  <div className="space-y-3">
+                    <label className="text-[12px] font-black text-slate-400 mr-6 uppercase tracking-widest">الصف</label>
+                    <select className="w-full p-6 bg-slate-50 border-none rounded-[2.5rem] font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all appearance-none cursor-pointer" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
                        <option value="10">الصف العاشر</option>
                        <option value="11">الحادي عشر</option>
                        <option value="12">الثاني عشر</option>
@@ -201,14 +208,14 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
                   </div>
                </div>
                
-               <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">أرقام التواصل</label>
+               <div className="space-y-4">
+                  <label className="text-[12px] font-black text-slate-400 mr-6 uppercase tracking-widest">أرقام التواصل</label>
                   {form.phones.map((phone, index) => (
-                    <div key={index} className="flex gap-2">
-                       <input placeholder="رقم الموبايل" className="flex-1 p-5 bg-slate-50 border-none rounded-3xl font-black outline-none focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all text-left" value={phone.number} onChange={e => {
+                    <div key={index} className="flex gap-4">
+                       <input placeholder="الرقم..." className="flex-1 p-6 bg-slate-50 border-none rounded-[2.5rem] font-black outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all text-left" value={phone.number} onChange={e => {
                          const n = [...form.phones]; n[index].number = e.target.value; setForm({...form, phones: n});
                        }} />
-                       <select className="p-5 bg-slate-50 border-none rounded-3xl font-black outline-none focus:bg-white transition-all text-xs" value={phone.label} onChange={e => {
+                       <select className="p-6 bg-slate-50 border-none rounded-[2.5rem] font-black text-[12px]" value={phone.label} onChange={e => {
                          const n = [...form.phones]; n[index].label = e.target.value; setForm({...form, phones: n});
                        }}>
                           <option>الطالب</option><option>الأب</option><option>الأم</option>
@@ -217,22 +224,22 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
                   ))}
                </div>
 
-               <div className="p-8 bg-slate-50 rounded-[3rem] space-y-4 border border-slate-100 shadow-inner">
-                  <div className="flex items-center gap-4">
-                    <input type="checkbox" id="hourly" checked={form.is_hourly} onChange={e => setForm({...form, is_hourly: e.target.checked})} className="w-5 h-5 accent-indigo-600 rounded-lg" />
-                    <label htmlFor="hourly" className="font-black text-slate-700">نظام المحاسبة بالساعة (خارجي)</label>
+               <div className="p-10 bg-slate-50 rounded-[4rem] space-y-6 border border-slate-100 shadow-inner">
+                  <div className="flex items-center gap-6">
+                    <input type="checkbox" id="hourly" checked={form.is_hourly} onChange={e => setForm({...form, is_hourly: e.target.checked})} className="w-7 h-7 accent-indigo-600 rounded-xl cursor-pointer" />
+                    <label htmlFor="hourly" className="font-black text-slate-700 text-lg cursor-pointer select-none">نظام المحاسبة بالساعة</label>
                   </div>
                   {form.is_hourly ? (
-                    <input type="number" placeholder="سعر الساعة..." className="w-full p-5 bg-white border-none rounded-3xl font-black outline-none shadow-sm" value={form.price_per_hour} onChange={e => setForm({...form, price_per_hour: e.target.value})} />
+                    <input type="number" placeholder="سعر الساعة..." className="w-full p-6 bg-white border-none rounded-[2.5rem] font-black outline-none shadow-sm text-center text-3xl text-indigo-600" value={form.price_per_hour} onChange={e => setForm({...form, price_per_hour: e.target.value})} />
                   ) : (
-                    <input type="number" placeholder="المبلغ الإجمالي المتفق عليه..." className="w-full p-5 bg-white border-none rounded-3xl font-black outline-none shadow-sm" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} />
+                    <input type="number" placeholder="المبلغ الكلي المتفق عليه..." className="w-full p-6 bg-white border-none rounded-[2.5rem] font-black outline-none shadow-sm text-center text-3xl text-slate-900" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} />
                   )}
                </div>
             </div>
 
-            <button disabled={isSubmitting} className="w-full py-6 bg-indigo-600 text-white font-black rounded-[2.5rem] mt-10 shadow-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50">
-              {isSubmitting ? <RefreshCw className="animate-spin" /> : <Save size={20}/>}
-              {isEditMode ? 'حفظ التغييرات' : 'تأكيد التسجيل'}
+            <button disabled={isSubmitting} className="w-full py-8 bg-indigo-600 text-white font-black rounded-[3rem] mt-12 shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-6 active:scale-95 disabled:opacity-50 text-xl group">
+              {isSubmitting ? <RefreshCw className="animate-spin" /> : <Save size={28} className="group-hover:scale-110 transition-transform"/>}
+              {isEditMode ? 'حفظ التعديلات' : 'تأكيد التسجيل'}
             </button>
           </form>
         </div>

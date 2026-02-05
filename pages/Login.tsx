@@ -47,7 +47,7 @@ const Login = () => {
             is_approved: isAdminNumber ? true : false 
           }]);
           setIsSignUp(false);
-          alert(isAdminNumber ? "تم إنشاء حساب الإدارة بنجاح" : "تم إرسال طلب الانضمام، بانتظار موافقة الإدارة.");
+          alert(isAdminNumber ? "تم إنشاء الحساب الإداري بنجاح" : "تم إرسال طلب الانضمام، بانتظار موافقة الإدارة.");
         }
       } else {
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -70,69 +70,69 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 font-['Cairo'] text-right" dir="rtl">
       
-      {/* Visual Background Elements */}
+      {/* Background Blobs */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-100/40 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-100/40 rounded-full blur-[120px]"></div>
+        <div className="absolute top-[-15%] left-[-10%] w-[50%] h-[50%] bg-indigo-100/40 rounded-full blur-[150px]"></div>
+        <div className="absolute bottom-[-15%] right-[-10%] w-[50%] h-[50%] bg-blue-100/40 rounded-full blur-[150px]"></div>
       </div>
 
-      <div className="bg-white w-full max-w-lg p-12 lg:p-16 rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] relative z-10 border border-white/50 overflow-hidden">
-        <div className="absolute top-0 right-0 w-full h-3 bg-gradient-to-l from-indigo-600 to-indigo-400"></div>
+      <div className="bg-white w-full max-w-xl p-14 lg:p-20 rounded-[5rem] shadow-[0_60px_120px_-30px_rgba(0,0,0,0.1)] relative z-10 border border-white/80 overflow-hidden backdrop-blur-sm">
+        <div className="absolute top-0 right-0 w-full h-3 bg-gradient-to-l from-indigo-700 to-indigo-500"></div>
         
-        <div className="flex flex-col items-center mb-14">
-          <div className="bg-indigo-600 p-6 rounded-[2.5rem] text-white mb-8 shadow-2xl shadow-indigo-100 rotate-6 hover:rotate-0 transition-transform duration-500">
-            <GraduationCap size={56} />
+        <div className="flex flex-col items-center mb-16">
+          <div className="bg-gradient-to-tr from-indigo-700 to-indigo-500 p-7 rounded-[2.8rem] text-white mb-10 shadow-2xl shadow-indigo-100 rotate-6 hover:rotate-0 transition-transform duration-700">
+            <GraduationCap size={64} />
           </div>
-          <h2 className="text-3xl font-black text-slate-900 leading-tight text-center">
-            {isSignUp ? 'إنشاء حساب جديد' : 'بوابة المعلمين'}
+          <h2 className="text-4xl font-black text-slate-900 leading-tight text-center">
+            {isSignUp ? 'عضوية جديدة' : 'بوابة المعلمين'}
             <br/>
-            <span className="text-indigo-600 text-[10px] font-black tracking-[0.4em] uppercase mt-4 block">PREMIUM EDUCATIONAL CORE</span>
+            <span className="text-indigo-600 text-[11px] font-black tracking-[0.5em] uppercase mt-6 block">ELITE MANAGEMENT SYSTEM</span>
           </h2>
         </div>
 
-        {error && <div className="bg-rose-50 text-rose-600 p-6 rounded-3xl mb-10 text-xs font-black border border-rose-100 flex items-center gap-4 animate-shake">
-          <ShieldCheck size={20} className="shrink-0" /> {error}
+        {error && <div className="bg-rose-50 text-rose-600 p-8 rounded-[2rem] mb-12 text-sm font-black border border-rose-100 flex items-center gap-5 animate-shake">
+          <ShieldCheck size={24} className="shrink-0" /> {error}
         </div>}
 
-        <form onSubmit={handleAuth} className="space-y-6">
+        <form onSubmit={handleAuth} className="space-y-8">
           {isSignUp && (
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest">الاسم الكامل</label>
-              <input required placeholder="الاسم الثلاثي..." className="w-full p-6 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black outline-none focus:bg-white focus:border-indigo-100 transition-all text-sm" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
+            <div className="space-y-3">
+              <label className="text-[12px] font-black text-slate-400 mr-5 uppercase tracking-[0.2em]">الاسم بالكامل</label>
+              <input required placeholder="الاسم الثلاثي..." className="w-full p-6 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-black outline-none focus:bg-white focus:border-indigo-100 transition-all text-base" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
             </div>
           )}
-          <div className="space-y-2">
-             <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest block">رقم الهاتف</label>
+          <div className="space-y-3">
+             <label className="text-[12px] font-black text-slate-400 mr-5 uppercase tracking-[0.2em] block">رقم الهاتف</label>
              <div className="relative">
-               <Phone className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-               <input required type="tel" placeholder="00000000" className="w-full p-6 pr-16 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all tracking-widest" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
+               <Phone className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
+               <input required type="tel" placeholder="رقم الهاتف المسجل..." className="w-full p-7 pr-20 bg-slate-50 border-2 border-slate-50 rounded-[2.2rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all tracking-[0.15em] text-lg" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
              </div>
           </div>
-          <div className="space-y-2">
-             <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest block">كلمة السر</label>
+          <div className="space-y-3">
+             <label className="text-[12px] font-black text-slate-400 mr-5 uppercase tracking-[0.2em] block">كلمة المرور</label>
              <div className="relative">
-               <Lock className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-               <input required type="password" placeholder="••••••••" className="w-full p-6 pr-16 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+               <Lock className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
+               <input required type="password" placeholder="••••••••" className="w-full p-7 pr-20 bg-slate-50 border-2 border-slate-50 rounded-[2.2rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all text-lg" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
              </div>
           </div>
           {isSignUp && (
-            <div className="space-y-2">
-               <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest block">تأكيد كلمة السر</label>
-               <input required type="password" placeholder="••••••••" className="w-full p-6 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
+            <div className="space-y-3">
+               <label className="text-[12px] font-black text-slate-400 mr-5 uppercase tracking-[0.2em] block">تأكيد كلمة المرور</label>
+               <input required type="password" placeholder="••••••••" className="w-full p-7 bg-slate-50 border-2 border-slate-50 rounded-[2.2rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all text-lg" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
             </div>
           )}
           
-          <button disabled={loading} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-[0_20px_40px_-10px_rgba(79,70,229,0.3)] hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-4 text-lg mt-4">
-            {loading ? <RefreshCw className="animate-spin" /> : (isSignUp ? <><Sparkles size={22}/> إنشاء الحساب</> : 'دخول المنصة')}
+          <button disabled={loading} className="w-full py-7 bg-indigo-600 text-white rounded-[2.5rem] font-black shadow-[0_25px_50px_-10px_rgba(79,70,229,0.4)] hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-5 text-xl mt-6">
+            {loading ? <RefreshCw className="animate-spin" /> : (isSignUp ? <><Sparkles size={24}/> تسجيل البيانات</> : 'دخول المنصة')}
           </button>
         </form>
 
-        <button onClick={() => setIsSignUp(!isSignUp)} className="w-full mt-12 text-slate-400 font-black text-[11px] uppercase tracking-[0.3em] hover:text-indigo-600 transition-colors">
+        <button onClick={() => setIsSignUp(!isSignUp)} className="w-full mt-16 text-slate-400 font-black text-[12px] uppercase tracking-[0.4em] hover:text-indigo-600 transition-all duration-300">
           {isSignUp ? 'هل تملك حساباً؟ سجل دخولك' : 'لا تملك حساباً؟ اطلب الانضمام'}
         </button>
       </div>
       
-      <p className="mt-10 text-slate-400 font-black text-[10px] uppercase tracking-[0.4em] relative z-10">© 2025 ELITE TEACHER PORTAL</p>
+      <p className="mt-12 text-slate-400 font-black text-[11px] uppercase tracking-[0.5em] relative z-10 opacity-60">© 2025 ELITE MANAGEMENT CORE SYSTEM</p>
     </div>
   );
 };

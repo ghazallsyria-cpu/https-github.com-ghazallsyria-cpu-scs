@@ -18,8 +18,8 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return { text: 'يوم سعيد يا أستاذ', icon: <Coffee className="text-amber-500 animate-bounce"/> };
-    if (hour < 18) return { text: 'مساء مليء بالتميز', icon: <Sun className="text-orange-500 animate-spin-slow"/> };
+    if (hour < 12) return { text: 'صباح التميز يا أستاذ', icon: <Coffee className="text-amber-500 animate-bounce"/> };
+    if (hour < 18) return { text: 'يومك مليء بالنجاح', icon: <Sun className="text-orange-500 animate-spin-slow"/> };
     return { text: 'ليلة هادئة ومثمرة', icon: <Moon className="text-indigo-400 animate-pulse"/> };
   }, []);
 
@@ -48,7 +48,7 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
         completedStudents: totals.completed
       });
 
-      let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(20);
+      let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(15);
       if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
       const { data: lsns } = await lQuery;
 
@@ -68,73 +68,75 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
 
   if (loading) return (
     <div className="h-96 flex items-center justify-center">
-      <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
     </div>
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-1000">
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000">
       
-      {/* Upper Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      {/* Bento Layout Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 lg:gap-10">
         
-        {/* Hero Card */}
-        <div className="lg:col-span-3 bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 p-12 lg:p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center min-h-[400px]">
+        {/* Hero Bento Card */}
+        <div className="lg:col-span-3 bg-gradient-to-br from-[#1E1B4B] via-[#312E81] to-[#1E1B4B] p-12 lg:p-20 rounded-[4.5rem] text-white shadow-[0_40px_100px_-20px_rgba(49,46,129,0.4)] relative overflow-hidden flex flex-col justify-center min-h-[450px] border border-white/5">
            <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+           <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-500/20 rounded-full blur-[120px] animate-pulse"></div>
+           
            <div className="relative z-10">
-              <div className="flex items-center gap-4 mb-10">
-                <span className="bg-white/10 backdrop-blur-3xl border border-white/20 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3">
-                  <Sparkles size={16} className="text-amber-400" /> الحالة الفعالة للنظام
+              <div className="flex items-center gap-4 mb-12">
+                <span className="bg-white/10 backdrop-blur-3xl border border-white/20 px-8 py-2.5 rounded-full text-[11px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
+                  <Sparkles size={18} className="text-amber-400" /> الحالة النشطة للنظام
                 </span>
               </div>
-              <div className="flex items-center gap-6 mb-8">
-                <span className="text-5xl lg:text-6xl">{greeting.icon}</span>
-                <h1 className="text-4xl lg:text-7xl font-black leading-none">{greeting.text}</h1>
+              <div className="flex items-center gap-8 mb-10">
+                <span className="text-6xl lg:text-8xl transform hover:scale-110 transition-transform duration-500 cursor-default">{greeting.icon}</span>
+                <h1 className="text-4xl lg:text-7xl font-black leading-tight tracking-tighter">{greeting.text}</h1>
               </div>
-              <p className="text-indigo-100/60 font-bold max-w-xl text-xl leading-relaxed">
-                مرحباً بك في لوحة تحكم القمة. إليك نظرة سريعة على أدائك التعليمي والمالي اليوم.
+              <p className="text-indigo-100/60 font-black max-w-2xl text-xl lg:text-2xl leading-relaxed">
+                مرحباً بك مجدداً في نظام القمة. لقد تم تحليل بياناتك للفصل الحالي بنجاح.
               </p>
            </div>
-           <Zap className="absolute -bottom-20 -left-20 text-white/5 w-[500px] h-[500px] -rotate-12" />
+           <Zap className="absolute bottom-[-100px] left-[-100px] text-white/[0.03] w-[600px] h-[600px] -rotate-12" />
         </div>
 
-        {/* Profit Bento */}
-        <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-2xl flex flex-col justify-between group overflow-hidden relative">
-           <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-50 rounded-full blur-3xl group-hover:bg-emerald-100 transition-all duration-700"></div>
-           <div className="bg-emerald-500 text-white w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl shadow-emerald-100 group-hover:scale-110 transition-transform duration-500 relative z-10">
-             <DollarSign size={40}/>
+        {/* Financial Bento */}
+        <div className="bg-white p-14 rounded-[4.5rem] border border-slate-50 shadow-[0_30px_80px_-15px_rgba(0,0,0,0.05)] flex flex-col justify-between group overflow-hidden relative transition-all duration-700 hover:shadow-2xl border border-slate-100">
+           <div className="absolute -top-10 -right-10 w-48 h-48 bg-emerald-50 rounded-full blur-[60px] group-hover:bg-emerald-100/50 transition-all duration-1000"></div>
+           <div className="bg-gradient-to-tr from-emerald-500 to-emerald-400 text-white w-24 h-24 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-emerald-100 group-hover:scale-110 group-hover:rotate-6 transition-all duration-700 relative z-10">
+             <DollarSign size={48}/>
            </div>
            <div className="relative z-10">
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">إجمالي التحصيل</p>
-              <h2 className="text-6xl font-black text-slate-900 leading-none mb-6 tracking-tighter">${stats.totalIncome.toLocaleString()}</h2>
-              <div className="flex items-center gap-3 text-emerald-600 font-black text-xs bg-emerald-50 px-6 py-3 rounded-2xl w-fit shadow-inner">
-                <TrendingUp size={18}/> {collectionRate}% محصل
+              <p className="text-[12px] font-black text-slate-400 uppercase tracking-[0.25em] mb-4">إجمالي التحصيل</p>
+              <h2 className="text-6xl lg:text-7xl font-black text-slate-900 leading-none mb-8 tracking-tighter">${stats.totalIncome.toLocaleString()}</h2>
+              <div className="flex items-center gap-4 text-emerald-600 font-black text-[13px] bg-emerald-50/50 backdrop-blur-sm px-8 py-4 rounded-3xl w-fit shadow-inner border border-emerald-100/50">
+                <TrendingUp size={22} className="animate-bounce" /> {collectionRate}% محصل
               </div>
            </div>
         </div>
 
       </div>
 
-      {/* Stats Quick Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-        <StatBento label="إجمالي الطلاب" value={stats.totalStudents} sub={`${stats.completedStudents} مكتمل`} icon={<Users size={28}/>} color="bg-indigo-600" />
-        <StatBento label="الحصص المنفذة" value={stats.totalLessons} sub="حصة مسجلة" icon={<Calendar size={28}/>} color="bg-blue-500" />
-        <StatBento label="ساعات التدريس" value={stats.totalHours.toFixed(1)} sub="ساعة فعلية" icon={<Clock size={28}/>} color="bg-amber-500" />
-        <StatBento label="مستحقات معلقة" value={`$${stats.pendingPayments.toLocaleString()}`} sub="ديون طلاب" icon={<CreditCard size={28}/>} color="bg-rose-500" />
+      {/* Stats Cards Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10">
+        <StatBento label="إجمالي الطلاب" value={stats.totalStudents} sub={`${stats.completedStudents} منتهٍ`} icon={<Users size={32}/>} color="bg-indigo-600 shadow-indigo-100" />
+        <StatBento label="حصص منفذة" value={stats.totalLessons} sub="حصة تعليمية" icon={<Calendar size={32}/>} color="bg-blue-500 shadow-blue-100" />
+        <StatBento label="ساعات التدريس" value={stats.totalHours.toFixed(1)} sub="ساعة فعلية" icon={<Clock size={32}/>} color="bg-amber-500 shadow-amber-100" />
+        <StatBento label="ديون معلقة" value={`$${stats.pendingPayments.toLocaleString()}`} sub="غير محصلة" icon={<CreditCard size={32}/>} color="bg-rose-500 shadow-rose-100" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         
-        {/* Productivity Chart */}
-        <div className="lg:col-span-2 bg-white p-12 lg:p-16 rounded-[4.5rem] border border-slate-100 shadow-2xl">
+        {/* Interactive Chart Area */}
+        <div className="lg:col-span-2 bg-white p-14 lg:p-16 rounded-[5rem] border border-slate-100 shadow-[0_40px_90px_-20px_rgba(0,0,0,0.04)] hover:shadow-2xl transition-all duration-1000">
            <div className="flex justify-between items-center mb-16">
               <div>
-                 <h3 className="text-3xl font-black text-slate-900">مؤشر الإنتاجية</h3>
-                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.25em] mt-2">معدل الحصص خلال الـ 15 يوماً الماضية</p>
+                 <h3 className="text-4xl font-black text-slate-900 leading-none">مؤشر الإنتاجية</h3>
+                 <p className="text-[12px] text-slate-400 font-black uppercase tracking-[0.3em] mt-3">تحليل الساعات التعليمية خلال الفترة الأخيرة</p>
               </div>
-              <div className="bg-indigo-50 p-5 rounded-3xl text-indigo-600 shadow-inner"><Activity size={32}/></div>
+              <div className="bg-indigo-50 p-6 rounded-[2.5rem] text-indigo-600 shadow-inner group transition-transform"><Activity size={40} className="group-hover:scale-110 transition-transform"/></div>
            </div>
-           <div className="h-[350px]">
+           <div className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
                  <AreaChart data={chartData}>
                     <defs>
@@ -144,31 +146,31 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 900}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 900}} />
-                    <Tooltip contentStyle={{borderRadius: '30px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', fontFamily: 'Cairo', fontWeight: 900, padding: '20px'}} />
-                    <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={6} fill="url(#colorHours)" dot={{r: 7, fill: '#fff', strokeWidth: 4, stroke: '#4f46e5'}} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} />
+                    <Tooltip contentStyle={{borderRadius: '35px', border: 'none', boxShadow: '0 30px 60px rgba(0,0,0,0.12)', fontFamily: 'Cairo', fontWeight: 900, padding: '25px', backgroundColor: 'rgba(255,255,255,0.95)'}} />
+                    <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={7} fill="url(#colorHours)" dot={{r: 8, fill: '#fff', strokeWidth: 5, stroke: '#4f46e5'}} activeDot={{ r: 10, fill: '#4f46e5', strokeWidth: 0 }} />
                  </AreaChart>
               </ResponsiveContainer>
            </div>
         </div>
 
-        {/* Tip/Info Card */}
-        <div className="bg-slate-900 p-14 rounded-[4.5rem] text-white shadow-2xl flex flex-col justify-between relative overflow-hidden group border border-white/10">
+        {/* Center of Excellence Bento */}
+        <div className="bg-slate-900 p-16 rounded-[5rem] text-white shadow-[0_40px_100px_-20px_rgba(15,23,42,0.5)] flex flex-col justify-between relative overflow-hidden group border border-white/5">
            <div className="absolute top-0 right-0 w-full h-full bg-indigo-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
            <div className="relative z-10">
-              <h3 className="text-3xl font-black mb-8 leading-tight">جاهز للحصة <br/>القادمة؟</h3>
-              <p className="text-slate-400 font-bold leading-relaxed mb-12 text-lg">
-                لقد قمت بإنجاز {stats.totalLessons} حصة هذا الفصل الدراسي. حافظ على هذا المستوى المرتفع من الأداء.
+              <h3 className="text-4xl font-black mb-10 leading-tight">مركز <br/>التوجيه</h3>
+              <p className="text-slate-400 font-black leading-relaxed mb-16 text-xl">
+                أداء استثنائي لهذا الفصل! استمر في تقديم أفضل ما لديك لطلابك.
               </p>
-              <div className="space-y-4">
-                 <div className="flex items-center gap-5 bg-white/5 p-6 rounded-3xl border border-white/5 backdrop-blur-md hover:bg-white/10 transition-colors">
-                    <div className="bg-indigo-600/40 p-3 rounded-2xl text-white shadow-lg"><Award size={24}/></div>
-                    <p className="text-[11px] font-black uppercase tracking-widest text-indigo-300">أعلى أداء شهري</p>
+              <div className="space-y-6">
+                 <div className="flex items-center gap-6 bg-white/5 p-8 rounded-[2.5rem] border border-white/5 backdrop-blur-2xl hover:bg-white/10 transition-all cursor-default">
+                    <div className="bg-indigo-600/40 p-4 rounded-2xl text-white shadow-lg"><Award size={28}/></div>
+                    <p className="text-[12px] font-black uppercase tracking-[0.2em] text-indigo-300">أعلى أداء تعليمي</p>
                  </div>
-                 <div className="flex items-center gap-5 bg-white/5 p-6 rounded-3xl border border-white/5 backdrop-blur-md hover:bg-white/10 transition-colors">
-                    <div className="bg-emerald-600/40 p-3 rounded-2xl text-white shadow-lg"><ShieldCheck size={24}/></div>
-                    <p className="text-[11px] font-black uppercase tracking-widest text-emerald-300">البيانات محمية بالكامل</p>
+                 <div className="flex items-center gap-6 bg-white/5 p-8 rounded-[2.5rem] border border-white/5 backdrop-blur-2xl hover:bg-white/10 transition-all cursor-default">
+                    <div className="bg-emerald-600/40 p-4 rounded-2xl text-white shadow-lg"><ShieldCheck size={28}/></div>
+                    <p className="text-[12px] font-black uppercase tracking-[0.2em] text-emerald-300">حماية البيانات مفعلة</p>
                  </div>
               </div>
            </div>
@@ -180,14 +182,14 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
 };
 
 const StatBento = ({ label, value, sub, icon, color }: any) => (
-  <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all duration-700 group relative overflow-hidden">
-    <div className={`${color} w-16 h-16 rounded-2xl flex items-center justify-center text-white mb-8 group-hover:rotate-12 transition-transform shadow-xl relative z-10`}>{icon}</div>
+  <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.03)] hover:shadow-2xl hover:-translate-y-3 transition-all duration-1000 group relative overflow-hidden text-right border border-slate-100/50">
+    <div className={`${color} w-20 h-20 rounded-[2.5rem] flex items-center justify-center text-white mb-10 group-hover:rotate-12 group-hover:scale-110 transition-all duration-700 shadow-2xl relative z-10`}>{icon}</div>
     <div className="relative z-10">
-       <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{label}</p>
-       <h4 className="text-5xl font-black text-slate-900 mb-2 leading-none tracking-tighter">{value}</h4>
-       <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{sub}</p>
+       <p className="text-[12px] font-black text-slate-400 uppercase tracking-[0.3em] mb-3">{label}</p>
+       <h4 className="text-5xl lg:text-6xl font-black text-slate-900 mb-3 leading-none tracking-tighter">{value}</h4>
+       <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest">{sub}</p>
     </div>
-    <div className={`absolute -right-12 -bottom-12 w-40 h-40 opacity-[0.03] group-hover:opacity-[0.08] group-hover:scale-150 transition-all duration-1000 ${color.replace('bg-', 'text-')}`}>{icon}</div>
+    <div className={`absolute -right-16 -bottom-16 w-56 h-56 opacity-[0.03] group-hover:opacity-[0.1] group-hover:scale-150 transition-all duration-[2000ms] text-slate-900`}>{icon}</div>
   </div>
 );
 
