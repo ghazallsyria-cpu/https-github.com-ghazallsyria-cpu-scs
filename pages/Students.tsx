@@ -143,31 +143,32 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
       const student = students.find(s => s.id === selectedStudentId);
       if (!student) throw new Error("لم يتم العثور على بيانات الطالب");
 
-      const newData = {
-        ...student,
-        id: undefined, // Let DB generate new ID if copying
-        academic_year: moveData.year,
-        semester: moveData.semester,
-        created_at: undefined
-      };
-      // Remove summary view fields
-      delete (newData as any).total_lessons;
-      delete (newData as any).total_hours;
-      delete (newData as any).total_paid;
-      delete (newData as any).expected_income;
-      delete (newData as any).remaining_balance;
-
       if (moveData.action === 'move') {
         const { error } = await supabase.from('students').update({
           academic_year: moveData.year,
           semester: moveData.semester
         }).eq('id', selectedStudentId);
         if (error) throw error;
-        showFeedback('تم نقل الطالب إلى الفترة المحددة بنجاح');
+        showFeedback('تم نقل الطالب بنجاح (مع كافة بياناته السابقة)');
       } else {
+        // عند النسخ: ننشئ سجل جديد تماماً
+        // يتم حذف كافة الحقول التلقائية وحقول العرض لتجنب التداخل
+        const { 
+          id, created_at, 
+          total_lessons, total_hours, total_paid, expected_income, remaining_balance, 
+          ...studentCleanData 
+        } = student;
+
+        const newData = {
+          ...studentCleanData,
+          teacher_id: uid, // التأكد من ربطه بالمعلم الحالي
+          academic_year: moveData.year,
+          semester: moveData.semester
+        };
+
         const { error } = await supabase.from('students').insert([newData]);
         if (error) throw error;
-        showFeedback('تم نسخ الطالب إلى الفترة المحددة بنجاح');
+        showFeedback('تم نسخ الطالب كملف جديد نظيف (بدون حصص أو دفعات سابقة)');
       }
 
       setIsMoveModalOpen(false);
@@ -379,7 +380,9 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
 
               <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
                 <p className="text-[10px] font-black text-amber-600 leading-relaxed italic">
-                  * ملحوظة: عند "النقل" سيختفي الطالب من الفترة الحالية. عند "النسخ" سيتم إنشاء سجل جديد للطالب في الفترة المختارة.
+                  {moveData.action === 'move' 
+                    ? '* تنبيه: النقل يحول الطالب الحالي لفترة أخرى مع الاحتفاظ بكامل سجله.' 
+                    : '* تنبيه: النسخ ينشئ ملفاً جديداً للطالب في الفترة المختارة بدون أي دروس أو دفعات سابقة.'}
                 </p>
               </div>
 

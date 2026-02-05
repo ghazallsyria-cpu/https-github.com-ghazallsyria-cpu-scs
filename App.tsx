@@ -2,8 +2,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
+// Added RefreshCw to imports
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, CalendarDays, Layers, CheckCircle, KeyRound, Clock, FileDown
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, CalendarDays, Layers, CheckCircle, KeyRound, Clock, FileDown, RefreshCw
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard.tsx';
@@ -16,21 +17,20 @@ import Teachers from './pages/Teachers.tsx';
 import Schedule from './pages/Schedule.tsx';
 import Reports from './pages/Reports.tsx';
 
-// مخزن بسيط للبيانات في الذاكرة لمنع إعادة الطلب
 const cache = {
   profile: null as any,
   lastUid: null as string | null
 };
 
 const Footer: React.FC = () => (
-  <footer className="mt-auto py-8 text-center border-t border-slate-100 bg-white/50 backdrop-blur-sm rounded-t-[2.5rem] lg:rounded-t-[3rem] pb-24 lg:pb-8">
+  <footer className="mt-auto py-8 text-center border-t border-slate-100 bg-white/50 backdrop-blur-sm rounded-t-[2.5rem] lg:rounded-t-[3rem] pb-24 lg:pb-8 font-['Cairo']">
     <div className="flex flex-col items-center justify-center gap-2">
       <div className="flex items-center gap-2 text-indigo-600 font-black text-sm">
         <Code2 size={16} />
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 2.7.0 (الاستقرار والأمان) &copy; {new Date().getFullYear()}
+        الإصدار 2.7.5 (الاستقرار والأمان) &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
@@ -83,7 +83,6 @@ const App: React.FC = () => {
     }
 
     try {
-      // جلب البيانات من الجداول مباشرة لضمان الدقة
       const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
       if (error) throw error;
       
@@ -103,15 +102,15 @@ const App: React.FC = () => {
     const init = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       setSession(currentSession);
-      if (currentSession) await fetchProfile(currentSession.user.id);
+      if (currentSession) await fetchProfile(currentSession.user.id, true); // Force initial fetch to ensure correct state
       else setLoading(false);
     };
     init();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       if (newSession) {
-        fetchProfile(newSession.user.id, true); // فرض التحديث عند تغيير الجلسة
+        fetchProfile(newSession.user.id, true); 
       } else {
         setProfile(null);
         cache.profile = null;
@@ -122,15 +121,14 @@ const App: React.FC = () => {
   }, []);
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white">
+    <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="font-bold text-slate-400 font-['Cairo']">جاري الدخول...</p>
+      <p className="font-bold text-slate-400">جاري الدخول للنظام...</p>
     </div>
   );
 
   if (!session) return <Login />;
 
-  // إخفاء الـ Overlay إذا كان مفعلاً أو كان المدير
   const isApproved = profile?.is_approved === true || profile?.role === 'admin';
   
   if (!isApproved && !supervisedTeacher) {
@@ -241,7 +239,6 @@ const ActivationOverlay = ({ onActivated, profileName }: any) => {
       
       if (data.success) {
         setSuccess(true);
-        // مسح الـ Cache لضمان تحديث الحالة
         cache.profile = null;
         cache.lastUid = null;
         setTimeout(() => onActivated(), 1500);
@@ -249,7 +246,7 @@ const ActivationOverlay = ({ onActivated, profileName }: any) => {
         setError(data.message);
       }
     } catch (err: any) {
-      setError("حدث خطأ في الاتصال بالخادم");
+      setError("كود التفعيل غير صالح أو حدث خطأ في النظام");
     } finally {
       setLoading(false);
     }
@@ -261,22 +258,22 @@ const ActivationOverlay = ({ onActivated, profileName }: any) => {
         <div className="relative z-10">
           <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3"><KeyRound size={40} /></div>
           <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط الحساب</h2>
-          <p className="text-slate-500 font-bold mb-8">أهلاً <span className="text-indigo-600">{profileName || 'بك'}</span>. أدخل كود التفعيل لتشغيل النظام.</p>
+          <p className="text-slate-500 font-bold mb-8">أهلاً <span className="text-indigo-600">{profileName || 'بك'}</span>. أدخل كود التفعيل لتشغيل النظام بشكل كامل.</p>
           
-          {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100"><ShieldAlert size={20} /><span>{error}</span></div>}
+          {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100 animate-in shake duration-300"><ShieldAlert size={20} className="shrink-0" /><span>{error}</span></div>}
           
           {success && (
             <div className="bg-emerald-50 text-emerald-600 p-6 rounded-[2rem] mb-6 text-center animate-bounce">
               <CheckCircle size={48} className="mx-auto mb-3" />
-              <p className="font-black">تم التفعيل بنجاح! جاري الدخول...</p>
+              <p className="font-black">تم تفعيل حسابك بنجاح! جاري توجيهك...</p>
             </div>
           )}
 
           {!success && (
             <form onSubmit={handleActivate} className="space-y-6">
-              <input required maxLength={8} placeholder="أدخل الكود هنا" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-3xl tracking-[0.3em] uppercase outline-none focus:border-indigo-500 transition-all" value={code} onChange={(e) => setCode(e.target.value)} />
+              <input required maxLength={8} placeholder="أدخل الكود المكون من 8 خانات" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-2xl tracking-[0.2em] uppercase outline-none focus:border-indigo-500 transition-all placeholder:tracking-normal placeholder:text-sm" value={code} onChange={(e) => setCode(e.target.value)} />
               <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 disabled:opacity-50 text-lg">
-                {loading ? "جاري المعالجة..." : "تنشيط الحساب الآن"}
+                {loading ? <RefreshCw className="animate-spin mx-auto" size={24} /> : "تنشيط الحساب الآن"}
               </button>
               <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold hover:text-rose-500 transition-colors flex items-center justify-center gap-2"><LogOut size={18} /> تسجيل الخروج</button>
             </form>
