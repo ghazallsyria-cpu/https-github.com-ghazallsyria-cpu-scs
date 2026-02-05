@@ -15,13 +15,13 @@ import Teachers from './pages/Teachers';
 import Schedule from './pages/Schedule';
 import Reports from './pages/Reports';
 
+// الرقم الذهبي للمدير
 const ADMIN_PHONE = '55315661';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [supervisedTeacher, setSupervisedTeacher] = useState<{id: string, name: string} | null>(null);
   const [currentYear, setCurrentYear] = useState(localStorage.getItem('selectedYear') || '2025-2026');
   const [currentSemester, setCurrentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
@@ -45,9 +45,9 @@ const App: React.FC = () => {
     const userPhone = user.user_metadata?.phone || '';
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      const isSystemAdmin = userPhone === ADMIN_PHONE || data?.role === 'admin';
       
-      // Force admin role if it's the admin phone
+      // منطق الصلاحية المطلقة: إذا كان الهاتف يطابق رقم المدير، فهو Admin فوراً
+      const isSystemAdmin = userPhone === ADMIN_PHONE || data?.role === 'admin';
       const role = isSystemAdmin ? 'admin' : (data?.role || 'teacher');
       
       setProfile({ 
@@ -60,9 +60,9 @@ const App: React.FC = () => {
   };
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-[#F8FAFC]">
+    <div className="h-screen flex items-center justify-center bg-white">
       <div className="flex flex-col items-center gap-6">
-        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin shadow-xl shadow-indigo-100"></div>
+        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin shadow-2xl shadow-indigo-100"></div>
         <p className="font-black text-indigo-600 text-lg animate-pulse">يتم الآن تهيئة القمة...</p>
       </div>
     </div>
@@ -72,6 +72,8 @@ const App: React.FC = () => {
 
   const isAdmin = profile?.role === 'admin';
   const effectiveUid = supervisedTeacher ? supervisedTeacher.id : session.user.id;
+  
+  // المدير دائماً يملك صلاحية الأدمن إلا إذا كان في وضع الرقابة (Supervision)
   const effectiveRole = isAdmin && !supervisedTeacher ? 'admin' : 'teacher';
 
   const navItems = [
@@ -85,54 +87,56 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
-      <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row text-right" dir="rtl">
+      <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row-reverse text-right" dir="rtl">
         
-        {/* Sidebar - Positioned on the Right for Arabic RTL logic */}
-        <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-[10px_0_40px_rgba(0,0,0,0.03)] order-first">
+        {/* Sidebar - الآن يقع جهة اليمين بالكامل */}
+        <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-[10px_0_40px_rgba(0,0,0,0.03)]">
           <div className="p-10 flex items-center gap-4 border-b border-slate-50/50">
-            <div className="bg-gradient-to-tr from-indigo-700 to-indigo-500 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100">
+            <div className="bg-gradient-to-tr from-indigo-700 to-indigo-500 p-3 rounded-2xl text-white shadow-xl">
               <GraduationCap size={30} />
             </div>
             <div>
               <span className="font-black text-slate-900 text-xl block leading-none">نظام القمة</span>
-              <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mt-2 block">إصدار التميز V2.5</span>
+              <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-2 block">إصدار التميز V3.0</span>
             </div>
           </div>
           
           <nav className="flex-1 px-6 py-10 space-y-3 overflow-y-auto no-scrollbar">
             {navItems.map(item => (
-              <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-4 px-6 py-4 rounded-[1.8rem] font-black text-[13px] transition-all duration-500 ${isActive ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}>
+              <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-4 px-6 py-4 rounded-[1.8rem] font-black text-[13px] transition-all duration-500 ${isActive ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 translate-x-1' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}>
                 {item.icon} {item.label}
               </NavLink>
             ))}
             {isAdmin && (
-              <NavLink to="/teachers" className={({isActive}) => `flex items-center gap-4 px-6 py-4 rounded-[1.8rem] font-black text-[13px] transition-all duration-500 ${isActive ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}>
-                <ShieldCheck size={22} /> إدارة المعلمين
+              <NavLink to="/teachers" className={({isActive}) => `flex items-center gap-4 px-6 py-4 rounded-[1.8rem] font-black text-[13px] transition-all duration-500 ${isActive ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200 translate-x-1' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}>
+                <ShieldCheck size={22} /> شؤون المعلمين
               </NavLink>
             )}
           </nav>
 
           <div className="p-10 border-t border-slate-50">
-             <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-rose-500 font-black hover:bg-rose-50 transition-all duration-300 text-sm">
+             <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-rose-500 font-black hover:bg-rose-50 transition-all text-sm">
                <LogOut size={20} /> تسجيل الخروج
              </button>
           </div>
         </aside>
 
-        {/* Mobile Navbar */}
+        {/* Mobile Nav - Bottom */}
         <nav className="lg:hidden fixed bottom-6 inset-x-6 bg-white/95 backdrop-blur-2xl border border-white/50 flex justify-around items-center px-4 py-5 z-[100] shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-[2.8rem]">
           {navItems.slice(0, 5).map(item => (
-            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all duration-500 ${isActive ? 'text-indigo-600 scale-125' : 'text-slate-300'}`}>
+            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all ${isActive ? 'text-indigo-600 scale-125' : 'text-slate-300'}`}>
               {item.icon}
             </NavLink>
           ))}
-          <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-300">
-            <Menu size={22} />
-          </button>
+          {isAdmin && (
+            <NavLink to="/teachers" className={({isActive}) => `flex flex-col items-center gap-1 transition-all ${isActive ? 'text-indigo-600 scale-125' : 'text-slate-300'}`}>
+              <Settings size={22} />
+            </NavLink>
+          )}
         </nav>
 
-        {/* Main Content Area */}
-        <main className="flex-1 min-h-screen pb-32 lg:pb-0 relative overflow-hidden">
+        {/* Main Content */}
+        <main className="flex-1 min-h-screen pb-32 lg:pb-0 relative">
           <header className="h-28 bg-white/60 backdrop-blur-2xl sticky top-0 z-40 px-8 lg:px-14 flex items-center justify-between border-b border-slate-100/50">
             <div className="flex items-center gap-8">
               <div className="hidden md:flex gap-4">
@@ -147,14 +151,14 @@ const App: React.FC = () => {
                 </select>
               </div>
               <div className="h-12 w-[2px] bg-slate-100 hidden md:block rounded-full"></div>
-              <div className="flex flex-col">
-                <p className="text-[11px] font-black text-indigo-500 uppercase tracking-widest">{profile?.role === 'admin' ? 'المدير العام' : 'معلم معتمد'}</p>
+              <div>
+                <p className="text-[11px] font-black text-indigo-500 uppercase tracking-widest">{isAdmin ? 'المدير العام' : 'معلم معتمد'}</p>
                 <p className="text-lg font-black text-slate-900 mt-1">{profile?.full_name}</p>
               </div>
             </div>
             
             <div className="flex items-center gap-6">
-               <button className="bg-white border border-slate-50 text-slate-400 p-4 rounded-2xl hover:bg-indigo-50 hover:text-indigo-600 transition-all relative shadow-sm">
+               <button className="bg-white border border-slate-50 text-slate-400 p-4 rounded-2xl hover:bg-indigo-50 hover:text-indigo-600 transition-all shadow-sm relative">
                  <Bell size={22}/>
                  <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white"></span>
                </button>
@@ -166,15 +170,15 @@ const App: React.FC = () => {
 
           <div className="p-8 lg:p-14 max-w-7xl mx-auto">
             {supervisedTeacher && (
-              <div className="mb-12 p-8 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-[2.5rem] flex items-center justify-between shadow-2xl shadow-amber-100 animate-in slide-in-from-top-6 duration-700">
+              <div className="mb-12 p-8 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-[2.5rem] flex items-center justify-between shadow-2xl animate-in slide-in-from-top-6 duration-700">
                 <div className="flex items-center gap-6">
                   <div className="bg-white/20 p-4 rounded-2xl backdrop-blur-md shadow-inner"><Users size={24}/></div>
                   <div>
-                    <span className="font-black text-lg block">وضع الرقابة نشط</span>
+                    <span className="font-black text-lg block">تصفح بوضع الرقابة</span>
                     <span className="text-xs font-bold opacity-80 uppercase tracking-widest">المعلم: {supervisedTeacher.name}</span>
                   </div>
                 </div>
-                <button onClick={() => setSupervisedTeacher(null)} className="bg-white text-orange-600 px-8 py-3 rounded-2xl font-black text-xs hover:bg-slate-50 transition-all shadow-xl active:scale-95">إنهاء الرقابة</button>
+                <button onClick={() => setSupervisedTeacher(null)} className="bg-white text-orange-600 px-8 py-3 rounded-2xl font-black text-xs hover:bg-slate-50 transition-all shadow-xl active:scale-95">العودة للوحة الإدارة</button>
               </div>
             )}
             

@@ -1,7 +1,7 @@
--- [V7] الإصلاح الجذري النهائي لصلاحيات مدير النظام
--- هذا الكود يكسر حلقة التكرار اللانهائي في RLS
+-- [V8] النظام المتكامل لإدارة القمة - إعداد الجداول والصلاحيات
+-- هذا الملف يحتوي على كافة الجداول اللازمة لعمل التطبيق بشكل صحيح
 
--- 1. التأكد من وجود الجداول الأساسية
+-- 1. جدول الحسابات الشخصية (Profiles)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     full_name TEXT,
@@ -12,8 +12,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. دالة التحقق من صلاحيات المدير (SECURITY DEFINER لكسر حلقة RLS)
--- الدالة تقرأ الجدول بصلاحيات الأدمن (bypass RLS) لتعود بالنتيجة الصحيحة
+-- دالة التحقق من صلاحيات المدير (Security Definer لكسر حلقة RLS)
 CREATE OR REPLACE FUNCTION public.is_admin_check(p_user_id UUID)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -24,24 +23,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- 3. تفعيل سياسات الأمان RLS
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Profiles individual read" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles admin managed" ON public.profiles;
+CREATE POLICY "Profiles individual read" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Profiles admin managed" ON public.profiles FOR ALL USING (public.is_admin_check(auth.uid()));
 
--- 4. إعادة ضبط سياسات جدول البروفايل (الجزء الحاسم)
-DROP POLICY IF EXISTS "Allow individual read" ON public.profiles;
-DROP POLICY IF EXISTS "Allow admin managed" ON public.profiles;
-DROP POLICY IF EXISTS "Profiles access" ON public.profiles;
-
--- سياسة تسمح للمستخدم بقراءة بياناته الخاصة
-CREATE POLICY "Allow individual read" ON public.profiles 
-FOR SELECT USING (auth.uid() = id);
-
--- سياسة تسمح للمدير بالتحكم الكامل في كل شيء
-CREATE POLICY "Allow admin managed" ON public.profiles 
-FOR ALL USING (public.is_admin_check(auth.uid()));
-
--- 5. إعداد بقية الجداول والسياسات
--- الطلاب
+-- 2. جدول الطلاب (Students)
 CREATE TABLE IF NOT EXISTS public.students (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -58,12 +46,80 @@ CREATE TABLE IF NOT EXISTS public.students (
     semester TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Students access" ON public.students;
-CREATE POLICY "Students access" ON public.students FOR ALL
+CREATE POLICY "Students access" ON public.students FOR ALL 
 USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
 
--- الأكواد
+-- 3. جدول سجل الحصص (Lessons)
+CREATE TABLE IF NOT EXISTS public.lessons (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+    teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    lesson_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    hours NUMERIC NOT NULL DEFAULT 1,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Lessons access" ON public.lessons;
+CREATE POLICY "Lessons access" ON public.lessons FOR ALL 
+USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
+
+-- 4. جدول المدفوعات (Payments)
+CREATE TABLE IF NOT EXISTS public.payments (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+    teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    amount NUMERIC NOT NULL,
+    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    payment_method TEXT DEFAULT 'كاش',
+    payment_number TEXT DEFAULT 'الأولى',
+    is_final BOOLEAN DEFAULT false,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Payments access" ON public.payments;
+CREATE POLICY "Payments access" ON public.payments FOR ALL 
+USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
+
+-- 5. جدول المتابعة الدراسية (Academic Records) - هذا ما سألت عنه
+CREATE TABLE IF NOT EXISTS public.academic_records (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+    teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    status_notes TEXT, -- ملاحظات الحالة العامة
+    weaknesses TEXT,    -- نقاط الضعف
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.academic_records ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Academic records access" ON public.academic_records;
+CREATE POLICY "Academic records access" ON public.academic_records FOR ALL 
+USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
+
+-- 6. جدول المواعيد الأسبوعية (Schedules)
+CREATE TABLE IF NOT EXISTS public.schedules (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+    day_of_week TEXT NOT NULL,
+    start_time TIME NOT NULL,
+    duration_hours NUMERIC DEFAULT 1,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Schedules access" ON public.schedules;
+CREATE POLICY "Schedules access" ON public.schedules FOR ALL 
+USING (auth.uid() = teacher_id OR public.is_admin_check(auth.uid()));
+
+-- 7. جدول أكواد التفعيل (Activation Codes)
 CREATE TABLE IF NOT EXISTS public.activation_codes (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     code TEXT UNIQUE NOT NULL,
@@ -71,12 +127,15 @@ CREATE TABLE IF NOT EXISTS public.activation_codes (
     used_by UUID REFERENCES auth.users(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
 ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Codes access" ON public.activation_codes;
-CREATE POLICY "Codes access" ON public.activation_codes FOR ALL
+DROP POLICY IF EXISTS "Codes admin access" ON public.activation_codes;
+CREATE POLICY "Codes admin access" ON public.activation_codes FOR ALL 
 USING (public.is_admin_check(auth.uid()));
 
--- عرض ملخص الطلاب (View)
+-- 8. عرض ملخص بيانات الطالب (Student Summary View)
+-- يفضل حذف العرض القديم وإعادة إنشائه لضمان تحديث الجداول المرتبطة
+DROP VIEW IF EXISTS public.student_summary_view;
 CREATE OR REPLACE VIEW public.student_summary_view AS
 SELECT 
     s.*,
@@ -92,10 +151,18 @@ SELECT
         ELSE s.agreed_amount
     END) - COALESCE(p.total_paid, 0) AS remaining_balance
 FROM public.students s
-LEFT JOIN (SELECT student_id, COUNT(*) AS total_lessons, SUM(hours) AS total_hours FROM public.lessons GROUP BY student_id) l ON s.id = l.student_id
-LEFT JOIN (SELECT student_id, SUM(amount) AS total_paid FROM public.payments GROUP BY student_id) p ON s.id = p.student_id;
+LEFT JOIN (
+    SELECT student_id, COUNT(*) AS total_lessons, SUM(hours) AS total_hours 
+    FROM public.lessons 
+    GROUP BY student_id
+) l ON s.id = l.student_id
+LEFT JOIN (
+    SELECT student_id, SUM(amount) AS total_paid 
+    FROM public.payments 
+    GROUP BY student_id
+) p ON s.id = p.student_id;
 
--- 6. ترقية حسابك الحالي إلى مدير فوراً
+-- 9. ترقية حساب المدير
 UPDATE public.profiles 
 SET role = 'admin', is_approved = true 
 WHERE phone = '55315661';

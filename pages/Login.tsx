@@ -47,14 +47,14 @@ const Login = () => {
             is_approved: isAdminNumber ? true : false 
           }]);
           setIsSignUp(false);
-          alert(isAdminNumber ? "تم إنشاء الحساب الإداري بنجاح" : "تم إرسال طلب الانضمام، بانتظار موافقة الإدارة.");
+          alert(isAdminNumber ? "تم إنشاء حساب الإدارة بنجاح" : "تم إرسال طلب الانضمام، بانتظار موافقة الإدارة المركزية.");
         }
       } else {
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: virtualEmail,
           password: formData.password
         });
-        if (signInError) throw new Error("بيانات الدخول غير صحيحة، يرجى المحاولة مرة أخرى.");
+        if (signInError) throw new Error("بيانات الدخول غير صحيحة، يرجى مراجعة رقم الهاتف أو كلمة السر.");
 
         if (isAdminNumber && signInData.user) {
           await supabase.from('profiles').update({ role: 'admin', is_approved: true }).eq('id', signInData.user.id);
@@ -76,15 +76,15 @@ const Login = () => {
         <div className="absolute bottom-[-15%] right-[-10%] w-[50%] h-[50%] bg-blue-100/40 rounded-full blur-[150px]"></div>
       </div>
 
-      <div className="bg-white w-full max-w-xl p-14 lg:p-20 rounded-[5rem] shadow-[0_60px_120px_-30px_rgba(0,0,0,0.1)] relative z-10 border border-white/80 overflow-hidden backdrop-blur-sm">
+      <div className="bg-white w-full max-w-xl p-14 lg:p-20 rounded-[5rem] shadow-2xl relative z-10 border border-white/80 overflow-hidden backdrop-blur-sm">
         <div className="absolute top-0 right-0 w-full h-3 bg-gradient-to-l from-indigo-700 to-indigo-500"></div>
         
         <div className="flex flex-col items-center mb-16">
-          <div className="bg-gradient-to-tr from-indigo-700 to-indigo-500 p-7 rounded-[2.8rem] text-white mb-10 shadow-2xl shadow-indigo-100 rotate-6 hover:rotate-0 transition-transform duration-700">
+          <div className="bg-gradient-to-tr from-indigo-700 to-indigo-500 p-7 rounded-[2.8rem] text-white mb-10 shadow-2xl rotate-6 hover:rotate-0 transition-transform duration-700">
             <GraduationCap size={64} />
           </div>
           <h2 className="text-4xl font-black text-slate-900 leading-tight text-center">
-            {isSignUp ? 'عضوية جديدة' : 'بوابة المعلمين'}
+            {isSignUp ? 'عضوية جديدة' : 'بوابة المنصة الرقمية'}
             <br/>
             <span className="text-indigo-600 text-[11px] font-black tracking-[0.5em] uppercase mt-6 block">ELITE MANAGEMENT SYSTEM</span>
           </h2>
@@ -102,10 +102,10 @@ const Login = () => {
             </div>
           )}
           <div className="space-y-3">
-             <label className="text-[12px] font-black text-slate-400 mr-5 uppercase tracking-[0.2em] block">رقم الهاتف</label>
+             <label className="text-[12px] font-black text-slate-400 mr-5 uppercase tracking-[0.2em] block">رقم الهاتف المسجل</label>
              <div className="relative">
                <Phone className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
-               <input required type="tel" placeholder="رقم الهاتف المسجل..." className="w-full p-7 pr-20 bg-slate-50 border-2 border-slate-50 rounded-[2.2rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all tracking-[0.15em] text-lg" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
+               <input required type="tel" placeholder="00000000" className="w-full p-7 pr-20 bg-slate-50 border-2 border-slate-50 rounded-[2.2rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all tracking-[0.15em] text-lg" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
              </div>
           </div>
           <div className="space-y-3">
@@ -115,12 +115,6 @@ const Login = () => {
                <input required type="password" placeholder="••••••••" className="w-full p-7 pr-20 bg-slate-50 border-2 border-slate-50 rounded-[2.2rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all text-lg" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
              </div>
           </div>
-          {isSignUp && (
-            <div className="space-y-3">
-               <label className="text-[12px] font-black text-slate-400 mr-5 uppercase tracking-[0.2em] block">تأكيد كلمة المرور</label>
-               <input required type="password" placeholder="••••••••" className="w-full p-7 bg-slate-50 border-2 border-slate-50 rounded-[2.2rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all text-lg" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
-            </div>
-          )}
           
           <button disabled={loading} className="w-full py-7 bg-indigo-600 text-white rounded-[2.5rem] font-black shadow-[0_25px_50px_-10px_rgba(79,70,229,0.4)] hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-5 text-xl mt-6">
             {loading ? <RefreshCw className="animate-spin" /> : (isSignUp ? <><Sparkles size={24}/> تسجيل البيانات</> : 'دخول المنصة')}
@@ -128,7 +122,7 @@ const Login = () => {
         </form>
 
         <button onClick={() => setIsSignUp(!isSignUp)} className="w-full mt-16 text-slate-400 font-black text-[12px] uppercase tracking-[0.4em] hover:text-indigo-600 transition-all duration-300">
-          {isSignUp ? 'هل تملك حساباً؟ سجل دخولك' : 'لا تملك حساباً؟ اطلب الانضمام'}
+          {isSignUp ? 'لديك حساب؟ سجل دخولك' : 'طلب انضمام جديد'}
         </button>
       </div>
       
