@@ -1,9 +1,10 @@
+
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate, NavLink } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, FileText, Settings, Bell, Star, Menu, X
+  BookOpen, Calendar, FileText, Settings, Bell, Star, Menu, X, ShieldAlert, Key, RefreshCw, CheckCircle
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -15,7 +16,6 @@ import Teachers from './pages/Teachers';
 import Schedule from './pages/Schedule';
 import Reports from './pages/Reports';
 
-// الرقم الذهبي للمدير
 const ADMIN_PHONE = '55315661';
 
 const App: React.FC = () => {
@@ -25,6 +25,8 @@ const App: React.FC = () => {
   const [supervisedTeacher, setSupervisedTeacher] = useState<{id: string, name: string} | null>(null);
   const [currentYear, setCurrentYear] = useState(localStorage.getItem('selectedYear') || '2025-2026');
   const [currentSemester, setCurrentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
+  const [activationCode, setActivationCode] = useState('');
+  const [activating, setActivating] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
@@ -46,7 +48,6 @@ const App: React.FC = () => {
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       
-      // منطق الصلاحية المطلقة: إذا كان الهاتف يطابق رقم المدير، فهو Admin فوراً
       const isSystemAdmin = userPhone === ADMIN_PHONE || data?.role === 'admin';
       const role = isSystemAdmin ? 'admin' : (data?.role || 'teacher');
       
@@ -57,6 +58,38 @@ const App: React.FC = () => {
         is_approved: isSystemAdmin || data?.is_approved
       });
     } catch (e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  const handleActivateAccount = async () => {
+    if (!activationCode || activationCode.length < 5) return;
+    setActivating(true);
+    try {
+      // 1. التحقق من الكود
+      const { data: codeData, error: codeError } = await supabase
+        .from('activation_codes')
+        .select('*')
+        .eq('code', activationCode.toUpperCase())
+        .eq('is_used', false)
+        .maybeSingle();
+
+      if (codeError || !codeData) {
+        alert("كود التفعيل غير صحيح أو تم استخدامه مسبقاً.");
+        return;
+      }
+
+      // 2. تفعيل الحساب وتحديث الكود
+      await Promise.all([
+        supabase.from('profiles').update({ is_approved: true }).eq('id', session.user.id),
+        supabase.from('activation_codes').update({ is_used: true, used_by: session.user.id }).eq('id', codeData.id)
+      ]);
+
+      alert("تم تفعيل حسابك بنجاح! مرحباً بك في القمة.");
+      window.location.reload();
+    } catch (e) {
+      alert("حدث خطأ أثناء التفعيل.");
+    } finally {
+      setActivating(false);
+    }
   };
 
   if (loading) return (
@@ -70,10 +103,61 @@ const App: React.FC = () => {
 
   if (!session) return <Login />;
 
+  // شاشة بانتظار الموافقة
+  if (profile && !profile.is_approved) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-right font-['Cairo']" dir="rtl">
+        <div className="bg-white w-full max-w-xl p-10 lg:p-16 rounded-[4rem] shadow-2xl border border-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-full h-3 bg-amber-500"></div>
+          
+          <div className="flex flex-col items-center text-center mb-10">
+            <div className="bg-amber-100 text-amber-600 p-8 rounded-[3rem] mb-8 animate-bounce shadow-inner">
+               <ShieldAlert size={64} />
+            </div>
+            <h1 className="text-3xl font-black text-slate-900 mb-4">الحساب قيد المراجعة</h1>
+            <p className="text-slate-500 font-bold leading-relaxed">
+              أهلاً بك يا أستاذ <b>{profile.full_name}</b>.
+              <br/>
+              حسابك بانتظار موافقة الإدارة المركزية لتتمكن من الوصول لبيانات الطلاب والدروس.
+            </p>
+          </div>
+
+          <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 mb-10">
+             <div className="flex items-center gap-3 mb-6 text-indigo-600">
+               <Key size={20} />
+               <span className="font-black text-sm uppercase tracking-widest">تفعيل فوري بالكود</span>
+             </div>
+             <p className="text-[10px] font-black text-slate-400 mb-4">إذا كنت تملك كود تفعيل من الإدارة، أدخله هنا للوصول الفوري:</p>
+             <div className="flex gap-3">
+               <input 
+                 placeholder="ABC-123"
+                 className="flex-1 bg-white border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-center tracking-[0.3em] uppercase outline-none focus:border-indigo-600 transition-all"
+                 value={activationCode}
+                 onChange={e => setActivationCode(e.target.value)}
+               />
+               <button 
+                 disabled={activating || !activationCode}
+                 onClick={handleActivateAccount}
+                 className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all disabled:opacity-50"
+               >
+                 {activating ? <RefreshCw className="animate-spin" /> : <CheckCircle size={24}/>}
+               </button>
+             </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-6">
+             <p className="text-[11px] font-black text-slate-400">تواصل مع المدير العام للتفعيل: <span className="text-indigo-600">{ADMIN_PHONE}</span></p>
+             <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-3 text-rose-500 font-black text-sm hover:underline">
+               <LogOut size={18} /> تسجيل الخروج والعودة
+             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const isAdmin = profile?.role === 'admin';
   const effectiveUid = supervisedTeacher ? supervisedTeacher.id : session.user.id;
-  
-  // المدير دائماً يملك صلاحية الأدمن إلا إذا كان في وضع الرقابة (Supervision)
   const effectiveRole = isAdmin && !supervisedTeacher ? 'admin' : 'teacher';
 
   const navItems = [
@@ -89,7 +173,7 @@ const App: React.FC = () => {
     <HashRouter>
       <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row-reverse text-right" dir="rtl">
         
-        {/* Sidebar - الآن يقع جهة اليمين بالكامل */}
+        {/* Sidebar */}
         <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-[10px_0_40px_rgba(0,0,0,0.03)]">
           <div className="p-10 flex items-center gap-4 border-b border-slate-50/50">
             <div className="bg-gradient-to-tr from-indigo-700 to-indigo-500 p-3 rounded-2xl text-white shadow-xl">
@@ -121,7 +205,7 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* Mobile Nav - Bottom */}
+        {/* Mobile Nav */}
         <nav className="lg:hidden fixed bottom-6 inset-x-6 bg-white/95 backdrop-blur-2xl border border-white/50 flex justify-around items-center px-4 py-5 z-[100] shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-[2.8rem]">
           {navItems.slice(0, 5).map(item => (
             <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all ${isActive ? 'text-indigo-600 scale-125' : 'text-slate-300'}`}>

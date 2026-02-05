@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
-import { GraduationCap, Phone, Lock, RefreshCw, ShieldCheck, Sparkles, AlertCircle } from 'lucide-react';
+import { GraduationCap, Phone, Lock, RefreshCw, ShieldCheck, Sparkles, AlertCircle, UserCheck, UserPlus } from 'lucide-react';
 
 const ADMIN_PHONE = '55315661';
 
@@ -32,10 +32,9 @@ const Login = () => {
     try {
       if (isSignUp) {
         if (formData.password !== formData.confirmPassword) {
-          throw new Error("كلمات المرور غير متطابقة");
+          throw new Error("كلمات المرور غير متطابقة، يرجى التأكد من كتابتها بشكل صحيح في الحقلين.");
         }
         
-        // محاولة إنشاء الحساب
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
           password: formData.password,
@@ -47,10 +46,8 @@ const Login = () => {
           }
         });
 
-        // معالجة حالة المستخدم المسجل مسبقاً في نظام Auth ولكن ليس في Profiles
         if (signUpError) {
           if (signUpError.message.includes("already registered") || signUpError.status === 422) {
-             // إذا كان مسجلاً مسبقاً، نحاول تسجيل الدخول للتأكد من امتلاكه الحساب ثم ننشئ له بروفايل إذا نقص
              const { data: signInData, error: retrySignInError } = await supabase.auth.signInWithPassword({
                email: virtualEmail,
                password: formData.password
@@ -62,7 +59,7 @@ const Login = () => {
 
              if (signInData.user) {
                await ensureProfileExists(signInData.user.id, mobileClean, formData.fullName, isAdminNumber);
-               return; // سيتم تحديث حالة App.tsx تلقائياً عبر المستمع
+               return;
              }
           }
           throw signUpError;
@@ -74,7 +71,6 @@ const Login = () => {
           alert(isAdminNumber ? "تم إنشاء حساب الإدارة بنجاح" : "تم إرسال طلب الانضمام، بانتظار موافقة الإدارة المركزية.");
         }
       } else {
-        // تسجيل الدخول العادي
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: virtualEmail,
           password: formData.password
@@ -84,7 +80,6 @@ const Login = () => {
           throw new Error("بيانات الدخول غير صحيحة، يرجى مراجعة رقم الهاتف أو كلمة السر.");
         }
 
-        // التأكد من وجود بروفايل حتى عند تسجيل الدخول (لحالات الخلل السابقة)
         if (signInData.user) {
           await ensureProfileExists(signInData.user.id, mobileClean, signInData.user.user_metadata?.full_name || 'معلم جديد', isAdminNumber);
         }
@@ -96,7 +91,6 @@ const Login = () => {
     }
   };
 
-  // دالة مساعدة لضمان وجود السجل في جدول profiles
   const ensureProfileExists = async (userId: string, phone: string, name: string, isAdmin: boolean) => {
     const { data: existingProfile } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
     
@@ -110,87 +104,92 @@ const Login = () => {
       }]);
       if (profileError) console.error("Profile linking error:", profileError);
     } else if (isAdmin) {
-      // تحديث صلاحية المدير إذا كان الرقم هو الرقم الذهبي
       await supabase.from('profiles').update({ role: 'admin', is_approved: true }).eq('id', userId);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 font-['Cairo'] text-right" dir="rtl">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 lg:p-6 font-['Cairo'] text-right" dir="rtl">
       
       {/* Background Blobs */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-        <div className="absolute top-[-15%] left-[-10%] w-[50%] h-[50%] bg-indigo-100/40 rounded-full blur-[150px]"></div>
-        <div className="absolute bottom-[-15%] right-[-10%] w-[50%] h-[50%] bg-blue-100/40 rounded-full blur-[150px]"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-indigo-100/40 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-blue-100/40 rounded-full blur-[120px]"></div>
       </div>
 
-      <div className="bg-white w-full max-w-xl p-10 lg:p-16 rounded-[4rem] shadow-2xl relative z-10 border border-white/80 overflow-hidden backdrop-blur-sm">
-        <div className="absolute top-0 right-0 w-full h-2.5 bg-gradient-to-l from-indigo-700 to-indigo-500"></div>
+      <div className="bg-white w-full max-w-xl p-8 lg:p-14 rounded-[3.5rem] lg:rounded-[4.5rem] shadow-2xl relative z-10 border border-white/80 overflow-hidden backdrop-blur-sm">
+        <div className={`absolute top-0 right-0 w-full h-2 transition-all duration-700 ${isSignUp ? 'bg-emerald-500' : 'bg-indigo-600'}`}></div>
         
-        <div className="flex flex-col items-center mb-12">
-          <div className="bg-gradient-to-tr from-indigo-700 to-indigo-500 p-6 rounded-[2.2rem] text-white mb-8 shadow-2xl rotate-3 hover:rotate-0 transition-transform duration-700">
-            <GraduationCap size={56} />
+        <div className="flex flex-col items-center mb-10">
+          <div className={`p-6 rounded-[2.2rem] text-white mb-6 shadow-2xl rotate-3 hover:rotate-0 transition-all duration-700 ${isSignUp ? 'bg-emerald-500' : 'bg-indigo-600'}`}>
+            {isSignUp ? <UserPlus size={48} /> : <GraduationCap size={48} />}
           </div>
           <h2 className="text-3xl font-black text-slate-900 leading-tight text-center">
-            {isSignUp ? 'عضوية جديدة' : 'بوابة المنصة الرقمية'}
+            {isSignUp ? 'انضمام لمعلمي القمة' : 'دخول المنصة الرقمية'}
             <br/>
-            <span className="text-indigo-600 text-[10px] font-black tracking-[0.4em] uppercase mt-4 block">SUMMIT MANAGEMENT SYSTEM</span>
+            <span className="text-indigo-600 text-[9px] font-black tracking-[0.4em] uppercase mt-4 block">SUMMIT MANAGEMENT SYSTEM</span>
           </h2>
         </div>
 
         {error && (
-          <div className="bg-rose-50 text-rose-600 p-6 rounded-[1.8rem] mb-10 text-xs font-black border border-rose-100 flex items-center gap-4 animate-in fade-in slide-in-from-top-2">
+          <div className="bg-rose-50 text-rose-600 p-5 rounded-[1.5rem] mb-8 text-[11px] font-black border border-rose-100 flex items-center gap-4 animate-in fade-in slide-in-from-top-2">
             <AlertCircle size={20} className="shrink-0" /> 
             <span className="leading-relaxed">{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleAuth} className="space-y-6">
+        <form onSubmit={handleAuth} className="space-y-5">
+          {/* حقل الاسم يظهر فقط في حالة التسجيل الجديد */}
           {isSignUp && (
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest">الاسم بالكامل</label>
-              <input required placeholder="الاسم الثلاثي..." className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.8rem] font-black outline-none focus:bg-white focus:border-indigo-100 transition-all text-sm" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
+            <div className="space-y-1.5 animate-in fade-in slide-in-from-right duration-500">
+              <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">الاسم الثلاثي بالكامل</label>
+              <input required placeholder="اكتب اسمك هنا..." className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-black outline-none focus:bg-white focus:border-emerald-100 transition-all text-sm" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
             </div>
           )}
           
-          <div className="space-y-2">
-             <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest block">رقم الهاتف المسجل</label>
+          <div className="space-y-1.5">
+             <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest block">رقم الهاتف</label>
              <div className="relative">
-               <Phone className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-               <input required type="tel" placeholder="00000000" className="w-full p-5 pr-16 bg-slate-50 border-2 border-slate-50 rounded-[1.8rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all tracking-widest text-base" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
+               <Phone className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+               <input required type="tel" placeholder="رقم الهاتف المسجل..." className="w-full p-4 pr-14 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all tracking-widest text-base" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
              </div>
           </div>
 
-          <div className="space-y-2">
-             <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest block">كلمة المرور</label>
+          <div className="space-y-1.5">
+             <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest block">كلمة المرور</label>
              <div className="relative">
-               <Lock className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-               <input required type="password" placeholder="••••••••" className="w-full p-5 pr-16 bg-slate-50 border-2 border-slate-50 rounded-[1.8rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all text-base" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+               <Lock className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+               <input required type="password" placeholder="••••••••" className="w-full p-4 pr-14 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all text-base" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
              </div>
           </div>
 
+          {/* حقل تأكيد كلمة المرور يظهر فقط في حالة التسجيل الجديد */}
           {isSignUp && (
-            <div className="space-y-2">
-               <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest block">تأكيد كلمة المرور</label>
+            <div className="space-y-1.5 animate-in fade-in slide-in-from-right duration-500 delay-75">
+               <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest block text-emerald-600">تأكيد كلمة المرور</label>
                <div className="relative">
-                 <ShieldCheck className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-                 <input required type="password" placeholder="••••••••" className="w-full p-5 pr-16 bg-slate-50 border-2 border-slate-50 rounded-[1.8rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all text-base" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
+                 <ShieldCheck className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-300" size={18} />
+                 <input required type="password" placeholder="أعد كتابة كلمة المرور..." className="w-full p-4 pr-14 bg-emerald-50/30 border-2 border-emerald-50 rounded-[1.5rem] font-black text-left outline-none focus:bg-white focus:border-emerald-200 transition-all text-base" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
                </div>
             </div>
           )}
           
-          <button disabled={loading} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-4 text-lg mt-4">
-            {loading ? <RefreshCw className="animate-spin" /> : (isSignUp ? <><Sparkles size={20}/> تسجيل الحساب</> : 'دخول المنصة')}
+          <button disabled={loading} className={`w-full py-5 rounded-[1.8rem] font-black shadow-xl transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-4 text-lg mt-4 text-white ${isSignUp ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+            {loading ? <RefreshCw className="animate-spin" /> : (isSignUp ? <><UserPlus size={22}/> إنشاء الحساب</> : <><UserCheck size={22}/> دخول المنصة</>)}
           </button>
         </form>
 
-        <div className="flex flex-col items-center mt-12 gap-4">
-          <button onClick={() => setIsSignUp(!isSignUp)} className="text-slate-400 font-black text-[11px] uppercase tracking-[0.3em] hover:text-indigo-600 transition-all duration-300">
-            {isSignUp ? 'لديك حساب بالفعل؟ سجل دخولك' : 'طلب انضمام لمعلم جديد'}
+        <div className="flex flex-col items-center mt-10 gap-4">
+          <button onClick={() => { setIsSignUp(!isSignUp); setError(null); }} className="text-slate-400 font-black text-[11px] uppercase tracking-[0.2em] hover:text-indigo-600 transition-all duration-300 flex items-center gap-2">
+            {isSignUp ? (
+              <><span>لديك حساب بالفعل؟</span> <span className="text-indigo-600 underline">سجل دخولك هنا</span></>
+            ) : (
+              <><span>ليس لديك حساب؟</span> <span className="text-emerald-600 underline">طلب انضمام لمعلم جديد</span></>
+            )}
           </button>
           {!isSignUp && (
             <p className="text-[9px] text-slate-300 font-bold max-w-xs text-center leading-relaxed">
-              * في حال نسيان كلمة المرور، يرجى التواصل مع المدير العام لإعادة تعيين حسابك.
+              * في حال نسيان كلمة المرور، يرجى التواصل مع المدير العام.
             </p>
           )}
         </div>
