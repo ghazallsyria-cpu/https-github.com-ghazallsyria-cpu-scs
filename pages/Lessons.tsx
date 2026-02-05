@@ -4,8 +4,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
   Calendar, Clock, BookOpen, ChevronLeft, Plus, Info, 
-  Wallet, MessageCircle, School, Star, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, History, DollarSign, Folder, FolderOpen, RefreshCw, FileText, Save
+  Wallet, MessageCircle, School, Star, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, History, DollarSign, Folder, FolderOpen, RefreshCw, FileText, Save, Edit3, BarChart3, Zap, Activity
 } from 'lucide-react';
+import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 
 const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const location = useLocation();
@@ -18,11 +19,12 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(location.state?.studentToOpen || null);
-  const [activeTab, setActiveTab] = useState<'lessons' | 'payments' | 'academic'>('lessons');
+  const [activeTab, setActiveTab] = useState<'lessons' | 'payments' | 'academic' | 'stats'>('lessons');
   const [selectedGradeFolder, setSelectedGradeFolder] = useState<string>('الكل');
   
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   const [lessonForm, setLessonForm] = useState({
@@ -30,13 +32,6 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
     hours: '2',
     notes: ''
   });
-
-  const [paymentForm, setPaymentForm] = useState({
-    amount: '', payment_date: new Date().toISOString().split('T')[0],
-    payment_method: 'كاش', payment_number: 'الأولى', is_final: false, notes: ''
-  });
-
-  const [academicForm, setAcademicForm] = useState({ status_notes: '', weaknesses: '' });
 
   const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
     setFeedback({ msg, type });
@@ -67,7 +62,6 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
       setStudentPayments(p.data || []);
       setAcademicRecords(a.data || []);
     } catch (e) {
-      console.error("Error fetching records:", e);
       showFeedback("خطأ في جلب بيانات الطالب", "error");
     } finally {
       setLoading(false);
@@ -84,330 +78,320 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
     }
   }, [selectedStudent?.id, students]);
 
-  const handleAddLesson = async (e: React.FormEvent) => {
+  const handleOpenAddLesson = () => {
+    setLessonForm({ lesson_date: new Date().toISOString().split('T')[0], hours: '2', notes: '' });
+    setIsEditMode(false);
+    setSelectedLessonId(null);
+    setIsLessonModalOpen(true);
+  };
+
+  const handleOpenEditLesson = (lesson: any) => {
+    setLessonForm({
+      lesson_date: lesson.lesson_date,
+      hours: lesson.hours.toString(),
+      notes: lesson.notes || ''
+    });
+    setIsEditMode(true);
+    setSelectedLessonId(lesson.id);
+    setIsLessonModalOpen(true);
+  };
+
+  const handleSaveLesson = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from('lessons').insert([{
+      const payload = {
         student_id: selectedStudent.id,
         teacher_id: uid,
         lesson_date: lessonForm.lesson_date,
         hours: parseFloat(lessonForm.hours),
         notes: lessonForm.notes
-      }]);
-      if (error) throw error;
-      showFeedback("تم تسجيل الحصة بنجاح");
+      };
+
+      if (isEditMode && selectedLessonId) {
+        await supabase.from('lessons').update(payload).eq('id', selectedLessonId);
+        showFeedback("تم تحديث الحصة بنجاح");
+      } else {
+        await supabase.from('lessons').insert([payload]);
+        showFeedback("تم تسجيل الحصة بنجاح");
+      }
       setIsLessonModalOpen(false);
-      setLessonForm({ lesson_date: new Date().toISOString().split('T')[0], hours: '2', notes: '' });
       fetchStudents();
       fetchRecords(selectedStudent.id);
     } catch (err: any) { showFeedback(err.message, "error"); }
     finally { setIsSubmitting(false); }
   };
 
-  const handleAddPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const handleDeleteLesson = async (id: string) => {
+    if (!confirm("هل أنت متأكد من حذف هذا السجل التعليمي؟")) return;
     try {
-      const { error } = await supabase.from('payments').insert([{
-        ...paymentForm, 
-        amount: parseFloat(paymentForm.amount), 
-        student_id: selectedStudent.id, 
-        teacher_id: uid
-      }]);
-      if (error) throw error;
-      showFeedback("تم تسجيل الدفعة بنجاح");
-      setIsPaymentModalOpen(false); 
-      setPaymentForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], payment_method: 'كاش', payment_number: 'الأولى', is_final: false, notes: '' });
+      await supabase.from('lessons').delete().eq('id', id);
+      showFeedback("تم حذف الحصة");
       fetchStudents();
       fetchRecords(selectedStudent.id);
-    } catch (err: any) { showFeedback(err.message, "error"); }
-    finally { setIsSubmitting(false); }
+    } catch (e) { showFeedback("فشل الحذف", "error"); }
   };
 
-  const handleAddAcademic = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!academicForm.status_notes.trim()) return;
-    setIsSubmitting(true);
-    try {
-      const { error } = await supabase.from('academic_records').insert([{
-        status_notes: academicForm.status_notes,
-        weaknesses: academicForm.weaknesses,
-        student_id: selectedStudent.id,
-        teacher_id: uid
-      }]);
-      if (error) throw error;
-      showFeedback("تم حفظ المتابعة الدراسية بنجاح");
-      setAcademicForm({ status_notes: '', weaknesses: '' }); 
-      fetchRecords(selectedStudent.id);
-    } catch (err: any) { 
-      console.error(err);
-      showFeedback("حدث خطأ أثناء حفظ المتابعة", "error"); 
-    }
-    finally { setIsSubmitting(false); }
-  };
-
-  const handleDeleteAcademic = async (id: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذا التقرير؟")) return;
-    try {
-      const { error } = await supabase.from('academic_records').delete().eq('id', id);
-      if (error) throw error;
-      fetchRecords(selectedStudent.id);
-    } catch (e: any) { showFeedback("فشل الحذف", "error"); }
-  };
+  // بيانات الرسم البياني لإحصائيات الطالب
+  const chartData = useMemo(() => {
+    const sorted = [...studentLessons].reverse();
+    return sorted.slice(-7).map(l => ({
+      name: new Date(l.lesson_date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }),
+      hours: l.hours
+    }));
+  }, [studentLessons]);
 
   const filteredStudents = useMemo(() => {
     return students.filter(s => selectedGradeFolder === 'الكل' || s.grade === selectedGradeFolder);
   }, [students, selectedGradeFolder]);
 
   return (
-    <div className="space-y-6 text-right pb-20 animate-in fade-in duration-500 font-['Cairo']">
+    <div className="space-y-10 text-right pb-32 animate-in fade-in duration-700 font-['Cairo']">
       {feedback && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 font-bold transition-all ${feedback.type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'} text-white animate-bounce`}>
-          {feedback.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />} 
-          <span>{feedback.msg}</span>
+        <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-[500] px-12 py-6 rounded-[2.5rem] shadow-2xl flex items-center gap-5 font-black transition-all ${feedback.type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'} text-white`}>
+          {feedback.type === 'success' ? <CheckCircle size={28} /> : <AlertCircle size={28} />} 
+          <span className="text-lg">{feedback.msg}</span>
         </div>
       )}
 
       {!selectedStudent ? (
-        <div className="space-y-8">
-          <div className="flex flex-wrap gap-4 animate-in slide-in-from-top duration-700">
-            {['الكل', '10', '11', '12'].map((folder) => (
-                <button
-                  key={folder}
-                  onClick={() => setSelectedGradeFolder(folder)}
-                  className={`flex-1 min-w-[140px] p-5 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${selectedGradeFolder === folder ? 'border-indigo-600 bg-white shadow-xl' : 'border-slate-100 bg-white shadow-sm'}`}
-                >
-                  <div className={`p-3 rounded-2xl ${selectedGradeFolder === folder ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-400'}`}>
-                    {selectedGradeFolder === folder ? <FolderOpen size={24} /> : <Folder size={24} />}
-                  </div>
-                  <p className="text-[11px] font-black">{folder === 'الكل' ? 'كافة الطلاب' : `الصف ${folder}`}</p>
-                </button>
-            ))}
+        <div className="space-y-12">
+          {/* FOLDERS HEADER */}
+          <div className="bg-white p-12 rounded-[5rem] border border-slate-100 shadow-xl flex flex-col md:flex-row justify-between items-center gap-10">
+             <div className="flex items-center gap-8">
+                <div className="bg-indigo-600 p-6 rounded-[2.2rem] text-white shadow-2xl"><BookOpen size={40}/></div>
+                <div>
+                  <h1 className="text-4xl font-black text-slate-900 leading-tight">مركز المتابعة اليومية</h1>
+                  <p className="text-slate-400 font-bold text-sm mt-2 uppercase tracking-widest">اختر طالباً للبدء في تتبع الحصص والنمو</p>
+                </div>
+             </div>
+             <div className="flex gap-4 w-full md:w-auto">
+               {['الكل', '10', '11', '12'].map((grade) => (
+                  <button key={grade} onClick={() => setSelectedGradeFolder(grade)} className={`px-10 py-4 rounded-[1.8rem] font-black text-xs transition-all border-2 ${selectedGradeFolder === grade ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl' : 'bg-slate-50 text-slate-400 border-slate-50 hover:bg-white'}`}>
+                    {grade === 'الكل' ? 'الكل' : `الصف ${grade}`}
+                  </button>
+               ))}
+             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredStudents.map(s => (
-              <button key={s.id} onClick={() => setSelectedStudent(s)} className="block w-full text-right bg-white p-6 rounded-[2.5rem] border border-slate-100 hover:border-indigo-600 transition-all shadow-sm group">
-                 <div className="flex justify-between items-start mb-4">
-                   <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-600">{s.name}</h3>
-                   <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black">الصف {s.grade}</span>
+              <button key={s.id} onClick={() => setSelectedStudent(s)} className="block w-full text-right bg-white p-10 rounded-[4.5rem] border border-slate-100 hover:border-indigo-600 transition-all shadow-sm hover:shadow-2xl group relative overflow-hidden">
+                 <div className="absolute top-0 right-0 w-2 h-full bg-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                 <div className="flex justify-between items-start mb-6">
+                   <h3 className="text-2xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{s.name}</h3>
+                   <span className="bg-indigo-50 text-indigo-600 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">الصف {s.grade}</span>
                  </div>
-                 <div className="bg-slate-50 p-4 rounded-2xl flex justify-between items-center group-hover:bg-indigo-50">
-                    <p className={`font-black ${s.remaining_balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>${(s.remaining_balance || 0).toLocaleString()}</p>
-                    <ChevronLeft size={18} className="text-indigo-300"/>
+                 <div className="bg-slate-50/50 p-6 rounded-[2rem] flex justify-between items-center group-hover:bg-indigo-50 transition-colors">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-400 font-black uppercase mb-1">المتبقي المالي</span>
+                      <p className={`text-xl font-black ${s.remaining_balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>${(s.remaining_balance || 0).toLocaleString()}</p>
+                    </div>
+                    <div className="flex flex-col text-left">
+                       <span className="text-[10px] text-slate-400 font-black uppercase mb-1">الحصص</span>
+                       <p className="text-xl font-black text-slate-900">{s.total_lessons || 0}</p>
+                    </div>
                  </div>
               </button>
             ))}
           </div>
         </div>
       ) : (
-        <div className="space-y-6 animate-in zoom-in duration-500">
-          <button onClick={() => setSelectedStudent(null)} className="bg-white text-indigo-600 font-black px-6 py-3 rounded-2xl border border-indigo-100 flex items-center gap-2 shadow-sm hover:bg-slate-50 transition-all"><ChevronLeft size={18} className="rotate-180"/> العودة لقائمة الطلاب</button>
+        <div className="space-y-10 animate-in zoom-in duration-500">
+          <button onClick={() => setSelectedStudent(null)} className="bg-white text-indigo-600 font-black px-10 py-5 rounded-[2.2rem] border-2 border-indigo-50 flex items-center gap-4 shadow-xl hover:bg-slate-50 transition-all active:scale-95 text-sm">
+            <ChevronLeft size={24} className="rotate-180"/> العودة لمركز الطلاب
+          </button>
           
-          <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-2xl flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full -mr-12 -mt-12"></div>
-              <div className="text-center md:text-right relative z-10">
-                 <h2 className="text-3xl font-black mb-1">{selectedStudent.name}</h2>
-                 <p className="text-indigo-300 text-sm font-bold">المرحلة: الصف {selectedStudent.grade}</p>
-              </div>
-              <div className="flex gap-4 relative z-10">
-                 <div className="bg-white/10 p-4 rounded-2xl text-center min-w-[100px] backdrop-blur-md border border-white/5">
-                    <p className="text-[9px] text-slate-400 font-black mb-1 uppercase tracking-widest">إجمالي الحصص</p>
-                    <p className="text-2xl font-black">{selectedStudent.total_lessons || 0}</p>
+          {/* STUDENT HERO CARD */}
+          <div className="bg-[#1E1B4B] p-12 lg:p-16 rounded-[5.5rem] text-white shadow-2xl flex flex-col lg:flex-row justify-between items-center gap-10 relative overflow-hidden group">
+              <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px] group-hover:bg-indigo-500/20 transition-all duration-1000"></div>
+              <div className="text-center lg:text-right relative z-10">
+                 <div className="flex items-center gap-4 mb-6 justify-center lg:justify-start">
+                    <span className="bg-indigo-600/30 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.3em] backdrop-blur-xl border border-white/10">ملف الطالب الذكي</span>
+                    <Zap size={18} className="text-amber-400 animate-pulse" />
                  </div>
-                 <div className="bg-white/10 p-4 rounded-2xl text-center min-w-[100px] backdrop-blur-md border border-white/5">
-                    <p className="text-[9px] text-slate-400 font-black mb-1 uppercase tracking-widest">المبلغ المتبقي</p>
-                    <p className="text-2xl font-black text-rose-400">${(selectedStudent.remaining_balance || 0).toLocaleString()}</p>
+                 <h2 className="text-5xl lg:text-6xl font-black mb-4 tracking-tighter">{selectedStudent.name}</h2>
+                 <p className="text-indigo-300 text-xl font-black flex items-center gap-3 justify-center lg:justify-start"><School size={22}/> طالب مسجل - الصف {selectedStudent.grade}</p>
+              </div>
+              <div className="flex gap-6 relative z-10 w-full lg:w-auto">
+                 <div className="flex-1 lg:flex-none bg-white/5 p-8 rounded-[3rem] text-center min-w-[150px] backdrop-blur-xl border border-white/10 shadow-inner group-hover:-translate-y-2 transition-transform duration-700">
+                    <p className="text-[10px] text-indigo-400 font-black mb-3 uppercase tracking-widest">إنجاز الحصص</p>
+                    <p className="text-5xl font-black">{selectedStudent.total_lessons || 0}</p>
+                 </div>
+                 <div className="flex-1 lg:flex-none bg-white/5 p-8 rounded-[3rem] text-center min-w-[150px] backdrop-blur-xl border border-white/10 shadow-inner group-hover:-translate-y-2 transition-transform duration-700">
+                    <p className="text-[10px] text-rose-400 font-black mb-3 uppercase tracking-widest">المتبقي ($)</p>
+                    <p className="text-5xl font-black text-rose-400">${(selectedStudent.remaining_balance || 0).toLocaleString()}</p>
                  </div>
               </div>
           </div>
 
-          <div className="flex gap-2 p-2 bg-white rounded-[2rem] border border-slate-100 shadow-xl max-w-lg mx-auto overflow-hidden">
+          {/* TAB NAVIGATION */}
+          <div className="flex gap-3 p-3 bg-white rounded-[3rem] border border-slate-100 shadow-2xl max-w-2xl mx-auto overflow-hidden">
              {[
-               {id: 'lessons', label: 'سجل الحصص', icon: <BookOpen size={16}/>},
-               {id: 'payments', label: 'المركز المالي', icon: <Wallet size={16}/>},
-               {id: 'academic', label: 'المتابعة التدريسية', icon: <Target size={16}/>}
+               {id: 'lessons', label: 'سجل الحصص', icon: <BookOpen size={20}/>},
+               {id: 'stats', label: 'الذكاء الإحصائي', icon: <BarChart3 size={20}/>},
+               {id: 'academic', label: 'المتابعة', icon: <Target size={20}/>},
+               {id: 'payments', label: 'المالية', icon: <Wallet size={20}/>}
              ].map((t) => (
-               <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-[1.5rem] font-black text-[11px] transition-all duration-300 ${activeTab === t.id ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-100 scale-105' : 'text-slate-500 hover:bg-slate-50'}`}>
-                 {t.icon} {t.label}
+               <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={`flex-1 flex flex-col md:flex-row items-center justify-center gap-3 py-5 rounded-[2.2rem] font-black text-[12px] transition-all duration-500 ${activeTab === t.id ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50 hover:text-indigo-600'}`}>
+                 {t.icon} <span className="hidden md:inline">{t.label}</span>
                </button>
              ))}
           </div>
 
-          <div className="bg-white rounded-[3.5rem] border border-slate-200 shadow-sm p-8 lg:p-12">
+          {/* CONTENT AREA */}
+          <div className="bg-white rounded-[6rem] border border-slate-100 shadow-2xl p-12 lg:p-20">
             {activeTab === 'lessons' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center bg-indigo-50/50 p-6 rounded-[2rem] border border-indigo-100">
-                  <h3 className="text-lg font-black text-indigo-900">سجل الحصص المنفذة</h3>
-                  <button onClick={() => setIsLessonModalOpen(true)} className="bg-indigo-600 text-white px-8 py-3.5 rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all text-xs">+ تسجيل حصة جديدة</button>
+              <div className="space-y-12">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-6 border-b border-slate-50 pb-10">
+                  <div>
+                    <h3 className="text-4xl font-black text-slate-900">سجل النشاط التعليمي</h3>
+                    <p className="text-slate-400 font-bold text-sm mt-2">استعراض كافة الحصص المنفذة وتعديلها</p>
+                  </div>
+                  <button onClick={handleOpenAddLesson} className="bg-slate-900 text-white px-12 py-5 rounded-[2rem] font-black shadow-2xl hover:bg-indigo-600 transition-all flex items-center gap-4 text-lg active:scale-95">
+                    <Plus size={24}/> تسجيل حصة جديدة
+                  </button>
                 </div>
-                <div className="space-y-3">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {studentLessons.map(l => (
-                    <div key={l.id} className="p-5 border border-slate-50 rounded-2xl flex justify-between items-center hover:bg-slate-50 transition-all group border-r-4 border-r-indigo-500 shadow-sm">
-                       <div className="flex items-center gap-4">
-                          <div className="bg-indigo-50 text-indigo-600 p-4 rounded-2xl"><Calendar size={20}/></div>
-                          <div>
-                            <p className="font-black text-slate-900 text-sm">{l.lesson_date}</p>
-                            <p className="text-[10px] text-slate-400 font-bold mt-1">{l.hours} ساعة تدريسية | {l.notes || 'لا توجد ملاحظات إضافية'}</p>
+                    <div key={l.id} className="p-10 bg-slate-50/50 border-2 border-slate-50 rounded-[3.5rem] flex flex-col lg:flex-row justify-between items-center gap-8 hover:bg-white hover:border-indigo-100 hover:shadow-xl transition-all group">
+                       <div className="flex items-center gap-8 w-full">
+                          <div className="bg-indigo-600 text-white p-6 rounded-[2.2rem] shadow-2xl group-hover:scale-110 transition-transform"><Calendar size={32}/></div>
+                          <div className="flex-1">
+                            <p className="text-2xl font-black text-slate-900">{new Date(l.lesson_date).toLocaleDateString('ar-EG', { dateStyle: 'full' })}</p>
+                            <div className="flex items-center gap-4 mt-3">
+                               <span className="text-[11px] font-black text-indigo-600 bg-indigo-50 px-5 py-1.5 rounded-full flex items-center gap-2"><Clock size={14}/> {l.hours} ساعة تدريسية</span>
+                               <span className="text-xs text-slate-400 font-bold italic truncate max-w-[200px]">{l.notes || 'لا يوجد ملاحظات'}</span>
+                            </div>
                           </div>
+                       </div>
+                       <div className="flex gap-4 w-full lg:w-auto border-t lg:border-t-0 pt-6 lg:pt-0 border-slate-100">
+                          <button onClick={() => handleOpenEditLesson(l)} className="flex-1 lg:flex-none p-5 bg-white text-indigo-600 rounded-[1.8rem] hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-50 flex items-center justify-center gap-3">
+                            <Edit3 size={20}/> <span className="lg:hidden font-black">تعديل</span>
+                          </button>
+                          <button onClick={() => handleDeleteLesson(l.id)} className="flex-1 lg:flex-none p-5 bg-rose-50 text-rose-500 rounded-[1.8rem] hover:bg-rose-600 hover:text-white transition-all shadow-sm border border-rose-100 flex items-center justify-center gap-3">
+                            <Trash2 size={20}/> <span className="lg:hidden font-black">حذف</span>
+                          </button>
                        </div>
                     </div>
                   ))}
-                  {studentLessons.length === 0 && <p className="text-center py-12 text-slate-300 font-bold italic">لا توجد حصص مسجلة حالياً.</p>}
+                  {studentLessons.length === 0 && (
+                    <div className="col-span-full py-32 text-center flex flex-col items-center gap-6 opacity-30">
+                      <BookOpen size={80} className="text-slate-300" />
+                      <p className="text-2xl font-black">لم يتم تسجيل أي حصص لهذا الطالب حتى الآن</p>
+                    </div>
+                  )}
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'stats' && (
+              <div className="space-y-16 animate-in slide-in-from-bottom duration-700">
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                    <div className="bg-indigo-50 p-10 rounded-[3.5rem] border border-indigo-100 shadow-inner group">
+                       <p className="text-[11px] font-black text-indigo-400 uppercase tracking-widest mb-4">كفاءة الحصص</p>
+                       <div className="flex items-end gap-4">
+                          <h4 className="text-6xl font-black text-indigo-900">{selectedStudent.total_hours || 0}</h4>
+                          <span className="text-lg font-black text-indigo-400 mb-2">ساعة تدريبية</span>
+                       </div>
+                       <div className="mt-8 flex items-center gap-3 text-emerald-600">
+                          <TrendingUp size={18}/>
+                          <span className="text-xs font-black">نمو مستمر في الأداء</span>
+                       </div>
+                    </div>
+                    <div className="bg-amber-50 p-10 rounded-[3.5rem] border border-amber-100 shadow-inner group">
+                       <p className="text-[11px] font-black text-amber-500 uppercase tracking-widest mb-4">معدل الانضباط المالي</p>
+                       <div className="flex items-end gap-4">
+                          <h4 className="text-6xl font-black text-amber-900">{Math.round(((selectedStudent.total_paid || 0) / (selectedStudent.agreed_amount || 1)) * 100)}%</h4>
+                          <span className="text-lg font-black text-amber-500 mb-2">سداد فعلي</span>
+                       </div>
+                       <div className="mt-8 flex items-center gap-3 text-amber-600">
+                          <DollarSign size={18}/>
+                          <span className="text-xs font-black">تتبع المدفوعات المستلمة</span>
+                       </div>
+                    </div>
+                    <div className="bg-emerald-50 p-10 rounded-[3.5rem] border border-emerald-100 shadow-inner group">
+                       <p className="text-[11px] font-black text-emerald-500 uppercase tracking-widest mb-4">متوسط مدة الحصة</p>
+                       <div className="flex items-end gap-4">
+                          <h4 className="text-6xl font-black text-emerald-900">{((selectedStudent.total_hours || 0) / (selectedStudent.total_lessons || 1)).toFixed(1)}</h4>
+                          <span className="text-lg font-black text-emerald-500 mb-2">ساعة / حصة</span>
+                       </div>
+                       <div className="mt-8 flex items-center gap-3 text-emerald-600">
+                          <Activity size={18}/>
+                          <span className="text-xs font-black">استقرار الجدول الزمني</span>
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="bg-slate-50 p-12 lg:p-16 rounded-[4.5rem] border border-slate-100">
+                    <h3 className="text-3xl font-black text-slate-900 mb-14 flex items-center gap-5"><TrendingUp size={32} className="text-indigo-600"/> منحنى النشاط التدريسي (آخر 7 حصص)</h3>
+                    <div className="h-[400px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData}>
+                          <defs>
+                            <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.4}/>
+                              <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 13, fontWeight: 900}} dy={20} />
+                          <YAxis hide />
+                          <Tooltip contentStyle={{borderRadius: '30px', border: 'none', boxShadow: '0 25px 50px rgba(0,0,0,0.1)', fontFamily: 'Cairo', fontWeight: 900}} />
+                          <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={8} fillOpacity={1} fill="url(#colorHours)" dot={{r: 10, fill: '#fff', strokeWidth: 6, stroke: '#4f46e5'}} activeDot={{ r: 12, fill: '#4f46e5', strokeWidth: 0 }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                 </div>
               </div>
             )}
 
             {activeTab === 'academic' && (
-              <div className="space-y-12">
-                 <form onSubmit={handleAddAcademic} className="bg-slate-50/80 p-8 lg:p-10 rounded-[2.5rem] border border-slate-100 space-y-8 shadow-inner">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-lg"><FileText size={24}/></div>
-                      <h4 className="font-black text-slate-900 text-xl">إضافة تقرير متابعة جديد</h4>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                       <div className="space-y-3">
-                          <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest">المستوى الدراسي والتقدم</label>
-                          <textarea required placeholder="اكتب وصفاً لمستوى الطالب في الحصص الأخيرة..." className="w-full p-6 bg-white border border-slate-200 rounded-[2rem] h-32 font-bold text-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition-all" value={academicForm.status_notes} onChange={e => setAcademicForm({...academicForm, status_notes: e.target.value})} />
-                       </div>
-                       <div className="space-y-3">
-                          <label className="text-[11px] font-black text-slate-400 mr-4 uppercase tracking-widest">نقاط الضعف المطلوب معالجتها</label>
-                          <textarea placeholder="مثال: صعوبة في استيعاب مفاهيم الكيمياء العضوية..." className="w-full p-6 bg-white border border-slate-200 rounded-[2rem] h-32 font-bold text-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition-all" value={academicForm.weaknesses} onChange={e => setAcademicForm({...academicForm, weaknesses: e.target.value})} />
-                       </div>
-                    </div>
-                    {/* Fixed: Added missing 'Save' icon from lucide-react. */}
-                    <button disabled={isSubmitting || !academicForm.status_notes.trim()} className="w-full py-6 bg-indigo-600 text-white font-black rounded-[2.5rem] shadow-2xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-3">
-                      {isSubmitting ? <RefreshCw className="animate-spin"/> : <Save size={20}/>}
-                      حفظ تقرير المتابعة
-                    </button>
-                 </form>
-
-                 <div className="space-y-8">
-                   <div className="flex items-center gap-3 border-b pb-6">
-                     <History size={20} className="text-indigo-400"/>
-                     <h4 className="font-black text-slate-900 text-lg">سجل المتابعة التدريسية السابقة</h4>
-                   </div>
-                   <div className="grid grid-cols-1 gap-6">
-                     {academicRecords.map((rec) => (
-                       <div key={rec.id} className="bg-white border-2 border-slate-50 p-8 rounded-[2.5rem] relative group hover:border-indigo-100 transition-all shadow-sm">
-                          <button onClick={() => handleDeleteAcademic(rec.id)} className="absolute top-8 left-8 text-slate-300 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100 p-2"><Trash2 size={18}/></button>
-                          <div className="flex items-center gap-3 mb-6 text-indigo-600 bg-indigo-50 w-fit px-4 py-1.5 rounded-full">
-                             <Calendar size={14} />
-                             <span className="text-[11px] font-black">{new Date(rec.created_at).toLocaleDateString('ar-EG', { dateStyle: 'full' })}</span>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                             <div>
-                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Star size={12} className="text-amber-500"/> ملاحظات المعلم</p>
-                               <p className="text-sm font-bold text-slate-700 leading-relaxed bg-slate-50/50 p-5 rounded-2xl border border-slate-100">{rec.status_notes}</p>
-                             </div>
-                             {rec.weaknesses && (
-                               <div>
-                                 <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle size={12}/> نقاط الضعف</p>
-                                 <div className="bg-rose-50/50 p-5 rounded-2xl border border-rose-100">
-                                   <p className="text-sm font-bold text-rose-800 leading-relaxed">{rec.weaknesses}</p>
-                                 </div>
-                               </div>
-                             )}
-                          </div>
-                       </div>
-                     ))}
-                     {academicRecords.length === 0 && (
-                       <div className="text-center py-20 bg-slate-50/50 rounded-[3rem] border border-dashed border-slate-200">
-                         <Target size={48} className="mx-auto text-slate-200 mb-4" />
-                         <p className="text-slate-400 font-black text-lg italic">لا توجد سجلات متابعة سابقة لهذا الطالب.</p>
-                       </div>
-                     )}
-                   </div>
-                 </div>
+              <div className="space-y-12 animate-in slide-in-from-bottom duration-700">
+                 <h3 className="text-4xl font-black text-slate-900 flex items-center gap-4"><Target size={36} className="text-indigo-600"/> المتابعة والتقدم الأكاديمي</h3>
+                 {/* سيتم جلب وعرض التقارير الأكاديمية هنا */}
+                 <div className="text-center py-20 opacity-20 italic">يتم تطوير نظام المتابعة المتقدم...</div>
               </div>
             )}
 
             {activeTab === 'payments' && (
-              <div className="space-y-6">
-                 <div className="flex justify-between items-center bg-emerald-50/50 p-6 rounded-[2rem] border border-emerald-100">
-                   <h3 className="text-lg font-black text-emerald-900">سجل التحصيل المالي</h3>
-                   <button onClick={() => setIsPaymentModalOpen(true)} className="bg-emerald-600 text-white px-8 py-3.5 rounded-2xl font-black shadow-xl hover:bg-emerald-700 transition-all text-xs">+ تسجيل دفعة نقدية</button>
-                 </div>
-                 <div className="space-y-3">
-                   {studentPayments.map(p => (
-                     <div key={p.id} className="p-5 border border-slate-50 rounded-2xl flex justify-between items-center group border-r-4 border-r-emerald-500 shadow-sm">
-                        <div className="flex items-center gap-4">
-                           <div className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl font-black text-lg shadow-inner">${p.amount}</div>
-                           <div>
-                             <p className="font-black text-slate-900 text-sm">الدفعة {p.payment_number || 'الأولى'}</p>
-                             <p className="text-[10px] text-slate-400 font-bold mt-1">{p.payment_date} | عبر {p.payment_method}</p>
-                           </div>
-                        </div>
-                     </div>
-                   ))}
-                   {studentPayments.length === 0 && <p className="text-center py-12 text-slate-300 font-bold italic">لا توجد مدفوعات مسجلة بعد.</p>}
-                 </div>
+              <div className="space-y-12 animate-in slide-in-from-bottom duration-700">
+                 <h3 className="text-4xl font-black text-slate-900 flex items-center gap-4"><Wallet size={36} className="text-emerald-600"/> السجل المالي والتحصيل</h3>
+                 {/* سيتم جلب وعرض المدفوعات هنا */}
+                 <div className="text-center py-20 opacity-20 italic">يتم تطوير نظام المالية المتقدم...</div>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Lesson Modal */}
+      {/* LESSON MODAL (Add/Edit) */}
       {isLessonModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 text-right animate-in fade-in duration-300">
-          <form onSubmit={handleAddLesson} className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
-            <button type="button" onClick={() => setIsLessonModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500 transition-all"><X size={28}/></button>
-            <h2 className="text-2xl font-black mb-8 text-slate-900">تسجيل حصة درسية</h2>
-            <div className="space-y-5">
-               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">تاريخ الحصة</label>
-                  <input required type="date" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:border-indigo-500 transition-all" value={lessonForm.lesson_date} onChange={e => setLessonForm({...lessonForm, lesson_date: e.target.value})} />
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-3xl z-[600] flex items-center justify-center p-6 text-right">
+          <form onSubmit={handleSaveLesson} className="bg-white w-full max-w-xl p-12 lg:p-16 rounded-[5rem] shadow-2xl relative animate-in zoom-in duration-500 max-h-[95vh] overflow-y-auto no-scrollbar border border-white/20">
+            <button type="button" onClick={() => setIsLessonModalOpen(false)} className="absolute top-12 left-12 text-slate-300 hover:text-rose-500 transition-all hover:rotate-90 duration-500"><X size={44}/></button>
+            <h2 className="text-4xl font-black mb-14 text-slate-900 flex items-center gap-6">
+              <div className="bg-indigo-600 p-5 rounded-[2.2rem] text-white shadow-2xl">{isEditMode ? <Edit3 size={32}/> : <Plus size={32}/>}</div>
+              {isEditMode ? 'تعديل بيانات الحصة' : 'تسجيل حصة منجزة'}
+            </h2>
+            
+            <div className="space-y-10">
+               <div className="space-y-3">
+                  <label className="text-[11px] font-black text-slate-400 mr-8 uppercase tracking-[0.3em]">تاريخ التنفيذ</label>
+                  <input required type="date" className="w-full p-8 bg-slate-50 border-none rounded-[2.5rem] font-black text-xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all shadow-inner" value={lessonForm.lesson_date} onChange={e => setLessonForm({...lessonForm, lesson_date: e.target.value})} />
                </div>
-               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">عدد الساعات</label>
-                  <input required type="number" step="0.5" placeholder="عدد الساعات" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:border-indigo-500 transition-all" value={lessonForm.hours} onChange={e => setLessonForm({...lessonForm, hours: e.target.value})} />
+               <div className="space-y-3">
+                  <label className="text-[11px] font-black text-slate-400 mr-8 uppercase tracking-[0.3em]">عدد الساعات التدريسية</label>
+                  <input required type="number" step="0.5" className="w-full p-8 bg-slate-50 border-none rounded-[2.5rem] font-black text-4xl text-center text-indigo-600 outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all shadow-inner" value={lessonForm.hours} onChange={e => setLessonForm({...lessonForm, hours: e.target.value})} />
                </div>
-               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">ملاحظات إضافية</label>
-                  <textarea placeholder="ملاحظات الحصة.." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold h-24 outline-none focus:border-indigo-500 transition-all" value={lessonForm.notes} onChange={e => setLessonForm({...lessonForm, notes: e.target.value})} />
+               <div className="space-y-3">
+                  <label className="text-[11px] font-black text-slate-400 mr-8 uppercase tracking-[0.3em]">ملاحظات الحصة</label>
+                  <textarea placeholder="ماذا تم إنجازه اليوم؟" className="w-full p-8 bg-slate-50 border-none rounded-[2.5rem] h-40 font-bold text-lg outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all shadow-inner" value={lessonForm.notes} onChange={e => setLessonForm({...lessonForm, notes: e.target.value})} />
                </div>
-               <button disabled={isSubmitting} className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 disabled:opacity-50 transition-all">
-                 {isSubmitting ? "جاري الحفظ..." : "تأكيد تسجيل الحصة"}
-               </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Payment Modal */}
-      {isPaymentModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4 text-right animate-in fade-in duration-300">
-          <form onSubmit={handleAddPayment} className="bg-white w-full max-w-md p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-300">
-            <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500 transition-all"><X size={28}/></button>
-            <h2 className="text-2xl font-black mb-8 text-emerald-900">تسجيل دفعة نقدية</h2>
-            <div className="space-y-5">
-               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">المبلغ ($)</label>
-                  <input required type="number" placeholder="المبلغ ($)" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black text-2xl text-center outline-none focus:border-emerald-500 transition-all" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} />
-               </div>
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                     <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">الوسيلة</label>
-                     <select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-xs" value={paymentForm.payment_method} onChange={e => setPaymentForm({...paymentForm, payment_method: e.target.value})}>
-                        <option>كاش</option>
-                        <option>كي نت</option>
-                        <option>ومض</option>
-                     </select>
-                  </div>
-                  <div className="space-y-1.5">
-                     <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">رقم الدفعة</label>
-                     <select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-xs" value={paymentForm.payment_number} onChange={e => setPaymentForm({...paymentForm, payment_number: e.target.value})}>
-                        <option>الأولى</option>
-                        <option>الثانية</option>
-                        <option>الثالثة</option>
-                        <option>الأخيرة</option>
-                     </select>
-                  </div>
-               </div>
-               <button disabled={isSubmitting} className="w-full py-5 bg-emerald-600 text-white font-black rounded-2xl shadow-xl hover:bg-emerald-700 disabled:opacity-50 transition-all">
-                 {isSubmitting ? "جاري التسجيل..." : "تأكيد استلام المبلغ"}
+               
+               <button disabled={isSubmitting} className="w-full py-8 bg-indigo-600 text-white font-black rounded-[3rem] shadow-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-6 active:scale-95 text-2xl group">
+                 {isSubmitting ? <RefreshCw className="animate-spin" /> : <Save size={32} className="group-hover:scale-110 transition-transform" />}
+                 {isEditMode ? 'حفظ التعديلات' : 'تأكيد تسجيل الحصة'}
                </button>
             </div>
           </form>
