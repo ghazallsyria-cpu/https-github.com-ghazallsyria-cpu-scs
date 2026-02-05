@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, FileText, Settings, Bell, Star, Menu, X, ShieldAlert, Key, RefreshCw, CheckCircle, Sparkles
+  BookOpen, Calendar, FileText, Settings, Bell, Star, Menu, X, ShieldAlert, Key, RefreshCw, CheckCircle, Sparkles, BarChart3
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -15,6 +15,7 @@ import Login from './pages/Login';
 import Teachers from './pages/Teachers';
 import Schedule from './pages/Schedule';
 import Reports from './pages/Reports';
+import Statistics from './pages/Statistics';
 
 const ADMIN_PHONE = '55315661';
 
@@ -120,6 +121,7 @@ const App: React.FC = () => {
     { to: "/students", icon: <Users size={24} />, label: "الطلاب" },
     { to: "/lessons", icon: <BookOpen size={24} />, label: "الحصص" },
     { to: "/payments", icon: <Wallet size={24} />, label: "المالية" },
+    { to: "/statistics", icon: <BarChart3 size={24} />, label: "الإحصائيات" },
     { to: "/reports", icon: <FileText size={24} />, label: "التقارير" },
   ];
 
@@ -161,7 +163,7 @@ const App: React.FC = () => {
 
         {/* MOBILE BOTTOM NAV - GHOST STYLE */}
         <nav className="lg:hidden fixed bottom-6 inset-x-6 bg-slate-900/90 backdrop-blur-3xl border border-white/10 flex justify-around items-center px-4 py-5 z-[100] shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-[3rem]">
-          {navItems.slice(0, 5).map(item => (
+          {navItems.slice(0, 6).map(item => (
             <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all duration-500 ${isActive ? 'text-indigo-400 scale-125 -translate-y-2' : 'text-slate-500 opacity-60'}`}>
               {item.icon}
             </NavLink>
@@ -217,6 +219,7 @@ const App: React.FC = () => {
                   <Route path="/students" element={<Students isAdmin={isAdmin} role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                   <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                   <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                  <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                   <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
                   <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
                   {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
