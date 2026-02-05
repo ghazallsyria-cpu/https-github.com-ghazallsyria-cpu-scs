@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import { BookOpen, Clock, TrendingUp, PieChart as PieIcon, LayoutDashboard } from 'lucide-react';
+import { BookOpen, Clock, TrendingUp, PieChart as PieIcon, LayoutDashboard, RefreshCw } from 'lucide-react';
 
 const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const [data, setData] = useState<any[]>([]);
@@ -12,16 +12,27 @@ const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, yea
   const isAdmin = role === 'admin';
 
   useEffect(() => {
+    let isMounted = true;
     const fetchStats = async () => {
       setLoading(true);
       try {
-        const { data: periodStudents } = await supabase
+        const { data: periodStudents, error: stdError } = await supabase
           .from('students')
           .select('id')
           .eq('academic_year', year)
           .eq('semester', semester);
         
+        if (stdError) throw stdError;
+
         const studentIds = periodStudents?.map(s => s.id) || [];
+        if (studentIds.length === 0) {
+          if (isMounted) {
+            setData([]);
+            setSummary({ hourlyHours: 0, fixedHours: 0, hourlyLessons: 0, fixedLessons: 0 });
+            setLoading(false);
+          }
+          return;
+        }
 
         let lQuery = supabase
           .from('lessons')
@@ -32,38 +43,44 @@ const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, yea
           lQuery = lQuery.eq('teacher_id', uid);
         }
         
-        const { data: lsns } = await lQuery;
+        const { data: lsns, error: lsnError } = await lQuery;
+        if (lsnError) throw lsnError;
         
         let hH = 0, fH = 0, hL = 0, fL = 0;
         
         const grouped = (lsns || []).reduce((acc: any, curr) => {
           const date = curr.lesson_date;
           const isHourly = curr.students?.is_hourly;
+          const hoursValue = Number(curr.hours) || 0;
           
-          if (isHourly) { hH += Number(curr.hours); hL++; }
-          else { fH += Number(curr.hours); fL++; }
+          if (isHourly) { hH += hoursValue; hL++; }
+          else { fH += hoursValue; fL++; }
 
           if (!acc[date]) acc[date] = { date, hourly: 0, fixed: 0 };
-          if (isHourly) acc[date].hourly += Number(curr.hours);
-          else acc[date].fixed += Number(curr.hours);
+          if (isHourly) acc[date].hourly += hoursValue;
+          else acc[date].fixed += hoursValue;
           
           return acc;
         }, {});
         
-        setSummary({ hourlyHours: hH, fixedHours: fH, hourlyLessons: hL, fixedLessons: fL });
+        if (isMounted) {
+          setSummary({ hourlyHours: hH, fixedHours: fH, hourlyLessons: hL, fixedLessons: fL });
 
-        const chartData = Object.values(grouped)
-          .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-          .slice(-15);
-          
-        setData(chartData);
+          const chartData = Object.values(grouped)
+            .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .slice(-15);
+            
+          setData(chartData);
+        }
       } catch (err) {
-        console.error(err);
+        console.error("Statistics Fetch Error:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
+
     fetchStats();
+    return () => { isMounted = false; };
   }, [uid, role, isAdmin, year, semester]);
 
   return (
@@ -112,20 +129,22 @@ const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, yea
         </div>
         {loading ? (
            <div className="h-full flex items-center justify-center py-20">
-             <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+             <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin" />
            </div>
         ) : data.length > 0 ? (
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false" stroke="#f1f5f9" />
-              <XAxis dataKey="date" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-              <YAxis tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontFamily: 'Cairo' }} />
-              <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{paddingBottom: '30px', fontSize: '12px', fontWeight: 'bold'}} />
-              <Bar dataKey="hourly" name="حصص خارجية (ساعة)" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={20} />
-              <Bar dataKey="fixed" name="حصص فصلية (اتفاق)" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={20} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="h-[400px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                <YAxis tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontFamily: 'Cairo' }} />
+                <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{paddingBottom: '30px', fontSize: '12px', fontWeight: 'bold'}} />
+                <Bar dataKey="hourly" name="حصص خارجية (ساعة)" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={20} />
+                <Bar dataKey="fixed" name="حصص فصلية (اتفاق)" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={20} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center py-20 text-slate-400 font-bold">
             <PieIcon size={64} className="mb-4 opacity-10" />
