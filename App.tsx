@@ -1,10 +1,11 @@
 
 import { HashRouter, Routes, Route, Link, useLocation, Navigate, NavLink } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+// Add React import to resolve 'Cannot find namespace React' error when using React.FC
+import React, { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, FileText, Settings, Bell, Star, Menu, X, ShieldAlert, Key, RefreshCw, CheckCircle, Sparkles, BarChart3, Send, Radio
+  BookOpen, Calendar, FileText, Settings, Bell, Star, Menu, X, ShieldAlert, Key, RefreshCw, CheckCircle, Sparkles, BarChart3, Send, Radio, PhoneCall
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -64,7 +65,6 @@ const App: React.FC = () => {
     const userPhone = user.user_metadata?.phone || '';
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      // منطق تحديد المدير: إما عن طريق رقم الهاتف المحفوظ أو الرتبة في القاعدة
       const isSystemAdmin = userPhone === ADMIN_PHONE || data?.role === 'admin';
       const role = isSystemAdmin ? 'admin' : (data?.role || 'teacher');
       
@@ -108,16 +108,16 @@ const App: React.FC = () => {
 
   if (profile && !profile.is_approved) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-right font-['Cairo']" dir="rtl">
-        <div className="bg-white w-full max-w-xl p-12 rounded-[4rem] shadow-2xl border border-white text-center">
-            <div className="bg-amber-100 text-amber-600 p-8 rounded-[3rem] inline-block mb-8 animate-bounce">
-               <ShieldAlert size={64} />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 text-right font-['Cairo']" dir="rtl">
+        <div className="bg-white w-full max-w-xl p-8 md:p-12 rounded-[2.5rem] md:rounded-[4rem] shadow-2xl border border-white text-center">
+            <div className="bg-amber-100 text-amber-600 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] inline-block mb-8 animate-bounce">
+               <ShieldAlert size={48} className="md:w-16 md:h-16" />
             </div>
-            <h1 className="text-3xl font-black text-slate-900 mb-4">الحساب قيد المراجعة</h1>
-            <p className="text-slate-500 font-bold mb-10">أهلاً بك يا أستاذ <b>{profile.full_name}</b>. حسابك بانتظار موافقة الإدارة.</p>
-            <div className="bg-slate-50 p-8 rounded-[2.5rem] mb-10">
+            <h1 className="text-2xl md:text-3xl font-black text-slate-900 mb-4">الحساب قيد المراجعة</h1>
+            <p className="text-slate-500 font-bold mb-10 text-sm md:text-base">أهلاً بك يا أستاذ <b>{profile.full_name}</b>. حسابك بانتظار موافقة الإدارة.</p>
+            <div className="bg-slate-50 p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] mb-10">
                <input placeholder="كود التفعيل الفوري" className="w-full bg-white border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-center uppercase mb-4" value={activationCode} onChange={e => setActivationCode(e.target.value)} />
-               <button disabled={activating} onClick={handleActivateAccount} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black">تفعيل الآن</button>
+               <button disabled={activating} onClick={handleActivateAccount} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg">تفعيل الآن</button>
             </div>
             <button onClick={() => supabase.auth.signOut()} className="text-rose-500 font-black flex items-center gap-2 mx-auto"><LogOut size={18} /> خروج</button>
         </div>
@@ -142,7 +142,7 @@ const App: React.FC = () => {
     <HashRouter>
       <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row text-right font-['Cairo']" dir="rtl">
         
-        {/* SIDEBAR */}
+        {/* SIDEBAR - DESKTOP ONLY */}
         <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-sm">
           <div className="p-10 flex flex-col items-center gap-4 border-b border-slate-50">
             <div className="bg-indigo-600 p-5 rounded-[2.2rem] text-white shadow-xl shadow-indigo-100">
@@ -158,15 +158,13 @@ const App: React.FC = () => {
               </NavLink>
             ))}
             
-            {/* خيارات المدير فقط - تم التأكد من ظهورها */}
             {isAdmin && (
               <div className="pt-6 mt-6 border-t border-slate-50 space-y-4">
                 <span className="px-8 text-[10px] font-black text-slate-300 uppercase tracking-widest">أدوات الإدارة</span>
-                {/* Fixed line 166: Use render prop to access isActive in children */}
                 <NavLink to="/messaging" className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all ${isActive ? 'bg-amber-600 text-white shadow-xl -translate-x-2' : 'text-amber-600 bg-amber-50 hover:bg-amber-100'}`}>
-                  {({ isActive }) => (
+                  {({ isActive: linkActive }) => (
                     <>
-                      <Radio size={24} className={isActive ? "" : "animate-pulse"} /> مركز البث الفوري
+                      <Radio size={24} className={linkActive ? "" : "animate-pulse"} /> مركز البث الفوري
                     </>
                   )}
                 </NavLink>
@@ -184,53 +182,69 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* MOBILE NAV */}
-        <nav className="lg:hidden fixed bottom-6 inset-x-6 bg-slate-900/95 backdrop-blur-xl border border-white/10 flex justify-around items-center px-4 py-5 z-[100] shadow-2xl rounded-[3rem]">
+        {/* MOBILE NAV - FLOATING BOTTOM BAR */}
+        <nav className="lg:hidden fixed bottom-4 inset-x-4 bg-white/90 backdrop-blur-2xl border border-slate-100 flex justify-around items-center px-2 py-4 z-[100] shadow-2xl rounded-[2.5rem]">
           {navItems.slice(0, 4).map(item => (
-            <NavLink key={item.to} to={item.to} className={({isActive}) => `transition-all ${isActive ? 'text-indigo-400 scale-125' : 'text-slate-500'}`}>
+            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-4 py-2 rounded-2xl ${isActive ? 'text-indigo-600 bg-indigo-50/50 scale-110' : 'text-slate-400'}`}>
               {item.icon}
+              <span className="text-[9px] font-black">{item.label}</span>
             </NavLink>
           ))}
           {isAdmin && (
-            <NavLink to="/messaging" className={({isActive}) => `transition-all ${isActive ? 'text-amber-400 scale-125' : 'text-amber-500'}`}>
+            <NavLink to="/messaging" className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-4 py-2 rounded-2xl ${isActive ? 'text-amber-600 bg-amber-50/50 scale-110' : 'text-amber-500/50'}`}>
               <Radio size={24} />
+              <span className="text-[9px] font-black">بث</span>
             </NavLink>
           )}
         </nav>
 
-        {/* MAIN */}
-        <main className="flex-1 min-h-screen relative">
-          <header className="h-28 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-10 flex items-center justify-between border-b border-slate-100">
+        {/* MAIN CONTENT AREA */}
+        <main className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
+          <header className="h-20 md:h-28 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 md:px-10 flex items-center justify-between border-b border-slate-100">
              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{isAdmin ? 'المدير العام' : 'المعلم المعتمد'}</span>
-                <span className="text-xl font-black text-slate-900">{profile?.full_name}</span>
+                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">{isAdmin ? 'المدير العام' : 'المعلم المعتمد'}</span>
+                <span className="text-lg md:text-xl font-black text-slate-900 truncate max-w-[150px] md:max-w-none">{profile?.full_name}</span>
              </div>
-             <div className="bg-indigo-600 w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black shadow-lg">
+             <div className="bg-indigo-600 w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-black shadow-lg text-sm md:text-base">
                 {profile?.full_name?.[0] || 'A'}
              </div>
           </header>
 
-          <div className="p-8 lg:p-12 max-w-[1400px] mx-auto">
+          <div className="flex-1 p-4 md:p-8 lg:p-12 max-w-[1400px] mx-auto w-full">
             {supervisedTeacher && (
-              <div className="mb-10 p-8 bg-amber-500 text-white rounded-[3rem] flex items-center justify-between shadow-xl">
-                <span className="font-black">أنت تتصفح بيانات: {supervisedTeacher.name}</span>
-                <button onClick={() => setSupervisedTeacher(null)} className="bg-white text-amber-600 px-6 py-2 rounded-full font-black text-xs">إغلاق الرقابة</button>
+              <div className="mb-8 p-6 bg-amber-500 text-white rounded-[2rem] flex flex-col md:flex-row items-center justify-between shadow-xl gap-4">
+                <span className="font-black text-sm md:text-base text-center md:text-right">أنت تتصفح بيانات: {supervisedTeacher.name}</span>
+                <button onClick={() => setSupervisedTeacher(null)} className="bg-white text-amber-600 px-6 py-2 rounded-full font-black text-xs active:scale-95">إغلاق الرقابة</button>
               </div>
             )}
             
-            <Routes>
-              <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-              <Route path="/students" element={<Students isAdmin={isAdmin} role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-              <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-              <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-              <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-              <Route path="/messaging" element={isAdmin ? <Messaging /> : <Navigate to="/" />} />
-              <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
-              <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-              {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <div className="pb-24 lg:pb-0">
+              <Routes>
+                <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/students" element={<Students isAdmin={isAdmin} role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                <Route path="/messaging" element={isAdmin ? <Messaging /> : <Navigate to="/" />} />
+                <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
+                <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </div>
           </div>
+
+          {/* SHARED FOOTER */}
+          <footer className="bg-white border-t border-slate-100 py-8 px-6 text-center mt-auto">
+             <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-slate-400">
+                <p className="font-black text-xs md:text-sm">برمجة الاستاذ ايهاب جمال غزال</p>
+                <span className="hidden md:inline opacity-30">|</span>
+                <a href="tel:55315661" className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-full font-black text-xs hover:bg-indigo-600 hover:text-white transition-all">
+                   <PhoneCall size={14} /> للإإستفسار : 55315661
+                </a>
+             </div>
+             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-4">Summit Management System © 2025</p>
+          </footer>
         </main>
       </div>
     </HashRouter>
