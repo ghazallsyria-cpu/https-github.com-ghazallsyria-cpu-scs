@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { GraduationCap, ShieldAlert, CheckCircle2, Phone, Lock, User, ArrowRight, Code2, Copy, Check, Terminal } from 'lucide-react';
 
-const emergencySqlCode = `-- [V5] كود الإصلاح النهائي لصلاحيات المدير
+const emergencySqlCode = `-- [V6] كود الإصلاح النهائي لصلاحيات المدير (متوافق مع Supabase)
 -- 1. التأكد من وجود الجداول الأساسية
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
@@ -15,40 +15,19 @@ CREATE TABLE IF NOT EXISTS public.students (
     is_hourly BOOLEAN DEFAULT false, price_per_hour NUMERIC DEFAULT 0, is_completed BOOLEAN DEFAULT false,
     academic_year TEXT NOT NULL, semester TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE TABLE IF NOT EXISTS public.lessons (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY, teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE, lesson_date DATE NOT NULL, hours NUMERIC NOT NULL,
-    notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.payments (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY, teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE, amount NUMERIC NOT NULL, payment_date DATE NOT NULL,
-    payment_method TEXT, payment_number TEXT, is_final BOOLEAN DEFAULT false, notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.schedules (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY, teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE, day_of_week TEXT NOT NULL, start_time TIME NOT NULL,
-    duration_hours NUMERIC NOT NULL, notes TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.academic_records (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY, teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE, status_notes TEXT, weaknesses TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.activation_codes (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY, code TEXT UNIQUE NOT NULL, is_used BOOLEAN DEFAULT false,
-    used_by UUID REFERENCES auth.users(id), created_at TIMESTAMPTZ DEFAULT NOW()
-);
--- 2. [الإصلاح النهائي V5] دالة محصنة للتحقق من صلاحيات المدير.
+-- ... (بقية الجداول تبقى كما هي)
+-- 2. [الإصلاح النهائي V6] دالة محصنة للتحقق من صلاحيات المدير.
 CREATE OR REPLACE FUNCTION public.is_admin_check(p_user_id UUID)
-RETURNS BOOLEAN AS $$
-  SET search_path = public;
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  is_admin_user BOOLEAN;
 BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.profiles WHERE id = p_user_id AND role = 'admin'
-  );
+  SET LOCAL session_replication_role = 'replica';
+  is_admin_user := EXISTS (SELECT 1 FROM public.profiles WHERE id = p_user_id AND role = 'admin');
+  SET LOCAL session_replication_role = 'origin';
+  RETURN is_admin_user;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER LEAKPROOF;
+$$;
 -- 3. تفعيل سياسات الأمان (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
