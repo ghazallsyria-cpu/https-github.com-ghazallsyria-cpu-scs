@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '../supabase.ts';
+import { supabase } from '../supabase';
 import { Wallet, Plus, X, DollarSign, CheckCircle, AlertCircle, Trash2, Search, Edit3, Save, RefreshCw, Folder, FolderOpen } from 'lucide-react';
 
 const Payments = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {

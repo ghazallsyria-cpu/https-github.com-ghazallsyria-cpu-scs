@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { supabase } from '../supabase.ts';
+import { supabase } from '../supabase';
 import { GraduationCap, ShieldAlert, CheckCircle2, Phone, Lock, User, ArrowRight, Code2 } from 'lucide-react';
 
 const Login = () => {
@@ -28,7 +28,6 @@ const Login = () => {
     setSuccess(null);
 
     const mobileClean = formData.mobile.trim();
-    // الرقم المعتمد للمدير العام (يرجى تغييره للرقم المطلوب)
     const isAdminNumber = mobileClean === '55315661';
     const virtualEmail = `${mobileClean}@system.local`;
 
@@ -90,7 +89,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-['Cairo']">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-['Cairo'] text-right">
       <div className="bg-white w-full max-w-[480px] p-8 md:p-12 rounded-[3rem] shadow-2xl relative overflow-hidden mb-10">
         <div className="relative z-10">
           <div className="flex flex-col items-center mb-10 text-center">

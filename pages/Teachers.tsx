@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabase.ts';
+import { supabase } from '../supabase';
 import { 
-  ShieldCheck, Calendar, Trash2, Phone, UserCircle, CheckCircle, XCircle, AlertCircle, Eye, UserPlus, X, Lock, User, KeyRound, Copy, Check, Plus, Hash, Send, RefreshCw 
+  ShieldCheck, Trash2, Phone, UserCircle, CheckCircle, XCircle, AlertCircle, Eye, Plus, Copy, Check, RefreshCw 
 } from 'lucide-react';
 
 const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: string} | null) => void }) => {
@@ -62,7 +62,7 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
       const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from('activation_codes').insert([{
         code: newCode,
-        created_by: user?.id
+        used_by: null // ensuring it is clean
       }]);
       if (error) throw error;
       showFeedback("تم توليد كود تفعيل جديد بنجاح");

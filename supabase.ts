@@ -2,9 +2,13 @@
 import { createClient } from '@supabase/supabase-js';
 
 const getEnv = (key: string): string => {
-  // البحث في متغيرات البيئة بشتى الطرق الممكنة في المتصفح
-  const env = (window as any).process?.env || (import.meta as any).env || {};
-  return env[key] || '';
+  // Safe access to environment variables in both Vite and general browser contexts
+  try {
+    const env = (import.meta as any).env || (window as any).process?.env || {};
+    return env[key] || '';
+  } catch (e) {
+    return '';
+  }
 };
 
 const SUPABASE_URL = getEnv('VITE_SUPABASE_URL');

@@ -21,6 +21,7 @@ const cache = {
   lastUid: null as string | null
 };
 
+// Moving components up to ensure they are defined before App component renders
 const Footer: React.FC = () => (
   <footer className="mt-auto py-8 text-center border-t border-slate-100 bg-white/50 backdrop-blur-sm rounded-t-[2.5rem] lg:rounded-t-[3rem] pb-24 lg:pb-8 font-['Cairo']">
     <div className="flex flex-col items-center justify-center gap-2">
@@ -63,6 +64,59 @@ const MobileNav: React.FC = () => {
         );
       })}
     </div>
+  );
+};
+
+const ActivationOverlay = ({ onActivated, profileName }: any) => {
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleActivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const { data, error: funcError } = await supabase.rpc('activate_account_with_code', { provided_code: code.trim().toUpperCase() });
+      if (funcError) throw funcError;
+      if (data.success) {
+        cache.profile = null;
+        onActivated();
+      } else setError(data.message);
+    } catch (err: any) {
+      setError("كود غير صالح أو خطأ تقني");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 text-right">
+      <div className="bg-white w-full max-w-lg p-10 rounded-[3.5rem] shadow-2xl">
+        <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3"><KeyRound size={40} /></div>
+        <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط الحساب</h2>
+        <p className="text-slate-500 font-bold mb-8">أهلاً <span className="text-indigo-600">{profileName}</span>. أدخل كود التفعيل لتشغيل النظام.</p>
+        {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold border border-rose-100 flex gap-3"><ShieldAlert size={20} /> {error}</div>}
+        <form onSubmit={handleActivate} className="space-y-6">
+          <input required maxLength={8} placeholder="أدخل الكود" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-2xl uppercase outline-none focus:border-indigo-500 transition-all" value={code} onChange={(e) => setCode(e.target.value)} />
+          <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl disabled:opacity-50">
+            {loading ? <RefreshCw className="animate-spin mx-auto" size={24} /> : "تنشيط الحساب الآن"}
+          </button>
+          <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold flex items-center justify-center gap-2"><LogOut size={18} /> خروج</button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const NavItem = ({ to, icon, label }: any) => {
+  const location = useLocation();
+  const isActive = location.pathname === to;
+  return (
+    <Link to={to} className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all font-bold ${isActive ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+      <span>{icon}</span>
+      <span>{label}</span>
+    </Link>
   );
 };
 
@@ -209,59 +263,6 @@ const App: React.FC = () => {
         </main>
       </div>
     </HashRouter>
-  );
-};
-
-const ActivationOverlay = ({ onActivated, profileName }: any) => {
-  const [code, setCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleActivate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const { data, error: funcError } = await supabase.rpc('activate_account_with_code', { provided_code: code.trim().toUpperCase() });
-      if (funcError) throw funcError;
-      if (data.success) {
-        cache.profile = null;
-        onActivated();
-      } else setError(data.message);
-    } catch (err: any) {
-      setError("كود غير صالح أو خطأ تقني");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 text-right">
-      <div className="bg-white w-full max-w-lg p-10 rounded-[3.5rem] shadow-2xl">
-        <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3"><KeyRound size={40} /></div>
-        <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط الحساب</h2>
-        <p className="text-slate-500 font-bold mb-8">أهلاً <span className="text-indigo-600">{profileName}</span>. أدخل كود التفعيل لتشغيل النظام.</p>
-        {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold border border-rose-100 flex gap-3"><ShieldAlert size={20} /> {error}</div>}
-        <form onSubmit={handleActivate} className="space-y-6">
-          <input required maxLength={8} placeholder="أدخل الكود" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-2xl uppercase outline-none focus:border-indigo-500 transition-all" value={code} onChange={(e) => setCode(e.target.value)} />
-          <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl disabled:opacity-50">
-            {loading ? <RefreshCw className="animate-spin mx-auto" size={24} /> : "تنشيط الحساب الآن"}
-          </button>
-          <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold flex items-center justify-center gap-2"><LogOut size={18} /> خروج</button>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-const NavItem = ({ to, icon, label }: any) => {
-  const location = useLocation();
-  const isActive = location.pathname === to;
-  return (
-    <Link to={to} className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all font-bold ${isActive ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
-      <span>{icon}</span>
-      <span>{label}</span>
-    </Link>
   );
 };
 

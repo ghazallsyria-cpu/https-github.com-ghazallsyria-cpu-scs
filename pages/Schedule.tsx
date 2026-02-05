@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabase.ts';
+import { supabase } from '../supabase';
 import { 
   Clock, Plus, X, Trash2, Calendar, CheckCircle, AlertCircle, User, Info, Search, ChevronLeft, CalendarDays
 } from 'lucide-react';
@@ -8,9 +8,7 @@ import {
 const DAYS = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
 
 const Schedule = ({ role, uid }: { role: any, uid: string }) => {
-  // تحديد اليوم الحالي كافتراضي
   const todayIndex = new Date().getDay();
-  // تحويل فهرس اليوم من النظام الأجنبي (0 الأحد) لنظامنا (السبت أولاً)
   const adjustedIndex = (todayIndex + 1) % 7; 
   const [selectedDay, setSelectedDay] = useState(DAYS[adjustedIndex]);
   
@@ -37,13 +35,11 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. جلب قائمة الطلاب للمدرس
       let qStds = supabase.from('students').select('id, name, grade');
       if (!isAdmin) qStds = qStds.eq('teacher_id', uid);
       const { data: stds } = await qStds;
       setStudents(stds || []);
 
-      // 2. جلب مواعيد اليوم المختار
       let qSched = supabase.from('schedules')
         .select('*, students(name, grade)')
         .eq('day_of_week', selectedDay);
@@ -151,36 +147,8 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
          ))}
       </div>
 
-      {/* Quick Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-         <div className="bg-indigo-600 p-8 rounded-[3rem] text-white shadow-xl shadow-indigo-100 flex justify-between items-center overflow-hidden relative group">
-            <div className="absolute -bottom-4 -left-4 w-24 h-24 bg-white/10 rounded-full blur-xl group-hover:scale-150 transition-transform duration-700"></div>
-            <div className="relative z-10">
-               <p className="text-indigo-200 text-[10px] font-black uppercase tracking-widest mb-1">طلاب اليوم</p>
-               <h3 className="text-4xl font-black">{scheduleItems.length} طلاب</h3>
-            </div>
-            <User size={40} className="text-white/20" />
-         </div>
-         <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex justify-between items-center group">
-            <div>
-               <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">إجمالي الحصص/الساعات</p>
-               <h3 className="text-4xl font-black text-slate-900">
-                 {scheduleItems.reduce((acc, curr) => acc + Number(curr.duration_hours), 0)}
-               </h3>
-            </div>
-            <div className="bg-amber-50 text-amber-600 p-4 rounded-2xl group-hover:rotate-12 transition-transform"><Clock size={32}/></div>
-         </div>
-         <div className="bg-slate-900 p-8 rounded-[3rem] text-white flex justify-between items-center shadow-xl">
-            <div>
-               <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">اليوم المختار</p>
-               <h3 className="text-3xl font-black text-indigo-400">{selectedDay}</h3>
-            </div>
-            <Calendar size={32} className="text-slate-700" />
-         </div>
-      </div>
-
       {/* Schedule Items List */}
-      <div className="space-y-4 animate-in fade-in duration-500">
+      <div className="space-y-4 animate-in fade-in duration-500 text-right">
          {scheduleItems.length > 0 ? (
            scheduleItems.map((item) => (
              <div key={item.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 hover:border-indigo-500 transition-all group relative overflow-hidden">
@@ -231,11 +199,9 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
             <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-10 left-10 text-slate-300 hover:text-rose-500 transition-colors">
               <X size={28}/>
             </button>
-            
             <h2 className="text-2xl font-black mb-8 text-slate-900 flex items-center gap-3">
               <Plus className="text-indigo-600" /> موعد جديد ({selectedDay})
             </h2>
-            
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-3">اختيار الطالب من القائمة</label>
@@ -252,48 +218,21 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
                   </select>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-2">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-3">وقت البدء</label>
-                   <input 
-                     required 
-                     type="time" 
-                     className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all" 
-                     value={form.start_time} 
-                     onChange={e => setForm({...form, start_time: e.target.value})} 
-                   />
+                   <input required type="time" className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all" value={form.start_time} onChange={e => setForm({...form, start_time: e.target.value})} />
                  </div>
                  <div className="space-y-2">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-3">عدد الحصص/المدة</label>
-                   <input 
-                     required 
-                     type="number" 
-                     step="0.5" 
-                     placeholder="1.5"
-                     className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all" 
-                     value={form.duration_hours} 
-                     onChange={e => setForm({...form, duration_hours: e.target.value})} 
-                   />
+                   <input required type="number" step="0.5" className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all" value={form.duration_hours} onChange={e => setForm({...form, duration_hours: e.target.value})} />
                  </div>
               </div>
-
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-3">ملاحظات (اختياري)</label>
-                <textarea 
-                  placeholder="مثال: مراجعة الوحدة الثانية.." 
-                  className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all h-28 resize-none" 
-                  value={form.notes} 
-                  onChange={e => setForm({...form, notes: e.target.value})} 
-                />
+                <textarea placeholder="مثال: مراجعة الوحدة الثانية.." className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-2xl font-black focus:bg-white focus:border-indigo-500 outline-none transition-all h-28 resize-none" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
               </div>
-
-              <button 
-                type="submit" 
-                className="w-full py-6 bg-indigo-600 text-white font-black rounded-3xl shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 text-lg"
-              >
-                تأكيد الإضافة للجدول
-              </button>
+              <button type="submit" className="w-full py-6 bg-indigo-600 text-white font-black rounded-3xl shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 text-lg">تأكيد الإضافة للجدول</button>
             </div>
           </form>
         </div>

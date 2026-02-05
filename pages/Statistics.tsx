@@ -1,10 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../supabase.ts';
+import { supabase } from '../supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import { BookOpen, Clock, TrendingUp, PieChart as PieIcon, LayoutDashboard } from 'lucide-react';
 
-// Fix: Added year and semester props to the component signature and type definition.
 const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const [data, setData] = useState<any[]>([]);
   const [summary, setSummary] = useState({ hourlyHours: 0, fixedHours: 0, hourlyLessons: 0, fixedLessons: 0 });
@@ -16,7 +15,6 @@ const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, yea
     const fetchStats = async () => {
       setLoading(true);
       try {
-        // Fix: Added logic to filter statistics by the selected academic year and semester.
         const { data: periodStudents } = await supabase
           .from('students')
           .select('id')
@@ -69,7 +67,7 @@ const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, yea
   }, [uid, role, isAdmin, year, semester]);
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-700 pb-12">
+    <div className="space-y-10 animate-in fade-in duration-700 pb-12 text-right">
       <div className="flex flex-col gap-2">
         <h1 className="text-4xl font-black text-slate-900 tracking-tight">تحليل الأداء التعليمي</h1>
         <p className="text-slate-500 font-bold">مقارنة بين كثافة العمل في النظام الخارجي (ساعة) والاتفاق الفصلي.</p>
@@ -119,7 +117,7 @@ const Statistics = ({ role, uid, year, semester }: { role: any, uid: string, yea
         ) : data.length > 0 ? (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false" stroke="#f1f5f9" />
               <XAxis dataKey="date" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
               <YAxis tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
               <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontFamily: 'Cairo' }} />

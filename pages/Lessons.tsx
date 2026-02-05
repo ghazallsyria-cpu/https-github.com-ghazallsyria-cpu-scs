@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '../supabase.ts';
+import { supabase } from '../supabase';
 import { 
   Calendar, Clock, BookOpen, ChevronLeft, Plus, Info, 
   Wallet, MessageCircle, School, Star, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, History, DollarSign, Folder, FolderOpen
