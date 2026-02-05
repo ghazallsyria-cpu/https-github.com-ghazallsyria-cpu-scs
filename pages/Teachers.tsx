@@ -111,12 +111,15 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
         code: newCode, 
         is_used: false 
       }]);
+      
       if (error) throw error;
-      showFeedback("تم توليد كود تفعيل جديد بنجاح: " + newCode);
-      fetchCodes();
+      
+      showFeedback("تم توليد الكود بنجاح: " + newCode);
+      // تحديث القائمة فوراً بعد الإضافة
+      await fetchCodes();
     } catch (err: any) {
       console.error("Code generation error:", err);
-      showFeedback("فشل توليد الكود. يرجى التأكد من تشغيل تحديث SQL الأخير في Supabase.", 'error');
+      showFeedback("فشل الحفظ في قاعدة البيانات. تأكد من صلاحيات SQL.", 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -202,12 +205,6 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
               </div>
             </div>
           ))}
-          {teachers.length === 0 && !loading && (
-            <div className="col-span-full py-20 text-center">
-               <UserCircle size={64} className="mx-auto text-slate-100 mb-4" />
-               <p className="text-slate-400 font-bold italic">لا توجد طلبات انضمام أو معلمين حالياً.</p>
-            </div>
-          )}
         </div>
       ) : (
         <div className="space-y-8 animate-in slide-in-from-bottom duration-700">

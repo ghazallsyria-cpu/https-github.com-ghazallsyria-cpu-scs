@@ -1,9 +1,9 @@
 
--- 1. إصلاح جدول المدفوعات (إضافة الأعمدة المفقودة)
+-- 1. التأكد من وجود الأعمدة المطلوبة في جدول المدفوعات
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS is_final BOOLEAN DEFAULT false;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS payment_number TEXT DEFAULT 'الأولى';
 
--- 2. تأكيد إنشاء جدول الأكواد مع تصحيح السياسات
+-- 2. إعداد جدول الأكواد وسياسات الأمان
 CREATE TABLE IF NOT EXISTS public.activation_codes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code TEXT UNIQUE NOT NULL,
@@ -14,8 +14,11 @@ CREATE TABLE IF NOT EXISTS public.activation_codes (
 
 ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY;
 
--- سياسة تسمح للمدير (بناءً على الهاتف أو الدور) بالتحكم الكامل
+-- حذف السياسات القديمة لتجنب التعارض
 DROP POLICY IF EXISTS "Admins manage codes" ON public.activation_codes;
+DROP POLICY IF EXISTS "Public select unused" ON public.activation_codes;
+
+-- سياسة المدير: الوصول الكامل (عرض، إضافة، تعديل، حذف)
 CREATE POLICY "Admins manage codes" ON public.activation_codes 
 FOR ALL USING (
     EXISTS (
@@ -23,13 +26,19 @@ FOR ALL USING (
         WHERE profiles.id = auth.uid() 
         AND (profiles.role = 'admin' OR profiles.phone = '55315661')
     )
+) WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (profiles.role = 'admin' OR profiles.phone = '55315661')
+    )
 );
 
-DROP POLICY IF EXISTS "Public select unused" ON public.activation_codes;
+-- سياسة عامة: المعلمين يمكنهم فقط رؤية الأكواد غير المستخدمة للتحقق منها عند التسجيل
 CREATE POLICY "Public select unused" ON public.activation_codes 
 FOR SELECT USING (is_used = false);
 
--- 3. تأكيد إنشاء جدول المتابعة الدراسية
+-- 3. إعداد جدول المتابعة الدراسية وسياسات الأمان
 CREATE TABLE IF NOT EXISTS public.academic_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
@@ -41,22 +50,17 @@ CREATE TABLE IF NOT EXISTS public.academic_records (
 
 ALTER TABLE public.academic_records ENABLE ROW LEVEL SECURITY;
 
--- سياسة تسمح للمعلم برؤية وإضافة سجلاته
 DROP POLICY IF EXISTS "Teachers records access" ON public.academic_records;
+
+-- سياسة المتابعة: المدير والمعلم صاحب الطالب يمكنهم الإدارة
 CREATE POLICY "Teachers records access" ON public.academic_records
 FOR ALL USING (
     auth.uid() = teacher_id OR 
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR phone = '55315661'))
-);
-
--- 4. سياسات إضافية لجدول الطلاب لضمان قدرة المعلم الجديد على الإضافة فور تفعيله
-DROP POLICY IF EXISTS "Teachers insert students" ON public.students;
-CREATE POLICY "Teachers insert students" ON public.students 
-FOR INSERT WITH CHECK (auth.uid() = teacher_id);
-
-DROP POLICY IF EXISTS "Teachers view their students" ON public.students;
-CREATE POLICY "Teachers view their students" ON public.students 
-FOR SELECT USING (
+) WITH CHECK (
     auth.uid() = teacher_id OR 
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR phone = '55315661'))
 );
+
+-- 4. تحديث الكاش البرمجي لـ Supabase (اختياري ولكن مفيد)
+NOTIFY pgrst, 'reload schema';
