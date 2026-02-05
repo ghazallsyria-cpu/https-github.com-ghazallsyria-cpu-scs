@@ -26,7 +26,6 @@ const Login = () => {
       if (isSignUp) {
         if (formData.password !== formData.confirmPassword) throw new Error("كلمات المرور غير متطابقة");
         
-        // تسجيل المستخدم مع إضافة الرقم في الـ Metadata
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
           password: formData.password,
@@ -40,7 +39,6 @@ const Login = () => {
         if (signUpError) throw signUpError;
         
         if (authData.user) {
-          // محاولة إنشاء البروفايل
           await supabase.from('profiles').upsert([{
             id: authData.user.id,
             full_name: formData.fullName,
@@ -49,14 +47,21 @@ const Login = () => {
             is_approved: isAdminNumber ? true : false 
           }]);
           setIsSignUp(false);
-          alert(isAdminNumber ? "تم إنشاء حساب المدير" : "تم إرسال الطلب");
+          alert(isAdminNumber ? "تم إنشاء حساب المدير" : "تم إرسال طلب الانضمام");
         }
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: virtualEmail,
           password: formData.password
         });
-        if (signInError) throw new Error("بيانات الدخول خاطئة");
+        if (signInError) throw new Error("رقم الهاتف أو كلمة السر غير صحيحة");
+
+        // تحديث Metadata فور الدخول لضمان تفعيل وضع المدير
+        if (isAdminNumber && signInData.user) {
+          await supabase.auth.updateUser({
+            data: { phone: mobileClean }
+          });
+        }
       }
     } catch (err: any) {
       setError(err.message);
@@ -82,11 +87,11 @@ const Login = () => {
             <input required placeholder="الاسم بالكامل" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold outline-none focus:bg-white" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
           )}
           <div className="space-y-1">
-             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">رقم الهاتف</label>
+             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest text-right block w-full">رقم الهاتف</label>
              <input required type="tel" placeholder="55315661" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-left outline-none focus:bg-white" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
           </div>
           <div className="space-y-1">
-             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">كلمة السر</label>
+             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest text-right block w-full">كلمة السر</label>
              <input required type="password" placeholder="••••••••" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold text-left outline-none focus:bg-white" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
           </div>
           {isSignUp && (

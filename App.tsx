@@ -27,22 +27,20 @@ const App: React.FC = () => {
   const [currentSemester, setCurrentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
 
   const fetchProfile = async (user: any) => {
-    const userPhone = user.user_metadata?.phone;
+    const userPhone = user.user_metadata?.phone || '';
     const isDirectAdmin = userPhone === ADMIN_PHONE;
 
     try {
-      // محاولة قراءة البروفايل
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       
       if (data) {
-        // إذا نجحت القراءة، نستخدم البيانات الحقيقية
-        setProfile({ ...data, role: isDirectAdmin ? 'admin' : data.role });
+        setProfile({ ...data, role: (isDirectAdmin || data.role === 'admin') ? 'admin' : 'teacher' });
       } else {
-        // إذا فشلت القراءة (بسبب RLS)، نمنحه صلاحية المدير يدوياً إذا كان الرقم مطابقاً
+        // إذا لم يوجد بروفايل أو فشل RLS، نعتمد على رقم الهاتف من Metadata
         setProfile({ 
           id: user.id,
           role: isDirectAdmin ? 'admin' : 'teacher', 
-          phone: userPhone || '',
+          phone: userPhone,
           is_approved: isDirectAdmin,
           full_name: user.user_metadata?.full_name || 'مستخدم'
         });
@@ -77,8 +75,9 @@ const App: React.FC = () => {
 
   if (!session) return <Login />;
 
-  // التحقق الفاصل: هل الرقم المسجل هو رقم المدير؟
-  const isAdmin = profile?.role === 'admin' || profile?.phone === ADMIN_PHONE || session.user.user_metadata?.phone === ADMIN_PHONE;
+  // منطق التحقق "الفولاذي" من رتبة المدير
+  const userMetadataPhone = session.user.user_metadata?.phone;
+  const isAdmin = userMetadataPhone === ADMIN_PHONE || profile?.phone === ADMIN_PHONE || profile?.role === 'admin';
   const effectiveUid = supervisedTeacher ? supervisedTeacher.id : session.user.id;
   const effectiveRole = isAdmin && !supervisedTeacher ? 'admin' : 'teacher';
 
@@ -111,7 +110,7 @@ const App: React.FC = () => {
         </aside>
 
         <main className="flex-1 flex flex-col min-h-screen bg-slate-50/50">
-          <header className={`h-20 bg-white border-b border-slate-100 flex items-center justify-between px-12 z-40 sticky top-0 ${supervisedTeacher ? 'mt-11' : ''}`}>
+          <header className={`h-20 bg-white border-b border-slate-100 flex items-center justify-between px-6 lg:px-12 z-40 sticky top-0 ${supervisedTeacher ? 'mt-11' : ''}`}>
              <div className="bg-indigo-600 text-white px-5 py-2 rounded-2xl text-[10px] font-black shadow-lg">
                 {isAdmin ? "بصلاحيات المدير العام" : "بصلاحيات المحتوى"}
              </div>
@@ -126,13 +125,14 @@ const App: React.FC = () => {
              </div>
           </header>
 
-          <div className="flex-1 p-10">
+          <div className="flex-1 p-6 lg:p-10">
             <Routes>
               <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/students" element={<Students isAdmin={isAdmin} role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
+              <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
               {isAdmin && <Route path="/database-viewer" element={<DatabaseViewer />} />}
               <Route path="*" element={<Navigate to="/" replace />} />
