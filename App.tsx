@@ -1,21 +1,21 @@
 
-import React, { useEffect, useState, useRef } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+// Fix: Import from 'react-router' instead of 'react-router-dom' to resolve missing export errors in v7 environments
+import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router';
 import { supabase } from './supabase';
-// Added RefreshCw to imports
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, CalendarDays, Layers, CheckCircle, KeyRound, Clock, FileDown, RefreshCw
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, EyeOff, CheckCircle, KeyRound, Clock, FileDown, RefreshCw
 } from 'lucide-react';
 
-import Dashboard from './pages/Dashboard.tsx';
-import Students from './pages/Students.tsx';
-import Statistics from './pages/Statistics.tsx';
-import Payments from './pages/Payments.tsx';
-import Lessons from './pages/Lessons.tsx';
-import Login from './pages/Login.tsx';
-import Teachers from './pages/Teachers.tsx';
-import Schedule from './pages/Schedule.tsx';
-import Reports from './pages/Reports.tsx';
+import Dashboard from './pages/Dashboard';
+import Students from './pages/Students';
+import Statistics from './pages/Statistics';
+import Payments from './pages/Payments';
+import Lessons from './pages/Lessons';
+import Login from './pages/Login';
+import Teachers from './pages/Teachers';
+import Schedule from './pages/Schedule';
+import Reports from './pages/Reports';
 
 const cache = {
   profile: null as any,
@@ -30,7 +30,7 @@ const Footer: React.FC = () => (
         <span>برمجة : ايهاب جمال غزال</span>
       </div>
       <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">
-        الإصدار 2.7.5 (الاستقرار والأمان) &copy; {new Date().getFullYear()}
+        الإصدار 2.7.5 &copy; {new Date().getFullYear()}
       </div>
     </div>
   </footer>
@@ -91,7 +91,7 @@ const App: React.FC = () => {
       cache.lastUid = uid;
       setProfile(profileData);
     } catch (e) {
-      console.error("Profile fetch error:", e);
+      console.error("Profile error:", e);
       setProfile({ role: 'teacher', is_approved: false }); 
     } finally {
       setLoading(false);
@@ -102,16 +102,15 @@ const App: React.FC = () => {
     const init = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       setSession(currentSession);
-      if (currentSession) await fetchProfile(currentSession.user.id, true); // Force initial fetch to ensure correct state
+      if (currentSession) await fetchProfile(currentSession.user.id, true);
       else setLoading(false);
     };
     init();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
-      if (newSession) {
-        fetchProfile(newSession.user.id, true); 
-      } else {
+      if (newSession) fetchProfile(newSession.user.id, true);
+      else {
         setProfile(null);
         cache.profile = null;
         setLoading(false);
@@ -121,9 +120,9 @@ const App: React.FC = () => {
   }, []);
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
+    <div className="h-screen flex flex-col items-center justify-center bg-white">
       <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="font-bold text-slate-400">جاري الدخول للنظام...</p>
+      <p className="font-bold text-slate-400">جاري الدخول...</p>
     </div>
   );
 
@@ -143,15 +142,15 @@ const App: React.FC = () => {
     <HashRouter>
       <div className="min-h-screen bg-slate-50 flex font-['Cairo'] overflow-x-hidden">
         {supervisedTeacher && (
-          <div className="fixed top-0 inset-x-0 h-10 bg-amber-500 text-white z-[100] flex items-center justify-center gap-4 px-4 shadow-lg animate-in slide-in-from-top duration-300">
+          <div className="fixed top-0 inset-x-0 h-10 bg-amber-500 text-white z-[100] flex items-center justify-center gap-4 px-4 shadow-lg">
             <span className="font-black text-[10px]">وضع الإشراف: {supervisedTeacher.name}</span>
-            <button onClick={() => setSupervisedTeacher(null)} className="bg-white/20 hover:bg-white/40 px-2 py-0.5 rounded text-[9px] font-black flex items-center gap-1"><EyeOff size={10} /> إنهاء</button>
+            <button onClick={() => setSupervisedTeacher(null)} className="bg-white/20 px-2 py-0.5 rounded text-[9px] font-black">إنهاء</button>
           </div>
         )}
 
         <aside className="hidden lg:flex w-72 bg-white border-l border-slate-200 flex-col p-8 sticky top-0 h-screen shadow-sm">
           <div className="flex items-center gap-3 mb-12">
-            <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl"><GraduationCap size={28} /></div>
+            <div className="bg-indigo-600 p-3 rounded-2xl text-white"><GraduationCap size={28} /></div>
             <h1 className="text-xl font-black text-slate-900 tracking-tight">إدارة الدروس</h1>
           </div>
           <nav className="flex-1 space-y-2 overflow-y-auto pr-2">
@@ -160,60 +159,51 @@ const App: React.FC = () => {
             <NavItem to="/students" icon={<Users size={20} />} label="الطلاب" />
             <NavItem to="/lessons" icon={<BookOpen size={20} />} label="سجل الدروس" />
             <NavItem to="/payments" icon={<Wallet size={20} />} label="المالية" />
-            <NavItem to="/reports" icon={<FileDown size={20} />} label="التقارير والتصدير" />
+            <NavItem to="/reports" icon={<FileDown size={20} />} label="التقارير" />
             <NavItem to="/statistics" icon={<BarChart3 size={20} />} label="الإحصائيات" />
-            {isAdmin && (
-              <div className="pt-6 mt-6 border-t border-slate-100">
-                <p className="text-[10px] font-black text-slate-400 uppercase px-4 mb-3">نظام الإدارة</p>
-                <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="المعلمون" />
-              </div>
-            )}
+            {isAdmin && <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="المعلمون" />}
           </nav>
-          <button onClick={() => confirm('تسجيل خروج؟') && supabase.auth.signOut()} className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> تسجيل خروج</button>
+          <button onClick={() => supabase.auth.signOut()} className="mt-8 flex items-center gap-3 px-5 py-4 text-rose-600 font-bold hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> خروج</button>
         </aside>
 
-        <main className="flex-1 flex flex-col min-h-screen max-w-full">
+        <main className="flex-1 flex flex-col min-h-screen">
           <header className={`h-16 lg:h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-10 z-40 sticky top-0 ${supervisedTeacher ? 'mt-10' : ''}`}>
-            <div className="flex items-center gap-3 lg:gap-6">
-              <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                <select value={currentYear} onChange={(e) => setCurrentYear(e.target.value)} className="bg-transparent text-[10px] lg:text-xs font-black text-slate-700 outline-none px-2 py-1 appearance-none cursor-pointer">
-                  <option value="2023-2024">2023-2024</option>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+                <select value={currentYear} onChange={(e) => setCurrentYear(e.target.value)} className="bg-transparent text-[10px] lg:text-xs font-black px-2 py-1 outline-none">
                   <option value="2024-2025">2024-2025</option>
                   <option value="2025-2026">2025-2026</option>
                 </select>
                 <div className="w-px h-4 bg-slate-300"></div>
-                <select value={currentSemester} onChange={(e) => setCurrentSemester(e.target.value)} className="bg-transparent text-[10px] lg:text-xs font-black text-slate-700 outline-none px-2 py-1 appearance-none cursor-pointer">
+                <select value={currentSemester} onChange={(e) => setCurrentSemester(e.target.value)} className="bg-transparent text-[10px] lg:text-xs font-black px-2 py-1 outline-none">
                   <option value="1">الفصل الأول</option>
                   <option value="2">الفصل الثاني</option>
                 </select>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 lg:gap-4">
+            <div className="flex items-center gap-2">
               <div className="text-right hidden sm:block">
-                <p className="text-xs lg:text-sm font-black text-slate-900">{profile?.full_name}</p>
-                <p className="text-[9px] lg:text-[10px] font-bold text-slate-400 uppercase">{isAdmin ? 'المدير' : 'معلم'}</p>
+                <p className="text-xs font-black">{profile?.full_name}</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase">{isAdmin ? 'المدير' : 'معلم'}</p>
               </div>
-              <div className="w-9 h-9 lg:w-11 lg:h-11 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black shadow-lg uppercase text-sm">
+              <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-sm uppercase">
                 {profile?.full_name?.charAt(0) || 'U'}
               </div>
             </div>
           </header>
 
-          <div className="flex-1 p-4 lg:p-10 flex flex-col pb-24 lg:pb-10 overflow-y-auto">
-            <div className="max-w-7xl mx-auto w-full flex-grow">
-              <Routes>
-                <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
-                <Route path="/students" element={<Students role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
-                <Route path="*" element={<Navigate to="/" />} />
-              </Routes>
-            </div>
+          <div className="flex-1 p-4 lg:p-10 pb-24 lg:pb-10 overflow-y-auto">
+            <Routes>
+              <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
+              <Route path="/students" element={<Students role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
             <Footer />
           </div>
           <MobileNav />
@@ -227,7 +217,6 @@ const ActivationOverlay = ({ onActivated, profileName }: any) => {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,49 +225,31 @@ const ActivationOverlay = ({ onActivated, profileName }: any) => {
     try {
       const { data, error: funcError } = await supabase.rpc('activate_account_with_code', { provided_code: code.trim().toUpperCase() });
       if (funcError) throw funcError;
-      
       if (data.success) {
-        setSuccess(true);
         cache.profile = null;
-        cache.lastUid = null;
-        setTimeout(() => onActivated(), 1500);
-      } else {
-        setError(data.message);
-      }
+        onActivated();
+      } else setError(data.message);
     } catch (err: any) {
-      setError("كود التفعيل غير صالح أو حدث خطأ في النظام");
+      setError("كود غير صالح أو خطأ تقني");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 text-right font-['Cairo']">
-      <div className="bg-white w-full max-w-lg p-10 md:p-14 rounded-[3.5rem] shadow-2xl relative overflow-hidden">
-        <div className="relative z-10">
-          <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3"><KeyRound size={40} /></div>
-          <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط الحساب</h2>
-          <p className="text-slate-500 font-bold mb-8">أهلاً <span className="text-indigo-600">{profileName || 'بك'}</span>. أدخل كود التفعيل لتشغيل النظام بشكل كامل.</p>
-          
-          {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold flex gap-3 border border-rose-100 animate-in shake duration-300"><ShieldAlert size={20} className="shrink-0" /><span>{error}</span></div>}
-          
-          {success && (
-            <div className="bg-emerald-50 text-emerald-600 p-6 rounded-[2rem] mb-6 text-center animate-bounce">
-              <CheckCircle size={48} className="mx-auto mb-3" />
-              <p className="font-black">تم تفعيل حسابك بنجاح! جاري توجيهك...</p>
-            </div>
-          )}
-
-          {!success && (
-            <form onSubmit={handleActivate} className="space-y-6">
-              <input required maxLength={8} placeholder="أدخل الكود المكون من 8 خانات" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-2xl tracking-[0.2em] uppercase outline-none focus:border-indigo-500 transition-all placeholder:tracking-normal placeholder:text-sm" value={code} onChange={(e) => setCode(e.target.value)} />
-              <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl transition-all active:scale-95 disabled:opacity-50 text-lg">
-                {loading ? <RefreshCw className="animate-spin mx-auto" size={24} /> : "تنشيط الحساب الآن"}
-              </button>
-              <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold hover:text-rose-500 transition-colors flex items-center justify-center gap-2"><LogOut size={18} /> تسجيل الخروج</button>
-            </form>
-          )}
-        </div>
+    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4 text-right">
+      <div className="bg-white w-full max-w-lg p-10 rounded-[3.5rem] shadow-2xl">
+        <div className="bg-indigo-600 w-20 h-20 rounded-3xl flex items-center justify-center text-white mb-8 shadow-2xl rotate-3"><KeyRound size={40} /></div>
+        <h2 className="text-3xl font-black text-slate-900 mb-2">تنشيط الحساب</h2>
+        <p className="text-slate-500 font-bold mb-8">أهلاً <span className="text-indigo-600">{profileName}</span>. أدخل كود التفعيل لتشغيل النظام.</p>
+        {error && <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl mb-6 text-sm font-bold border border-rose-100 flex gap-3"><ShieldAlert size={20} /> {error}</div>}
+        <form onSubmit={handleActivate} className="space-y-6">
+          <input required maxLength={8} placeholder="أدخل الكود" className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl text-center font-black text-2xl uppercase outline-none focus:border-indigo-500 transition-all" value={code} onChange={(e) => setCode(e.target.value)} />
+          <button disabled={loading || code.length < 5} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-2xl disabled:opacity-50">
+            {loading ? <RefreshCw className="animate-spin mx-auto" size={24} /> : "تنشيط الحساب الآن"}
+          </button>
+          <button type="button" onClick={() => supabase.auth.signOut()} className="w-full py-4 text-slate-400 font-bold flex items-center justify-center gap-2"><LogOut size={18} /> خروج</button>
+        </form>
       </div>
     </div>
   );
@@ -288,7 +259,7 @@ const NavItem = ({ to, icon, label }: any) => {
   const location = useLocation();
   const isActive = location.pathname === to;
   return (
-    <Link to={to} className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all font-bold ${isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50'}`}>
+    <Link to={to} className={`flex items-center gap-3 px-5 py-4 rounded-2xl transition-all font-bold ${isActive ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
       <span>{icon}</span>
       <span>{label}</span>
     </Link>

@@ -4,7 +4,6 @@ import { supabase } from '../supabase.ts';
 import { 
   ShieldCheck, Calendar, Trash2, Phone, UserCircle, CheckCircle, XCircle, AlertCircle, Eye, UserPlus, X, Lock, User, KeyRound, Copy, Check, Plus, Hash, Send, RefreshCw 
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: string} | null) => void }) => {
   const [teachers, setTeachers] = useState<any[]>([]);
