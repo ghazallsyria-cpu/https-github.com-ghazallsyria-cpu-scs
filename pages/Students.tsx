@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
   Plus, Trash2, CheckCircle, X, AlertCircle, Users, School, MessageCircle, 
@@ -15,10 +16,9 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
-  const [moveData, setMoveData] = useState({ year: year, semester: semester, action: 'move' as 'move' | 'copy' });
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const navigate = useNavigate();
   
   const [form, setForm] = useState({ 
     name: '', address: '', school_name: '', grade: '12', 
@@ -175,7 +175,14 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
         {loading ? (
           <div className="col-span-full py-20 flex justify-center"><RefreshCw className="animate-spin text-indigo-600" size={48} /></div>
         ) : filteredStudents.map(s => (
-          <div key={s.id} className={`bg-white p-8 rounded-[3.5rem] border transition-all duration-500 shadow-sm group hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden ${s.is_completed ? 'opacity-70 border-emerald-100 bg-emerald-50/10' : 'border-slate-100'}`}>
+          <div 
+            key={s.id} 
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/lessons', { state: { studentToOpen: s } })}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/lessons', { state: { studentToOpen: s } }); }}
+            className={`cursor-pointer bg-white p-8 rounded-[3.5rem] border transition-all duration-500 shadow-sm group hover:shadow-2xl hover:-translate-y-1 relative overflow-hidden ${s.is_completed ? 'opacity-70 border-emerald-100 bg-emerald-50/10' : 'border-slate-100'}`}
+          >
             
             {s.is_completed && (
               <div className="absolute top-0 left-0 bg-emerald-500 text-white px-6 py-2 rounded-br-[2rem] text-[9px] font-black z-10 flex items-center gap-2">
@@ -185,7 +192,7 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
 
             <div className="absolute top-8 left-8 z-20">
               <button 
-                onClick={() => setActiveMenu(activeMenu === s.id ? null : s.id)}
+                onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === s.id ? null : s.id) }}
                 className={`p-3 rounded-2xl transition-all ${activeMenu === s.id ? 'bg-slate-900 text-white shadow-xl rotate-90' : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-indigo-600'}`}
               >
                 <Settings2 size={20} />
@@ -193,16 +200,16 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
               
               {activeMenu === s.id && (
                 <div className="absolute left-0 mt-3 w-56 bg-white rounded-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.2)] border border-slate-100 py-3 z-[100] overflow-hidden animate-in zoom-in duration-200">
-                  <button onClick={() => { setIsEditMode(true); setSelectedStudentId(s.id); setForm({ ...s, agreed_amount: s.agreed_amount.toString(), price_per_hour: s.price_per_hour.toString() }); setIsModalOpen(true); setActiveMenu(null); }} className="w-full px-6 py-4 text-right hover:bg-indigo-50 text-slate-700 font-black text-xs flex items-center justify-between group/item transition-colors">
+                  <button onClick={(e) => { e.stopPropagation(); setIsEditMode(true); setSelectedStudentId(s.id); setForm({ ...s, agreed_amount: s.agreed_amount.toString(), price_per_hour: s.price_per_hour.toString() }); setIsModalOpen(true); setActiveMenu(null); }} className="w-full px-6 py-4 text-right hover:bg-indigo-50 text-slate-700 font-black text-xs flex items-center justify-between group/item transition-colors">
                     <span>تعديل الملف</span>
                     <Edit3 size={16} className="text-slate-300 group-hover/item:text-indigo-600" />
                   </button>
-                  <button onClick={() => handleToggleCompleted(s.id, s.is_completed)} className={`w-full px-6 py-4 text-right font-black text-xs flex items-center justify-between group/item transition-colors ${s.is_completed ? 'hover:bg-amber-50 text-amber-600' : 'hover:bg-emerald-50 text-emerald-600'}`}>
+                  <button onClick={(e) => { e.stopPropagation(); handleToggleCompleted(s.id, s.is_completed); }} className={`w-full px-6 py-4 text-right font-black text-xs flex items-center justify-between group/item transition-colors ${s.is_completed ? 'hover:bg-amber-50 text-amber-600' : 'hover:bg-emerald-50 text-emerald-600'}`}>
                     <span>{s.is_completed ? 'إعادة فتح الملف' : 'إتمام وقفل الملف'}</span>
                     {s.is_completed ? <Unlock size={16} /> : <Lock size={16} />}
                   </button>
                   <div className="h-px bg-slate-50 my-2 mx-6"></div>
-                  <button onClick={() => handleDeleteStudent(s.id)} className="w-full px-6 py-4 text-right hover:bg-rose-50 text-rose-600 font-black text-xs flex items-center justify-between group/item transition-colors">
+                  <button onClick={(e) => { e.stopPropagation(); handleDeleteStudent(s.id); }} className="w-full px-6 py-4 text-right hover:bg-rose-50 text-rose-600 font-black text-xs flex items-center justify-between group/item transition-colors">
                     <span>حذف نهائي</span>
                     <Trash2 size={16} className="text-rose-300" />
                   </button>
@@ -225,7 +232,7 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
                     <span className="text-indigo-400 opacity-50"><Phone size={14}/></span>
                     {p.label}: {p.number}
                   </span>
-                  <a href={`https://wa.me/${p.number.replace(/\s/g, '')}`} target="_blank" className="text-emerald-500 hover:scale-110 transition-transform"><MessageCircle size={18} fill="currentColor" fillOpacity={0.1}/></a>
+                  <a href={`https://wa.me/${p.number.replace(/\s/g, '')}`} target="_blank" onClick={(e) => e.stopPropagation()} className="text-emerald-500 hover:scale-110 transition-transform"><MessageCircle size={18} fill="currentColor" fillOpacity={0.1}/></a>
                 </div>
               ))}
             </div>
