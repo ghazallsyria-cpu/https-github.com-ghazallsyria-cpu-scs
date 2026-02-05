@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
 import { 
-  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, KeyRound, Clock, FileDown, RefreshCw, Calendar, Sparkles
+  LayoutDashboard, Users, BarChart3, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, ShieldAlert, Code2, KeyRound, Clock, FileDown, RefreshCw, Calendar, Sparkles, Database
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -14,6 +14,7 @@ import Login from './pages/Login';
 import Teachers from './pages/Teachers';
 import Schedule from './pages/Schedule';
 import Reports from './pages/Reports';
+import SqlViewer from './pages/SqlViewer';
 
 const cache = { profile: null as any, lastUid: null as string | null };
 
@@ -186,6 +187,7 @@ const App: React.FC = () => {
             <NavItem to="/reports" icon={<FileDown size={20} />} label="التقارير الذكية" />
             <NavItem to="/statistics" icon={<BarChart3 size={20} />} label="تحليل البيانات" />
             {isAdmin && <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="إدارة المحتوى" />}
+            {isAdmin && <NavItem to="/sql-viewer" icon={<Database size={20} />} label="قواعد البيانات" />}
           </nav>
           <button onClick={() => supabase.auth.signOut()} className="mt-8 flex items-center gap-4 px-6 py-4 text-rose-500 font-black hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> تسجيل خروج</button>
         </aside>
@@ -215,31 +217,31 @@ const App: React.FC = () => {
               </div>
               <div className="relative group cursor-pointer">
                 <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-xl shadow-indigo-100 transition-transform group-hover:rotate-12 group-hover:scale-110">
-                  {profile?.full_name?.charAt(0) || 'U'}
+                  {profile?.full_name?.split(' ').map((n: string) => n[0]).slice(0, 2).join('')}
                 </div>
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></div>
               </div>
             </div>
           </header>
 
-          <div className="flex-1 p-6 lg:p-12 pb-32 lg:pb-12">
-            <div className="max-w-[1400px] mx-auto">
-              <Routes>
-                <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
-                <Route path="/students" element={<Students role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
-                <Route path="*" element={<Navigate to="/" />} />
-              </Routes>
-            </div>
-            <Footer />
+          <div className="flex-1 p-6 lg:p-12">
+            <Routes>
+              <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/students" element={<Students isAdmin={isAdmin} role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
+              <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+              {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
+              {isAdmin && <Route path="/sql-viewer" element={<SqlViewer />} />}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           </div>
-          <MobileNav isAdmin={isAdmin} />
+
+          <Footer />
         </main>
+        
+        <MobileNav isAdmin={isAdmin} />
       </div>
     </HashRouter>
   );
