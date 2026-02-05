@@ -12,10 +12,14 @@
     <meta name="apple-mobile-web-app-title" content="ادارة الطلاب">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#4f46e5">
-    <link rel="manifest" href="/manifest.json">
     
+    <!-- Scripts for Browser-side Transpilation and ESM -->
+    <script src="https://unpkg.com/es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
     <style>
       body { 
         font-family: 'Cairo', sans-serif; 
@@ -29,34 +33,32 @@
         display: flex; justify-content: center; align-items: center; height: 100vh;
         font-weight: bold; color: #4f46e5; font-size: 1.2rem;
       }
-      html, body {
-        height: 100%;
-        width: 100%;
-      }
       ::-webkit-scrollbar { width: 4px; }
       ::-webkit-scrollbar-track { background: #f1f5f9; }
       ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
-  <script type="importmap">
+
+    <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.4",
-    "react-dom": "https://esm.sh/react-dom@^19.2.4",
-    "react-dom/client": "https://esm.sh/react-dom@^19.2.4/client",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.94.0",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "recharts": "https://esm.sh/recharts@^3.7.0",
-    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3",
+    "lucide-react": "https://esm.sh/lucide-react@0.468.0",
+    "recharts": "https://esm.sh/recharts@2.12.7",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
     "vite": "https://esm.sh/vite@^7.3.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3"
   }
 }
 </script>
-</head>
+  </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="index.tsx"></script>
+    <!-- استخدام Babel لترجمة الملف لحظياً وتجاوز خطأ MIME type -->
+    <script type="text/babel" data-type="module" src="index.tsx"></script>
   </body>
 </html>

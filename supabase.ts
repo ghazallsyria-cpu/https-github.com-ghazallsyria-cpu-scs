@@ -1,33 +1,28 @@
+
 import { createClient } from '@supabase/supabase-js';
 
-/**
- * دالة مساعدة للوصول الآمن لمتغيرات البيئة في بيئة Vite
- * تم إزالة التحقق من 'process' لتجنب أخطاء TypeScript أثناء عملية البناء (Build)
- */
 const safeGetEnv = (key: string): string => {
+  // محاولة الجلب من import.meta.env (Vite)
   try {
-    // في Vite، يتم حقن متغيرات البيئة في import.meta.env
-    // نستخدم الاختيار الاختياري (Optional Chaining) لضمان عدم توقف التطبيق
-    const env = import.meta.env;
-    if (env && env[key]) {
-      return env[key];
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+      return import.meta.env[key];
     }
-  } catch (e) {
-    // في حال كان import.meta غير مدعوم في المتصفحات القديمة جداً
-  }
+  } catch (e) {}
+
+  // محاولة الجلب من process.env (Node/Classic)
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      return process.env[key];
+    }
+  } catch (e) {}
+
   return '';
 };
 
 const SUPABASE_URL = safeGetEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = safeGetEnv('VITE_SUPABASE_ANON_KEY');
 
-// عرض تحذير في وحدة التحكم إذا كانت البيانات مفقودة
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn(
-    'تنبيه: بيانات Supabase غير مكتملة. تأكد من ضبط VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY في إعدادات Netlify.'
-  );
-}
-
+// قيم افتراضية لمنع توقف التطبيق أثناء التطوير
 export const supabase = createClient(
   SUPABASE_URL || 'https://placeholder.supabase.co',
   SUPABASE_ANON_KEY || 'placeholder'
