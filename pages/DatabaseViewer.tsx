@@ -83,14 +83,17 @@ CREATE TABLE IF NOT EXISTS public.activation_codes (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. [الإصلاح النهائي V2] إنشاء دالة مساعدة قوية لجلب دور المستخدم الحالي.
--- استخدام SECURITY DEFINER أمر حاسم. يسمح للدالة بتجاوز سياسات RLS على جدول 'profiles'،
--- وهو أمر ضروري للتحقق من دور المستخدم دون التسبب في حلقة أمان مفرغة.
-CREATE OR REPLACE FUNCTION public.get_my_role()
-RETURNS TEXT AS $$
+-- 2. [الإصلاح النهائي V3] دالة مباشرة وقوية للتحقق من صلاحيات المدير.
+-- هذه الدالة تعمل بصلاحيات المالك (SECURITY DEFINER)، مما يسمح لها بتجاوز سياسات الأمان
+-- على جدول 'profiles' للتحقق من دور المستخدم بأمان. هذا هو المفتاح لكسر "التبعية الدائرية"
+-- التي كانت تمنع المدير من رؤية أي بيانات.
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
 BEGIN
-  -- This query runs with the privileges of the function owner (postgres), not the current user.
-  RETURN (SELECT role FROM public.profiles WHERE id = auth.uid());
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -138,7 +141,7 @@ FROM public.students s
 LEFT JOIN (SELECT student_id, COUNT(*) AS total_lessons, SUM(hours) AS total_hours FROM public.lessons GROUP BY student_id) l ON s.id = l.student_id
 LEFT JOIN (SELECT student_id, SUM(amount) AS total_paid FROM public.payments GROUP BY student_id) p ON s.id = p.student_id;
 
--- 5. إعادة ضبط سياسات الأمان (RLS) - [الإصلاح النهائي V2]
+-- 5. إعادة ضبط سياسات الأمان (RLS) - [الإصلاح النهائي V3]
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
@@ -158,25 +161,25 @@ DROP POLICY IF EXISTS "Codes access" ON public.activation_codes;
 
 -- إنشاء السياسات الجديدة والموثوقة باستخدام الدالة المساعدة
 CREATE POLICY "Profiles access" ON public.profiles FOR ALL
-USING (auth.uid() = id OR public.get_my_role() = 'admin');
+USING (auth.uid() = id OR public.is_admin());
 
 CREATE POLICY "Students access" ON public.students FOR ALL
-USING (auth.uid() = teacher_id OR public.get_my_role() = 'admin');
+USING (auth.uid() = teacher_id OR public.is_admin());
 
 CREATE POLICY "Lessons access" ON public.lessons FOR ALL
-USING (auth.uid() = teacher_id OR public.get_my_role() = 'admin');
+USING (auth.uid() = teacher_id OR public.is_admin());
 
 CREATE POLICY "Payments access" ON public.payments FOR ALL
-USING (auth.uid() = teacher_id OR public.get_my_role() = 'admin');
+USING (auth.uid() = teacher_id OR public.is_admin());
 
 CREATE POLICY "Schedules access" ON public.schedules FOR ALL
-USING (auth.uid() = teacher_id OR public.get_my_role() = 'admin');
+USING (auth.uid() = teacher_id OR public.is_admin());
 
 CREATE POLICY "Academic records access" ON public.academic_records FOR ALL
-USING (auth.uid() = teacher_id OR public.get_my_role() = 'admin');
+USING (auth.uid() = teacher_id OR public.is_admin());
 
 CREATE POLICY "Codes access" ON public.activation_codes FOR ALL
-USING (public.get_my_role() = 'admin');
+USING (public.is_admin());
 `;
 
 const DatabaseViewer = () => {
