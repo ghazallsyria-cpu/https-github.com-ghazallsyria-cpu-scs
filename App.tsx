@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
 import { 
@@ -96,6 +96,8 @@ const App: React.FC = () => {
   const [supervisedTeacher, setSupervisedTeacher] = useState<{id: string, name: string} | null>(null);
   const [currentYear, setCurrentYear] = useState(localStorage.getItem('selectedYear') || '2024-2025');
   const [currentSemester, setCurrentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const isSupabaseConfigured = SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes('placeholder');
 
@@ -103,6 +105,16 @@ const App: React.FC = () => {
     localStorage.setItem('selectedYear', currentYear);
     localStorage.setItem('selectedSemester', currentSemester);
   }, [currentYear, currentSemester]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchProfile = async (uid: string, force = false) => {
     if (!force && cache.profile && cache.lastUid === uid) {
@@ -189,7 +201,6 @@ const App: React.FC = () => {
             {isAdmin && <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="إدارة المحتوى" />}
             {isAdmin && <NavItem to="/database-viewer" icon={<Database size={20} />} label="قواعد البيانات" />}
           </nav>
-          <button onClick={() => supabase.auth.signOut()} className="mt-8 flex items-center gap-4 px-6 py-4 text-rose-500 font-black hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> تسجيل خروج</button>
         </aside>
 
         <main className="flex-1 flex flex-col min-h-screen bg-transparent">
@@ -210,16 +221,27 @@ const App: React.FC = () => {
               </div>
             </div>
             
-            <div className="flex items-center gap-4">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-black text-slate-900">{profile?.full_name}</p>
-                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{isAdmin ? 'المدير العام' : 'إدارة محتوى'}</p>
-              </div>
-              <div className="relative group cursor-pointer">
+            <div className="relative" ref={profileMenuRef}>
+              <button onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className="group">
                 <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-xl shadow-indigo-100 transition-transform group-hover:rotate-12 group-hover:scale-110">
                   {profile?.full_name?.split(' ').map((n: string) => n[0]).slice(0, 2).join('')}
                 </div>
-              </div>
+              </button>
+              
+              {isProfileMenuOpen && (
+                <div className="absolute left-0 mt-4 w-64 bg-white rounded-3xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.2)] border border-slate-100 z-[100] overflow-hidden animate-in zoom-in duration-200">
+                  <div className="px-6 py-4 border-b border-slate-100 text-right">
+                    <p className="text-sm font-black text-slate-900 truncate">{profile?.full_name}</p>
+                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{isAdmin ? 'المدير العام' : 'إدارة محتوى'}</p>
+                  </div>
+                  <div className="p-2">
+                    <button onClick={() => { supabase.auth.signOut(); setIsProfileMenuOpen(false); }} className="w-full text-rose-500 flex items-center justify-end gap-3 px-4 py-3 rounded-2xl hover:bg-rose-50 font-black text-sm transition-colors">
+                      <span>تسجيل الخروج</span>
+                      <LogOut size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </header>
 
