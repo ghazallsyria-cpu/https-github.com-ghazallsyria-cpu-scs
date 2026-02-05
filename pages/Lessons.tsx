@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
   Calendar, Clock, BookOpen, ChevronLeft, Plus, Info, 
@@ -6,12 +7,15 @@ import {
 } from 'lucide-react';
 
 const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
   const [students, setStudents] = useState<any[]>([]);
   const [studentLessons, setStudentLessons] = useState<any[]>([]);
   const [studentPayments, setStudentPayments] = useState<any[]>([]);
   const [academicRecords, setAcademicRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [selectedStudent, setSelectedStudent] = useState<any>(location.state?.studentToOpen || null);
   const [activeTab, setActiveTab] = useState<'lessons' | 'payments' | 'academic'>('lessons');
   const [selectedGradeFolder, setSelectedGradeFolder] = useState<string>('الكل');
   
@@ -61,6 +65,12 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (location.state?.studentToOpen) {
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname]);
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
   
