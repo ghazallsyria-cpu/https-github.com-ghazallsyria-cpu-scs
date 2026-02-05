@@ -6,7 +6,7 @@ import {
   Edit3, Copy, MoveRight, Settings2, Save, Lock, Unlock, CheckCircle2
 } from 'lucide-react';
 
-const Students = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
+const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, role: any, uid: string, year: string, semester: string }) => {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,8 +26,6 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
     phones: [{ number: '', label: 'الطالب' }] as any[]
   });
 
-  const isAdmin = role === 'admin';
-
   const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
     setFeedback({ msg, type });
     setTimeout(() => setFeedback(null), 4000);
@@ -37,7 +35,7 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
     setLoading(true);
     try {
       let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
-      if (!isAdmin) query = query.eq('teacher_id', uid);
+      if (role !== 'admin') query = query.eq('teacher_id', uid);
       const { data, error } = await query.order('is_completed', { ascending: true }).order('name');
       if (error) throw error;
       setStudents(data || []);
@@ -47,7 +45,7 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
     } finally { 
       setLoading(false); 
     }
-  }, [uid, isAdmin, year, semester]);
+  }, [uid, role, year, semester]);
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
@@ -82,19 +80,25 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
         semester: semester
       };
 
+      let operation;
       if (isEditMode && selectedStudentId) {
-        const { error } = await supabase.from('students').update(studentData).eq('id', selectedStudentId);
-        if (error) throw error;
+        operation = supabase.from('students').update(studentData).eq('id', selectedStudentId);
       } else {
-        const { error } = await supabase.from('students').insert([studentData]);
-        if (error) throw error;
+        operation = supabase.from('students').insert([studentData]);
+      }
+      
+      const { error } = await operation;
+
+      if (error) {
+        console.error("Supabase error:", error);
+        throw new Error(error.message);
       }
       
       showFeedback(isEditMode ? 'تم التحديث بنجاح' : 'تمت الإضافة بنجاح');
       setIsModalOpen(false);
       fetchStudents();
     } catch (err: any) { 
-      showFeedback(err.message, 'error'); 
+      showFeedback(`فشل الحفظ: ${err.message}`, 'error'); 
     } finally { setIsSubmitting(false); }
   };
 
@@ -144,7 +148,7 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button onClick={() => { setIsEditMode(false); setIsModalOpen(true); }} className="bg-slate-900 hover:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 active:scale-95 transition-all text-sm"><Plus size={20}/> إضافة طالب</button>
+          <button onClick={() => { setIsEditMode(false); setForm({ name: '', address: '', school_name: '', grade: '12', agreed_amount: '', is_hourly: false, price_per_hour: '', phones: [{ number: '', label: 'الطالب' }] }); setIsModalOpen(true); }} className="bg-slate-900 hover:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-xl flex items-center gap-3 active:scale-95 transition-all text-sm"><Plus size={20}/> إضافة طالب</button>
         </div>
       </div>
 
@@ -269,55 +273,75 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
                   </select>
                 </div>
               </div>
-
-              <div className="space-y-5 bg-indigo-50/50 p-8 rounded-[3rem] border border-indigo-100">
-                <div className="flex justify-between items-center mb-4">
-                  <label className="text-xs font-black text-indigo-900 flex items-center gap-3"><Phone size={18}/> هواتف التواصل</label>
-                  <button type="button" onClick={() => setForm({...form, phones: [...form.phones, {number: '', label: 'الطالب'}]})} className="bg-white text-indigo-600 font-black text-[10px] px-4 py-2 rounded-2xl shadow-sm hover:bg-indigo-600 hover:text-white transition-all">+ إضافة</button>
-                </div>
-                {form.phones.map((p, idx) => (
-                  <div key={idx} className="flex gap-3 animate-in slide-in-from-right-2">
-                    <select className="w-32 p-4 bg-white border-2 border-white rounded-2xl font-black text-xs outline-none focus:border-indigo-500 shadow-sm" value={p.label} onChange={e => { const n = [...form.phones]; n[idx].label = e.target.value; setForm({...form, phones: n}); }}>
-                      <option value="الطالب">الطالب</option>
-                      <option value="الأب">الأب</option>
-                      <option value="الأم">الأم</option>
-                    </select>
-                    <input required placeholder="رقم الموبايل" className="flex-1 p-4 bg-white border-2 border-white rounded-2xl font-black text-xs text-left outline-none focus:border-indigo-500 shadow-sm" value={p.number} onChange={e => { const n = [...form.phones]; n[idx].number = e.target.value; setForm({...form, phones: n}); }} />
-                    {idx > 0 && <button type="button" onClick={() => setForm({...form, phones: form.phones.filter((_, i) => i !== idx)})} className="text-rose-400 p-3 hover:bg-rose-50 rounded-2xl transition-all"><Trash2 size={20}/></button>}
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="space-y-2">
+                   <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-[0.2em]">اسم المدرسة (اختياري)</label>
+                   <input placeholder="المدرسة..." className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.school_name} onChange={e => setForm({...form, school_name: e.target.value})} />
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-[0.2em]">عنوان السكن (اختياري)</label>
+                   <input placeholder="المنطقة..." className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
-                 <div className="absolute top-0 left-0 w-32 h-32 bg-indigo-500/10 rounded-full -ml-16 -mt-16 blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700"></div>
-                 <div className="relative z-10 space-y-4">
-                    <div className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl cursor-pointer hover:bg-white/10 transition-all" onClick={() => setForm({...form, is_hourly: !form.is_hourly})}>
-                       <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${form.is_hourly ? 'bg-indigo-500 border-indigo-500' : 'border-white/20'}`}>
-                         {form.is_hourly && <CheckCircle size={14}/>}
-                       </div>
-                       <span className="text-xs font-black">نظام خارجي (بالساعة)</span>
-                    </div>
-                 </div>
-                 <div className="relative z-10 text-center">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{form.is_hourly ? 'سعر الساعة الدراسية' : 'إجمالي الاتفاق الفصلي'}</p>
-                    <div className="flex items-center justify-center gap-2">
-                       <span className="text-indigo-400 font-black text-3xl">$</span>
-                       <input 
-                         required 
-                         type="number" 
-                         className="bg-transparent text-5xl font-black text-white w-full outline-none text-center placeholder:text-white/10" 
-                         placeholder="0"
-                         value={form.is_hourly ? form.price_per_hour : form.agreed_amount}
-                         onChange={e => setForm({...form, [form.is_hourly ? 'price_per_hour' : 'agreed_amount']: e.target.value})}
-                       />
-                    </div>
-                 </div>
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-[0.2em]">أرقام الهواتف</label>
+                {form.phones.map((phone, index) => (
+                  <div key={index} className="flex gap-2 items-center">
+                    <input 
+                      placeholder="رقم الهاتف..." 
+                      className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black outline-none focus:bg-white focus:border-indigo-500 transition-all text-left" 
+                      value={phone.number} 
+                      onChange={e => {
+                        const newPhones = [...form.phones];
+                        newPhones[index].number = e.target.value;
+                        setForm({...form, phones: newPhones});
+                      }}
+                    />
+                    <select 
+                      className="p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-black outline-none focus:bg-white focus:border-indigo-500 transition-all text-xs"
+                      value={phone.label}
+                      onChange={e => {
+                        const newPhones = [...form.phones];
+                        newPhones[index].label = e.target.value;
+                        setForm({...form, phones: newPhones});
+                      }}
+                    >
+                      <option>الطالب</option>
+                      <option>الأب</option>
+                      <option>الأم</option>
+                    </select>
+                    {form.phones.length > 1 && (
+                      <button type="button" onClick={() => setForm({...form, phones: form.phones.filter((_, i) => i !== index)})} className="p-4 bg-rose-50 text-rose-500 rounded-2xl"><Trash2 size={20}/></button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => setForm({...form, phones: [...form.phones, {number: '', label: 'الطالب'}]})} className="text-indigo-600 font-black text-xs">+ إضافة رقم آخر</button>
+              </div>
+
+              <div className="p-6 bg-slate-50 rounded-3xl border-2 border-slate-100 space-y-4">
+                <div className="flex items-center gap-4">
+                  <input type="checkbox" id="is_hourly" checked={form.is_hourly} onChange={e => setForm({...form, is_hourly: e.target.checked})} className="w-5 h-5 accent-indigo-600" />
+                  <label htmlFor="is_hourly" className="font-black text-slate-700">محاسبة خارجية (بالساعة)</label>
+                </div>
+                
+                {form.is_hourly ? (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-[0.2em]">سعر الساعة</label>
+                    <input type="number" placeholder="0" className="w-full p-5 bg-white border-2 border-slate-200 rounded-3xl font-black outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.price_per_hour} onChange={e => setForm({...form, price_per_hour: e.target.value})} />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-[0.2em]">المبلغ المتفق عليه للفصل الدراسي</label>
+                    <input type="number" placeholder="0" className="w-full p-5 bg-white border-2 border-slate-200 rounded-3xl font-black outline-none focus:bg-white focus:border-indigo-500 transition-all" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} />
+                  </div>
+                )}
               </div>
             </div>
 
-            <button disabled={isSubmitting} type="submit" className="w-full py-6 bg-indigo-600 text-white font-black rounded-[2.5rem] mt-12 shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 active:scale-95 disabled:opacity-50 text-xl">
-              {isSubmitting ? <RefreshCw className="animate-spin" size={28} /> : (isEditMode ? <Save size={28} /> : <CheckCircle size={28} />)}
-              {isSubmitting ? "جاري الحفظ..." : (isEditMode ? "تحديث البيانات" : "تأكيد تسجيل الطالب")}
+            <button disabled={isSubmitting} className="w-full py-6 bg-indigo-600 text-white font-black rounded-[2.5rem] mt-10 shadow-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50">
+              {isSubmitting ? <RefreshCw className="animate-spin" /> : <Save size={20} />}
+              {isEditMode ? 'حفظ التعديلات' : 'تسجيل وحفظ الملف'}
             </button>
           </form>
         </div>
