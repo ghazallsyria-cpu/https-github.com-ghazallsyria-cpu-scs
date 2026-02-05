@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '../supabase.ts';
+import { supabase } from '../supabase';
 import { 
   Plus, Trash2, CheckCircle, X, AlertCircle, Users, School, MessageCircle, 
   Phone, MapPin, Search, Folder, FolderOpen, Layers, RefreshCw, MoreVertical, 
@@ -151,8 +151,6 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
         if (error) throw error;
         showFeedback('تم نقل الطالب بنجاح (مع كافة بياناته السابقة)');
       } else {
-        // عند النسخ: ننشئ سجل جديد تماماً
-        // يتم حذف كافة الحقول التلقائية وحقول العرض لتجنب التداخل
         const { 
           id, created_at, 
           total_lessons, total_hours, total_paid, expected_income, remaining_balance, 
@@ -161,7 +159,7 @@ const Students = ({ role, uid, year, semester }: { role: any, uid: string, year:
 
         const newData = {
           ...studentCleanData,
-          teacher_id: uid, // التأكد من ربطه بالمعلم الحالي
+          teacher_id: uid, 
           academic_year: moveData.year,
           semester: moveData.semester
         };
