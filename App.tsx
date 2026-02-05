@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
+import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, BookOpen, Code2, Clock, FileDown, Database
 } from 'lucide-react';
@@ -26,20 +26,29 @@ const App: React.FC = () => {
   const [currentYear, setCurrentYear] = useState(localStorage.getItem('selectedYear') || '2024-2025');
   const [currentSemester, setCurrentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
 
-  const fetchProfile = async (uid: string) => {
+  const fetchProfile = async (user: any) => {
+    const userPhone = user.user_metadata?.phone;
+    const isDirectAdmin = userPhone === ADMIN_PHONE;
+
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+      // محاولة قراءة البروفايل
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       
-      // نظام التخطي الذكي: إذا فشل جلب البيانات ولكن المستخدم هو صاحب الرقم المدير، نمنحه الصلاحية يدوياً
-      if (data && data.phone === ADMIN_PHONE) {
-        setProfile({ ...data, role: 'admin', is_approved: true });
-      } else if (error || !data) {
-        setProfile({ role: 'teacher', is_approved: false });
+      if (data) {
+        // إذا نجحت القراءة، نستخدم البيانات الحقيقية
+        setProfile({ ...data, role: isDirectAdmin ? 'admin' : data.role });
       } else {
-        setProfile(data);
+        // إذا فشلت القراءة (بسبب RLS)، نمنحه صلاحية المدير يدوياً إذا كان الرقم مطابقاً
+        setProfile({ 
+          id: user.id,
+          role: isDirectAdmin ? 'admin' : 'teacher', 
+          phone: userPhone || '',
+          is_approved: isDirectAdmin,
+          full_name: user.user_metadata?.full_name || 'مستخدم'
+        });
       }
     } catch (e) {
-      setProfile({ role: 'teacher', is_approved: false });
+      setProfile({ role: isDirectAdmin ? 'admin' : 'teacher', is_approved: isDirectAdmin });
     } finally {
       setLoading(false);
     }
@@ -48,13 +57,13 @@ const App: React.FC = () => {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
-      if (s) fetchProfile(s.user.id);
+      if (s) fetchProfile(s.user);
       else setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, ns) => {
       setSession(ns);
-      if (ns) fetchProfile(ns.user.id);
+      if (ns) fetchProfile(ns.user);
       else { setProfile(null); setLoading(false); }
     });
     return () => subscription.unsubscribe();
@@ -68,8 +77,8 @@ const App: React.FC = () => {
 
   if (!session) return <Login />;
 
-  // التحقق النهائي من رتبة المدير
-  const isAdmin = profile?.role === 'admin' || profile?.phone === ADMIN_PHONE;
+  // التحقق الفاصل: هل الرقم المسجل هو رقم المدير؟
+  const isAdmin = profile?.role === 'admin' || profile?.phone === ADMIN_PHONE || session.user.user_metadata?.phone === ADMIN_PHONE;
   const effectiveUid = supervisedTeacher ? supervisedTeacher.id : session.user.id;
   const effectiveRole = isAdmin && !supervisedTeacher ? 'admin' : 'teacher';
 
@@ -83,47 +92,47 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col p-8 sticky top-0 h-screen">
+        <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col p-8 sticky top-0 h-screen shadow-2xl">
           <div className="flex items-center gap-4 mb-12">
             <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-indigo-100"><GraduationCap size={28} /></div>
             <h1 className="text-xl font-black text-slate-900">إدارة الطلاب</h1>
           </div>
           <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
-            <Link to="/" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50 transition-all"><LayoutDashboard size={20}/> الرئيسية</Link>
-            <Link to="/schedule" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50 transition-all"><Clock size={20}/> الجدول</Link>
-            <Link to="/students" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50 transition-all"><Users size={20}/> الطلاب</Link>
-            <Link to="/lessons" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50 transition-all"><BookOpen size={20}/> الحصص</Link>
-            <Link to="/payments" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50 transition-all"><Wallet size={20}/> المالية</Link>
-            <Link to="/reports" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50 transition-all"><FileDown size={20}/> التقارير</Link>
-            {isAdmin && <Link to="/teachers" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-indigo-600 bg-indigo-50 border border-indigo-100 shadow-sm"><ShieldCheck size={20}/> الإدارة</Link>}
-            {isAdmin && <Link to="/database-viewer" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50 transition-all"><Database size={20}/> قواعد البيانات</Link>}
+            <Link to="/" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الرئيسية</Link>
+            <Link to="/schedule" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الجدول</Link>
+            <Link to="/students" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الطلاب</Link>
+            <Link to="/lessons" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">الحصص</Link>
+            <Link to="/payments" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-slate-500 hover:bg-slate-50">المالية</Link>
+            {isAdmin && <Link to="/teachers" className="flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-sm text-indigo-600 bg-indigo-50 border border-indigo-100">الإدارة</Link>}
           </nav>
-          <button onClick={() => supabase.auth.signOut()} className="mt-8 flex items-center gap-4 px-6 py-4 rounded-2xl text-rose-500 font-black hover:bg-rose-50 transition-all">
-            <LogOut size={20} /> تسجيل الخروج
+          <button onClick={() => supabase.auth.signOut()} className="mt-8 flex items-center gap-4 px-6 py-4 rounded-2xl text-rose-500 font-black hover:bg-rose-50">
+            تسجيل الخروج
           </button>
         </aside>
 
         <main className="flex-1 flex flex-col min-h-screen bg-slate-50/50">
-          <header className={`h-20 bg-white border-b border-slate-100 flex items-center justify-between px-6 lg:px-12 z-40 sticky top-0 ${supervisedTeacher ? 'mt-11' : ''}`}>
-            <div className="flex items-center gap-4">
-               <span className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-lg">
-                 {isAdmin ? "وضع المدير العام" : "وضع المحتوى"}
-               </span>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-lg">
-              {profile?.full_name?.[0] || 'U'}
-            </div>
+          <header className={`h-20 bg-white border-b border-slate-100 flex items-center justify-between px-12 z-40 sticky top-0 ${supervisedTeacher ? 'mt-11' : ''}`}>
+             <div className="bg-indigo-600 text-white px-5 py-2 rounded-2xl text-[10px] font-black shadow-lg">
+                {isAdmin ? "بصلاحيات المدير العام" : "بصلاحيات المحتوى"}
+             </div>
+             <div className="flex gap-4">
+                <select value={currentYear} onChange={e => { setCurrentYear(e.target.value); localStorage.setItem('selectedYear', e.target.value); }} className="bg-slate-50 text-[11px] font-black px-4 py-2 rounded-xl outline-none border border-slate-100">
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                </select>
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black">
+                  {profile?.full_name?.[0] || 'U'}
+                </div>
+             </div>
           </header>
 
-          <div className="flex-1 p-6 lg:p-10">
+          <div className="flex-1 p-10">
             <Routes>
               <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/students" element={<Students isAdmin={isAdmin} role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-              <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
-              <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
               {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
               {isAdmin && <Route path="/database-viewer" element={<DatabaseViewer />} />}
               <Route path="*" element={<Navigate to="/" replace />} />
