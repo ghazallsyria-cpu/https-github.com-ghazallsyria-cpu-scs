@@ -1,76 +1,62 @@
--- [V9] تحديث سياسات الطلاب لضمان سهولة الإضافة
--- هذا الملف يعالج مشاكل الصلاحيات التي قد تمنع إضافة طلاب جدد
 
--- 1. التأكد من صلاحيات الإضافة لجدول الطلاب
-ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+-- 1. إصلاح جدول المدفوعات (إضافة الأعمدة المفقودة)
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS is_final BOOLEAN DEFAULT false;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS payment_number TEXT DEFAULT 'الأولى';
 
-DROP POLICY IF EXISTS "Students access" ON public.students;
-DROP POLICY IF EXISTS "Allow teachers to insert their own students" ON public.students;
-DROP POLICY IF EXISTS "Allow teachers to view/edit their own students" ON public.students;
-DROP POLICY IF EXISTS "Allow admins full access to students" ON public.students;
+-- 2. تأكيد إنشاء جدول الأكواد مع تصحيح السياسات
+CREATE TABLE IF NOT EXISTS public.activation_codes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code TEXT UNIQUE NOT NULL,
+    is_used BOOLEAN DEFAULT false,
+    used_by UUID REFERENCES auth.users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
 
--- سياسة الإضافة: تسمح لأي مستخدم مسجل بإضافة طالب بشرط أن يكون هو المعلم
-CREATE POLICY "Allow teachers to insert their own students" 
-ON public.students FOR INSERT 
-WITH CHECK (auth.uid() = teacher_id);
+ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY;
 
--- سياسة الرؤية والتعديل والحذف
-CREATE POLICY "Allow teachers to view/edit their own students" 
-ON public.students FOR ALL 
-USING (auth.uid() = teacher_id);
+-- سياسة تسمح للمدير (بناءً على الهاتف أو الدور) بالتحكم الكامل
+DROP POLICY IF EXISTS "Admins manage codes" ON public.activation_codes;
+CREATE POLICY "Admins manage codes" ON public.activation_codes 
+FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE profiles.id = auth.uid() 
+        AND (profiles.role = 'admin' OR profiles.phone = '55315661')
+    )
+);
 
--- سياسة المدير العام: صلاحيات مطلقة
-CREATE POLICY "Allow admins full access to students" 
-ON public.students FOR ALL 
-USING (public.is_admin_check(auth.uid()));
+DROP POLICY IF EXISTS "Public select unused" ON public.activation_codes;
+CREATE POLICY "Public select unused" ON public.activation_codes 
+FOR SELECT USING (is_used = false);
 
--- 2. دالة وتريجر لضمان وجود الملف الشخصي تلقائياً عند تسجيل أي مستخدم جديد (Fix لـ User already registered)
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name, phone, role, is_approved)
-  VALUES (
-    NEW.id, 
-    COALESCE(NEW.raw_user_meta_data->>'full_name', 'معلم جديد'), 
-    COALESCE(NEW.raw_user_meta_data->>'phone', '00000000'),
-    'teacher',
-    false
-  )
-  ON CONFLICT (id) DO NOTHING;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- 3. تأكيد إنشاء جدول المتابعة الدراسية
+CREATE TABLE IF NOT EXISTS public.academic_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID REFERENCES public.students(id) ON DELETE CASCADE,
+    teacher_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    status_notes TEXT NOT NULL,
+    weaknesses TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
 
--- تفعيل التريجر على جدول المستخدمين الخاص بـ Supabase
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+ALTER TABLE public.academic_records ENABLE ROW LEVEL SECURITY;
 
--- تحديث عرض الملخص لضمان سرعة الاستجابة
-DROP VIEW IF EXISTS public.student_summary_view;
-CREATE OR REPLACE VIEW public.student_summary_view AS
-SELECT 
-    s.*,
-    COALESCE(l.total_lessons, 0) AS total_lessons,
-    COALESCE(l.total_hours, 0) AS total_hours,
-    COALESCE(p.total_paid, 0) AS total_paid,
-    CASE 
-        WHEN s.is_hourly THEN (COALESCE(l.total_hours, 0) * s.price_per_hour)
-        ELSE s.agreed_amount
-    END AS expected_income,
-    (CASE 
-        WHEN s.is_hourly THEN (COALESCE(l.total_hours, 0) * s.price_per_hour)
-        ELSE s.agreed_amount
-    END) - COALESCE(p.total_paid, 0) AS remaining_balance
-FROM public.students s
-LEFT JOIN (
-    SELECT student_id, COUNT(*) AS total_lessons, SUM(hours) AS total_hours 
-    FROM public.lessons 
-    GROUP BY student_id
-) l ON s.id = l.student_id
-LEFT JOIN (
-    SELECT student_id, SUM(amount) AS total_paid 
-    FROM public.payments 
-    GROUP BY student_id
-) p ON s.id = p.student_id;
+-- سياسة تسمح للمعلم برؤية وإضافة سجلاته
+DROP POLICY IF EXISTS "Teachers records access" ON public.academic_records;
+CREATE POLICY "Teachers records access" ON public.academic_records
+FOR ALL USING (
+    auth.uid() = teacher_id OR 
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR phone = '55315661'))
+);
+
+-- 4. سياسات إضافية لجدول الطلاب لضمان قدرة المعلم الجديد على الإضافة فور تفعيله
+DROP POLICY IF EXISTS "Teachers insert students" ON public.students;
+CREATE POLICY "Teachers insert students" ON public.students 
+FOR INSERT WITH CHECK (auth.uid() = teacher_id);
+
+DROP POLICY IF EXISTS "Teachers view their students" ON public.students;
+CREATE POLICY "Teachers view their students" ON public.students 
+FOR SELECT USING (
+    auth.uid() = teacher_id OR 
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR phone = '55315661'))
+);
