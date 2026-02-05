@@ -72,7 +72,6 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 text-right">
       
-      {/* Alert if no data */}
       {stats.totalStudents === 0 && (
         <div className="bg-indigo-600/5 backdrop-blur-xl border border-indigo-200/50 p-8 rounded-[3rem] flex items-center gap-6 animate-pulse">
            <div className="bg-indigo-600 text-white p-5 rounded-2xl shadow-xl"><Info size={28}/></div>
@@ -83,14 +82,13 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
         </div>
       )}
 
-      {/* Hero Section */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         <div className="lg:col-span-3 bg-gradient-to-br from-indigo-700 via-indigo-800 to-slate-900 p-12 lg:p-16 rounded-[4rem] text-white shadow-[0_40px_80px_-20px_rgba(79,70,229,0.4)] relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-10">
               <span className="bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-2.5 rounded-full text-[11px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                <Sparkles size={14} className="text-amber-400" /> الحالة الرقمية: نشطة
+                <Sparkles size={14} className="text-amber-400" /> إدارة المحتوى: نشطة
               </span>
             </div>
             <div className="flex items-center gap-4 mb-6">
@@ -100,7 +98,7 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
               </h1>
             </div>
             <p className="text-indigo-100/60 font-bold max-w-xl text-lg lg:text-xl leading-relaxed mt-4">
-              أداء النظام اليوم ممتاز، تم إنجاز <span className="text-white border-b-4 border-indigo-500 pb-1">{stats.totalLessons}</span> حصة دراسية ناجحة حتى الآن.
+              أداء المنصة اليوم ممتاز، تم تسجيل <span className="text-white border-b-4 border-indigo-500 pb-1">{stats.totalLessons}</span> عملية تعليمية بنجاح.
             </p>
           </div>
           <GraduationCap className="absolute -bottom-16 -left-16 text-white/5 w-96 h-96 -rotate-12 group-hover:rotate-0 transition-transform duration-[2s]" />
@@ -115,26 +113,25 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
             <h2 className="text-6xl font-black text-slate-900 leading-none">${stats.totalIncome.toLocaleString()}</h2>
           </div>
           <div className="mt-8 flex items-center gap-2 text-emerald-600 font-black text-[11px] bg-emerald-50 px-6 py-3 rounded-2xl relative z-10 uppercase tracking-widest">
-            <Zap size={16} fill="currentColor"/> تحصيل ذكي
+            <Zap size={16} fill="currentColor"/> إدارة مالية
           </div>
           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-16 -mt-16"></div>
         </div>
       </div>
       
-      {/* Stats Bento Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
         <StatBento label="إجمالي الطلاب" value={stats.totalStudents} sub={`${stats.completedStudents} مكتمل`} icon={<Users size={28}/>} color="bg-blue-600" />
-        <StatBento label="ساعات العمل" value={stats.totalHours.toFixed(1)} sub="ساعة فعلية" icon={<Clock size={28}/>} color="bg-orange-500" />
-        <StatBento label="الحصص" value={stats.totalLessons} sub="درس منفذ" icon={<Calendar size={28}/>} color="bg-indigo-600" />
-        <StatBento label="الديون" value={`$${stats.pendingPayments.toLocaleString()}`} sub="غير محصلة" icon={<AlertCircle size={28}/>} color="bg-rose-500" />
+        <StatBento label="ساعات المحتوى" value={stats.totalHours.toFixed(1)} sub="ساعة تعليمية" icon={<Clock size={28}/>} color="bg-orange-500" />
+        <StatBento label="الحصص" value={stats.totalLessons} sub="عملية منجزة" icon={<Calendar size={28}/>} color="bg-indigo-600" />
+        <StatBento label="المستحقات" value={`$${stats.pendingPayments.toLocaleString()}`} sub="غير محصلة" icon={<AlertCircle size={28}/>} color="bg-rose-500" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 bg-white/90 backdrop-blur-xl p-12 lg:p-16 rounded-[4.5rem] border border-white shadow-2xl relative overflow-hidden">
           <div className="flex items-center justify-between mb-16">
             <div>
-              <h3 className="text-3xl font-black text-slate-900 mb-2">مؤشر النشاط</h3>
-              <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.3em]">تحليل الساعات خلال آخر 30 يوماً</p>
+              <h3 className="text-3xl font-black text-slate-900 mb-2">مؤشر الأداء</h3>
+              <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.3em]">تحليل نشاط المحتوى خلال آخر 30 يوماً</p>
             </div>
             <div className="bg-indigo-50 p-4 rounded-3xl text-indigo-600"><TrendingUp size={32} /></div>
           </div>
@@ -168,7 +165,7 @@ const Dashboard = ({ role, uid, year, semester }: { role: any, uid: string, year
                <h2 className="text-8xl font-black text-white tracking-tighter">{collectionRate}%</h2>
                <div className="bg-emerald-500/20 text-emerald-400 p-2 rounded-xl"><ArrowUpRight size={28}/></div>
             </div>
-            <p className="text-slate-400 text-sm font-bold leading-relaxed">أداء مالي فائق الاستقرار. تم تحصيل الغالبية العظمى من المستحقات بنجاح ملحوظ.</p>
+            <p className="text-slate-400 text-sm font-bold leading-relaxed">تحصيل ذكي لمستحقات المحتوى التعليمي بمعدل استقرار مرتفع.</p>
           </div>
           
           <div className="space-y-10 relative z-10 pt-16">

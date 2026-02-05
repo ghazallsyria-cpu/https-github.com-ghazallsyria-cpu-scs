@@ -61,10 +61,10 @@ const Login = () => {
           if (profileError) throw profileError;
 
           if (isAdminNumber) {
-            setSuccess("تم إنشاء حساب المدير بنجاح! يمكنك الدخول الآن.");
+            setSuccess("تم إنشاء حساب الإدارة بنجاح! يمكنك الدخول الآن.");
             setIsSignUp(false);
           } else {
-            setSuccess("تم إرسال طلب الانضمام! أدخل كود التفعيل بعد تسجيل الدخول لتنشيط حسابك.");
+            setSuccess("تم إرسال طلب الانضمام! أدخل كود التفعيل لتنشيط حساب إدارة المحتوى الخاص بك.");
             setIsSignUp(false);
           }
         }
@@ -97,7 +97,7 @@ const Login = () => {
               <GraduationCap size={48} />
             </div>
             <h1 className="text-2xl font-black text-slate-900 leading-tight">
-              ادارة تحكم الطلاب <br/> <span className="text-indigo-600 text-lg">في النظام الخصوصي</span>
+              نظام إدارة المحتوى <br/> <span className="text-indigo-600 text-lg">التعليمي المطور</span>
             </h1>
           </div>
 
@@ -127,14 +127,14 @@ const Login = () => {
 
             <div className="space-y-1">
               <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
-                <Phone size={12} /> رقم الموبايل
+                <Phone size={12} /> رقم الهاتف
               </label>
               <input required name="mobile" type="tel" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold outline-none" placeholder="09xxxxxxxx" value={formData.mobile} onChange={handleChange} />
             </div>
 
             <div className="space-y-1">
               <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
-                <Lock size={12} /> كلمة المرور
+                <Lock size={12} /> كلمة السر
               </label>
               <input required name="password" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold outline-none" value={formData.password} onChange={handleChange} />
             </div>
@@ -142,20 +142,20 @@ const Login = () => {
             {isSignUp && (
                <div className="space-y-1">
                 <label className="text-[11px] font-black text-slate-400 mr-2 uppercase tracking-widest flex items-center gap-1">
-                   <Lock size={12} /> تأكيد كلمة المرور
+                   <Lock size={12} /> تأكيد كلمة السر
                 </label>
                 <input required name="confirmPassword" type="password" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left font-bold outline-none" value={formData.confirmPassword} onChange={handleChange} />
               </div>
             )}
             
             <button disabled={loading} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-xl transition-all h-16 mt-4 active:scale-95 disabled:opacity-50">
-              {loading ? "جاري التحقق..." : (isSignUp ? 'إنشاء حساب جديد' : 'دخول للنظام')}
+              {loading ? "جاري التحقق..." : (isSignUp ? 'فتح حساب محتوى جديد' : 'تسجيل الدخول للنظام')}
             </button>
           </form>
 
           <div className="mt-8 pt-6 border-t border-slate-100 text-center">
             <button onClick={() => { setIsSignUp(!isSignUp); setError(null); setSuccess(null); }} className="text-slate-500 font-bold text-sm hover:text-indigo-600 transition-colors flex items-center justify-center gap-2">
-              {isSignUp ? 'بالفعل لديك حساب؟ سجل دخولك' : 'مدرس جديد؟ أنشئ حسابك الآن'}
+              {isSignUp ? 'لديك حساب محتوى؟ سجل دخولك' : 'مدير محتوى جديد؟ أنشئ حسابك'}
               <ArrowRight size={16} className={isSignUp ? 'rotate-180' : ''} />
             </button>
           </div>

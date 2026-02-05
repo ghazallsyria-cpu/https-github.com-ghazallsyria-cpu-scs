@@ -25,7 +25,7 @@ const Footer: React.FC = () => (
         <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><Code2 size={16} /></div>
         <span className="text-slate-900 font-black text-sm">برمجة : ايهاب جمال غزال</span>
       </div>
-      <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.3em]">الإصدار 3.0.0 &copy; {new Date().getFullYear()}</div>
+      <div className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.3em]">الإصدار 3.1.0 &copy; {new Date().getFullYear()}</div>
     </div>
   </footer>
 );
@@ -39,7 +39,7 @@ const MobileNav: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
     { to: '/payments', icon: <Wallet size={20} />, label: 'المالية' },
   ];
 
-  if (isAdmin) navItems.push({ to: '/teachers', icon: <ShieldCheck size={20} />, label: 'المعلمون' });
+  if (isAdmin) navItems.push({ to: '/teachers', icon: <ShieldCheck size={20} />, label: 'الإدارة' });
   else navItems.push({ to: '/reports', icon: <FileDown size={20} />, label: 'تقارير' });
 
   return (
@@ -118,7 +118,7 @@ const App: React.FC = () => {
         <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
         <div className="absolute inset-0 flex items-center justify-center"><Sparkles size={20} className="text-indigo-400 animate-pulse"/></div>
       </div>
-      <p className="font-black text-slate-900 mt-6 text-lg tracking-tight">جاري تهيئة النظام الرقمي...</p>
+      <p className="font-black text-slate-900 mt-6 text-lg tracking-tight">جاري تهيئة منصة المحتوى...</p>
     </div>
   );
 
@@ -134,18 +134,17 @@ const App: React.FC = () => {
         {supervisedTeacher && (
           <div className="fixed top-0 inset-x-0 h-11 bg-gradient-to-r from-amber-500 to-orange-600 text-white z-[100] flex items-center justify-center gap-4 px-4 shadow-xl">
              <ShieldCheck size={18} className="animate-bounce" />
-             <span className="font-black text-xs">وضع الإشراف النشط: {supervisedTeacher.name}</span>
-             <button onClick={() => setSupervisedTeacher(null)} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full text-[10px] font-black transition-all">خروج من الوضع</button>
+             <span className="font-black text-xs">وضع الرقابة النشط: {supervisedTeacher.name}</span>
+             <button onClick={() => setSupervisedTeacher(null)} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full text-[10px] font-black transition-all">إنهاء الجلسة</button>
           </div>
         )}
 
-        {/* Sidebar */}
         <aside className="hidden lg:flex w-80 bg-white/70 backdrop-blur-xl border-l border-slate-200/50 flex-col p-10 sticky top-0 h-screen">
           <div className="flex items-center gap-4 mb-16 px-2">
             <div className="bg-gradient-to-tr from-indigo-600 to-violet-600 p-3.5 rounded-2xl text-white shadow-2xl shadow-indigo-200 rotate-6"><GraduationCap size={32} /></div>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 leading-none">إدارة الطلاب</h1>
-              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-1">النسخة العصرية</p>
+              <h1 className="text-2xl font-black text-slate-900 leading-none">إدارة المحتوى</h1>
+              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-1">المنصة الذكية</p>
             </div>
           </div>
           <nav className="flex-1 space-y-2 pr-2 overflow-y-auto no-scrollbar">
@@ -156,7 +155,7 @@ const App: React.FC = () => {
             <NavItem to="/payments" icon={<Wallet size={20} />} label="المركز المالي" />
             <NavItem to="/reports" icon={<FileDown size={20} />} label="التقارير الذكية" />
             <NavItem to="/statistics" icon={<BarChart3 size={20} />} label="تحليل البيانات" />
-            {isAdmin && <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="إدارة المعلمين" />}
+            {isAdmin && <NavItem to="/teachers" icon={<ShieldCheck size={20} />} label="إدارة المحتوى" />}
           </nav>
           <button onClick={() => supabase.auth.signOut()} className="mt-8 flex items-center gap-4 px-6 py-4 text-rose-500 font-black hover:bg-rose-50 rounded-2xl transition-all"><LogOut size={20} /> تسجيل خروج</button>
         </aside>
@@ -182,7 +181,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-4">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-black text-slate-900">{profile?.full_name}</p>
-                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{isAdmin ? 'المدير العام' : 'معلم متخصص'}</p>
+                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{isAdmin ? 'المدير العام' : 'إدارة محتوى'}</p>
               </div>
               <div className="relative group cursor-pointer">
                 <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-xl shadow-indigo-100 transition-transform group-hover:rotate-12 group-hover:scale-110">
