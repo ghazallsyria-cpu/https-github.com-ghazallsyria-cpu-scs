@@ -5,7 +5,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
   Calendar, Clock, BookOpen, ChevronLeft, Plus, 
-  Wallet, School, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, RefreshCw, Save, Edit3, BarChart3, Zap, Activity
+  Wallet, School, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, RefreshCw, Save, Edit3, BarChart3, Zap, Activity,
+  DollarSign
 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 
