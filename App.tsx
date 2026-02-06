@@ -21,7 +21,7 @@ import ParentPortal from './pages/ParentPortal';
 import Settings from './pages/Settings';
 
 const ADMIN_PHONE = '55315661';
-const APP_VERSION = "V4.2 DIAMOND EDITION";
+const APP_VERSION = "V4.3 DIAMOND+";
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -55,11 +55,9 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, ns) => {
       if (event === 'SIGNED_OUT') {
-        if (!localStorage.getItem('parent_session_phone')) {
-          setSession(null);
-          setProfile(null);
-          setIsParentSession(false);
-        }
+        setSession(null);
+        setProfile(null);
+        setIsParentSession(false);
       } else if (ns) {
         setIsParentSession(false);
         setSession(ns);
@@ -71,9 +69,9 @@ const App: React.FC = () => {
 
   const fetchProfile = async (user: any) => {
     try {
-      // محاولة جلب الملف الشخصي بحد أقصى 3 مرات في حال تأخر الـ Trigger
       let profileData = null;
-      for (let i = 0; i < 3; i++) {
+      // محاولة الجلب بحد أقصى 5 مرات (لأن الـ Trigger قد يستغرق أجزاء من الثانية)
+      for (let i = 0; i < 5; i++) {
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
         if (data) {
           profileData = data;

@@ -52,7 +52,7 @@ const Login = () => {
 
     const mobileClean = formData.mobile.replace(/\D/g, '');
     if (mobileClean.length < 8) {
-      setError({ msg: "رقم الهاتف غير صحيح", type: 'error' });
+      setError({ msg: "رقم الهاتف يجب أن يكون 8 أرقام على الأقل", type: 'error' });
       setLoading(false);
       return;
     }
@@ -61,7 +61,8 @@ const Login = () => {
 
     try {
       if (isSignUp) {
-        const { error: signUpError } = await supabase.auth.signUp({
+        console.log("Starting SignUp for:", virtualEmail);
+        const { data, error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
           password: formData.password,
           options: { 
@@ -72,8 +73,12 @@ const Login = () => {
           }
         });
         
-        if (signUpError) throw signUpError;
-        setError({ msg: "تم إنشاء الحساب بنجاح! بانتظار موافقة الإدارة.", type: 'success' });
+        if (signUpError) {
+          console.error("SignUp Error:", signUpError);
+          throw signUpError;
+        }
+
+        setError({ msg: "تم إنشاء الحساب! يمكنك الآن تسجيل الدخول مباشرة.", type: 'success' });
         setIsSignUp(false);
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -83,7 +88,7 @@ const Login = () => {
         
         if (signInError) {
           if (signInError.message.includes("Invalid login credentials")) {
-            throw new Error("رقم الهاتف أو كلمة المرور غير صحيحة. جرب تسجيل حساب جديد إذا كنت تدخل لأول مرة.");
+            throw new Error("رقم الهاتف أو كلمة المرور غير صحيحة.");
           }
           throw signInError;
         }
@@ -91,7 +96,7 @@ const Login = () => {
       }
     } catch (err: any) {
       setError({ msg: err.message, type: 'error' });
-      console.error("Login detail:", err);
+      console.error("Auth process error:", err);
     } finally {
       setLoading(false);
     }
@@ -178,7 +183,7 @@ const Login = () => {
           )}
         </form>
       </div>
-      <p className="mt-12 text-slate-300 font-black text-[10px] uppercase tracking-[0.4em]">ADMIN: 55315661 • V4.2 DIAMOND</p>
+      <p className="mt-12 text-slate-300 font-black text-[10px] uppercase tracking-[0.4em]">ADMIN: 55315661 • V4.3 DIAMOND+</p>
     </div>
   );
 };

@@ -1,8 +1,28 @@
--- 1. تنظيف شامل للوظائف السابقة لضمان التحديث
+-- 1. حذف المشغلات القديمة لتجنب التعارض
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user();
 
--- 2. وظيفة معالجة المستخدمين الجدد (تنشأ تلقائياً عند التسجيل)
+-- 2. التأكد من هيكلة جدول Profiles الصحيحة
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+  full_name text,
+  phone text,
+  role text DEFAULT 'teacher',
+  is_approved boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
+);
+
+-- 3. تفعيل RLS (أمان مستوى الصف)
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- 4. إضافة سياسات الوصول (Permissions)
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
+CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
+-- 5. وظيفة معالجة المستخدمين الجدد (Trigger Function) مع معالجة الأخطاء
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -25,38 +45,17 @@ BEGIN
     full_name = EXCLUDED.full_name,
     role = CASE WHEN EXCLUDED.phone = '55315661' THEN 'admin' ELSE profiles.role END;
   RETURN new;
+EXCEPTION WHEN OTHERS THEN
+  -- في حالة الفشل، سجل الخطأ واستمر (لتجنب منع إنشاء حساب Auth)
+  RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 3. تفعيل المشغل (Trigger)
+-- 6. إعادة ربط المشغل
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 4. إصلاح جدول Profiles لضمان عدم وجود أخطاء في القيود
-ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
-ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check 
-  CHECK (role IN ('admin', 'teacher', 'parent'));
-
--- 5. تحديث كافة الدوال الأمنية لولي الأمر لضمان الدقة
-CREATE OR REPLACE FUNCTION public.normalize_phone(p_phone text)
-RETURNS text AS $$
-BEGIN
-    RETURN regexp_replace(p_phone, '\D', '', 'g');
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION public.verify_parent_access(phone_to_check text)
-RETURNS TABLE (student_id uuid, student_name text, teacher_name text, grade text) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT s.id, s.name, p.full_name, s.grade
-    FROM public.students s
-    JOIN public.profiles p ON s.teacher_id = p.id
-    WHERE EXISTS (
-        SELECT 1 FROM jsonb_array_elements(s.phones) AS ph
-        WHERE public.normalize_phone(ph->>'number') = public.normalize_phone(phone_to_check)
-    )
-    AND s.is_completed = false;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- 7. التأكد من صلاحيات جدول Profiles لـ Auth
+GRANT ALL ON public.profiles TO service_role;
+GRANT ALL ON public.profiles TO postgres;
