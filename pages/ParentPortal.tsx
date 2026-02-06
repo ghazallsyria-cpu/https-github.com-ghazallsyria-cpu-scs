@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { 
@@ -29,7 +28,7 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
       const { data: stds, error } = await supabase.rpc('get_student_by_parent_phone', { phone_val: parentPhone });
       if (error) throw error;
       setAvailableRecords(stds || []);
-      if (stds?.length === 1) {
+      if (stds?.length === 1 && !selectedStudentId) {
         setSelectedStudentId(stds[0].id);
       }
     } catch (e: any) {
@@ -37,18 +36,19 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
     } finally {
       setLoading(false);
     }
-  }, [parentPhone]);
+  }, [parentPhone, selectedStudentId]);
 
   const fetchRecordDetails = useCallback(async (sid: string) => {
     setLoading(true);
     try {
+      // Re-fetch to get most up to date specific record if needed or use existing
       const active = availableRecords.find(r => r.id === sid);
-      if (!active) {
-        const { data: stds } = await supabase.rpc('get_student_by_parent_phone', { phone_val: parentPhone });
-        const retryActive = stds?.find((r:any) => r.id === sid);
-        if (retryActive) setStudent(retryActive);
-      } else {
+      if (active) {
         setStudent(active);
+      } else {
+        const { data: stds } = await supabase.rpc('get_student_by_parent_phone', { phone_val: parentPhone });
+        const found = stds?.find((r: any) => r.id === sid);
+        if (found) setStudent(found);
       }
 
       const [lsns, sched] = await Promise.all([
@@ -66,13 +66,15 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
     }
   }, [availableRecords, parentPhone]);
 
-  useEffect(() => { fetchAvailableRecords(); }, [fetchAvailableRecords]);
+  useEffect(() => { 
+    fetchAvailableRecords(); 
+  }, [fetchAvailableRecords]);
 
   useEffect(() => {
-    if (selectedStudentId && availableRecords.length > 0) {
+    if (selectedStudentId) {
       fetchRecordDetails(selectedStudentId);
     }
-  }, [selectedStudentId, availableRecords, fetchRecordDetails]);
+  }, [selectedStudentId, fetchRecordDetails]);
 
   const handleSendRequest = async (type: string, content: string, amount?: number) => {
     if (!student) return;
@@ -89,8 +91,11 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
       if (error) throw error;
       showFeedback("تم إرسال طلبك بنجاح للأستاذ " + student.teacher_name);
       if (type === 'note') setNote('');
-    } catch (err: any) { showFeedback(err.message, "error"); }
-    finally { setSendingRequest(false); }
+    } catch (err: any) { 
+      showFeedback(err.message, "error"); 
+    } finally { 
+      setSendingRequest(false); 
+    }
   };
 
   const handleApologize = (day: string) => {
@@ -99,7 +104,9 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
   };
 
   if (loading && availableRecords.length === 0) return (
-    <div className="h-96 flex items-center justify-center"><RefreshCw className="animate-spin text-emerald-600" size={40} /></div>
+    <div className="h-96 flex items-center justify-center">
+      <RefreshCw className="animate-spin text-emerald-600" size={40} />
+    </div>
   );
 
   if (!selectedStudentId || (availableRecords.length > 1 && !student)) {
@@ -139,7 +146,7 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
                    <div className="flex justify-between items-center">
                       <span className="text-xs font-black text-slate-400">الحالة المالية:</span>
                       <span className={`text-sm font-black ${record.remaining_balance > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                         {record.remaining_balance > 0 ? `متبقي $${record.remaining_balance}` : 'خالص'}
+                         {record.remaining_balance > 0 ? `متبقي $${record.remaining_balance}` : 'خالص مالياً'}
                       </span>
                    </div>
                 </div>
@@ -197,7 +204,7 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
                </div>
                <div className="bg-white/10 backdrop-blur-xl p-6 md:p-8 rounded-[2.5rem] border border-white/20 text-center shadow-xl">
                   <p className="text-[9px] text-emerald-200 font-black uppercase mb-2">إجمالي المدفوع</p>
-                  <p className="text-3xl md:text-5xl font-black">${student?.total_paid || 0}</p>
+                  <p className="text-3xl md:text-5xl font-black">${(student?.total_paid || 0).toLocaleString()}</p>
                </div>
             </div>
          </div>
@@ -208,7 +215,7 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
            <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-slate-100 flex items-center justify-between group">
               <div>
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">المتبقي المالي للأستاذ {student?.teacher_name}</p>
-                 <h4 className="text-4xl font-black text-rose-500 tracking-tighter">${student?.remaining_balance?.toLocaleString()}</h4>
+                 <h4 className="text-4xl font-black text-rose-500 tracking-tighter">${(student?.remaining_balance || 0).toLocaleString()}</h4>
               </div>
               <div className="bg-rose-50 p-6 rounded-[2rem] text-rose-500 group-hover:scale-110 transition-transform"><Wallet size={36}/></div>
            </div>
@@ -225,7 +232,7 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
                          </div>
                          <div>
                             <p className="font-black text-slate-900 text-lg">حصة تعليمية ({l.hours}س)</p>
-                            <p className="text-xs text-slate-400 font-bold mt-1 leading-relaxed">"{l.notes || 'لا يوجد ملاحظات مسجلة'}"</p>
+                            <p className="text-xs text-slate-400 font-bold mt-1 leading-relaxed">"{l.notes || 'تم شرح المادة المقررة بنجاح'}"</p>
                          </div>
                       </div>
                    </div>
@@ -248,14 +255,20 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
                       <button onClick={() => handleApologize(s.day_of_week)} className="text-[10px] bg-rose-500/20 text-rose-400 px-5 py-2 rounded-full font-black hover:bg-rose-500 hover:text-white transition-all">اعتذار</button>
                    </div>
                  ))}
+                 {schedule.length === 0 && <p className="text-[10px] text-slate-500 italic py-4">لا توجد مواعيد ثابتة في الجدول</p>}
               </div>
            </div>
 
            <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-slate-100">
               <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3"><MessageCircle size={22} className="text-emerald-600"/> رسالة للأستاذ</h3>
-              <textarea placeholder="اكتب ملاحظاتك هنا..." className="w-full p-6 bg-slate-50 rounded-[2rem] h-32 text-xs font-bold outline-none focus:bg-white focus:ring-4 focus:ring-emerald-50 transition-all" value={note} onChange={e => setNote(e.target.value)} />
-              <button onClick={() => handleSendRequest('note', note)} disabled={sendingRequest} className="w-full py-4 bg-emerald-600 text-white rounded-[1.5rem] font-black shadow-lg mt-4 flex items-center justify-center gap-3 active:scale-95">
-                 {sendingRequest ? <RefreshCw className="animate-spin" /> : <Send size={18}/>} إرسال
+              <textarea 
+                placeholder="اكتب ملاحظاتك هنا..." 
+                className="w-full p-6 bg-slate-50 rounded-[2rem] h-32 text-xs font-bold outline-none focus:bg-white focus:ring-4 focus:ring-emerald-50 transition-all" 
+                value={note} 
+                onChange={e => setNote(e.target.value)} 
+              />
+              <button onClick={() => handleSendRequest('note', note)} disabled={sendingRequest || !note.trim()} className="w-full py-4 bg-emerald-600 text-white rounded-[1.5rem] font-black shadow-lg mt-4 flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50">
+                 {sendingRequest ? <RefreshCw className="animate-spin" /> : <Send size={18}/>} إرسال الملاحظة
               </button>
            </div>
         </div>

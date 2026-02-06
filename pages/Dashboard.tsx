@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { 
@@ -6,7 +5,7 @@ import {
   Sun, Moon, Coffee, RefreshCw, TrendingUp, Award, CreditCard, 
   Activity, PieChart, ShieldCheck, Sparkles, Zap, Bell, BellOff, BellRing, Heart, ChevronLeft,
   Briefcase, TrendingDown, Target, ZapOff, Users2, BarChart3, LineChart,
-  History as HistoryIcon
+  History as LucideHistory
 } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, Cell } from 'recharts';
 
@@ -44,7 +43,14 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
         completed: acc.completed + (curr.is_completed ? 1 : 0)
       }), { students: 0, lessons: 0, hours: 0, income: 0, debts: 0, completed: 0 });
 
-      setStats({ totalStudents: totals.students, totalLessons: totals.lessons, totalHours: totals.hours, totalIncome: totals.income, pendingPayments: totals.debts, completedStudents: totals.completed });
+      setStats({ 
+        totalStudents: totals.students, 
+        totalLessons: totals.lessons, 
+        totalHours: totals.hours, 
+        totalIncome: totals.income, 
+        pendingPayments: totals.debts, 
+        completedStudents: totals.completed 
+      });
 
       if (isAdmin) {
         const { data: teachers } = await supabase.from('profiles').select('id, full_name').neq('role', 'admin');
@@ -67,24 +73,34 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
       let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(50);
       if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
       const { data: lsns } = await lQuery;
+      
       const grouped = (lsns || []).reverse().reduce((acc: any, curr) => {
         const date = new Date(curr.lesson_date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
         acc[date] = (acc[date] || 0) + Number(curr.hours);
         return acc;
       }, {});
+      
       setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })).slice(-10));
 
       let qReq = supabase.from('parent_requests').select('*, students(name, teacher_id)').eq('status', 'pending');
       const { data: reqData } = await qReq;
       setPendingRequests(isAdmin ? (reqData || []) : (reqData || []).filter(r => r.students?.teacher_id === uid));
 
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
-  useEffect(() => { fetchData(); }, [year, semester, uid]);
+  useEffect(() => { 
+    fetchData(); 
+  }, [year, semester, uid]);
 
   if (loading) return (
-    <div className="h-96 flex items-center justify-center"><div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>
+    <div className="h-96 flex items-center justify-center">
+      <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+    </div>
   );
 
   return (
@@ -113,7 +129,7 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
            <div className="relative z-10 mt-10">
               <p className={`text-[12px] font-black uppercase tracking-widest mb-4 opacity-50`}>حالة الإشعارات</p>
               <h2 className="text-3xl font-black mb-6">طلبات معلقة</h2>
-              <p className="text-sm font-bold leading-relaxed">لديك {pendingRequests.length} طلبات جديدة {isAdmin ? 'عبر جميع المعلمين' : 'من أولياء أمورك'} بانتظار الرد.</p>
+              <p className="text-sm font-bold leading-relaxed">لديك {pendingRequests.length} طلبات جديدة بانتظار الرد.</p>
            </div>
         </div>
       </div>
@@ -171,7 +187,6 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
                      </div>
                      <div className="text-right">
                         <p className="text-2xl font-black text-emerald-400 leading-none">${t.collected.toLocaleString()}</p>
-                        <p className="text-[9px] text-slate-500 font-black mt-2">صافي المحصل</p>
                      </div>
                   </div>
                 ))}
@@ -186,11 +201,9 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
                      <div className="flex items-center gap-5">
                         <div className="bg-indigo-600 w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black shadow-xl shrink-0 group-hover:scale-105 transition-transform">
                           <span className="text-lg leading-none">{s.start_time.split(':')[0]}</span>
-                          <span className="text-[8px] opacity-60">:{s.start_time.split(':')[1]}</span>
                         </div>
                         <div>
                           <p className="text-lg font-black truncate max-w-[150px]">{s.students?.name}</p>
-                          <p className="text-[10px] text-indigo-300 font-black mt-1 uppercase tracking-widest">{s.duration_hours} ساعة مخصصة</p>
                         </div>
                      </div>
                   </div>
@@ -209,21 +222,19 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
         <div className="bg-white p-12 lg:p-20 rounded-[5rem] border border-slate-100 shadow-2xl">
            <div className="flex items-center gap-6 mb-14">
               <div className="bg-emerald-50 p-5 rounded-3xl text-emerald-600 shadow-inner">
-                <HistoryIcon size={32} />
+                <LucideHistory size={32} />
               </div>
               <div>
                  <h3 className="text-4xl font-black text-slate-900">سجل النشاط المالي الحي</h3>
-                 <p className="text-slate-400 font-black text-sm uppercase mt-2 tracking-widest">مراقبة فورية لآخر الدفعات المستلمة عبر المنصة</p>
               </div>
            </div>
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
               {recentActions.map((action, i) => (
-                <div key={i} className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 hover:bg-white hover:shadow-xl transition-all group">
+                <div key={i} className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 hover:bg-white transition-all group">
                    <p className="text-[10px] font-black text-slate-400 mb-4 uppercase tracking-widest">{new Date(action.created_at).toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'})}</p>
                    <p className="text-xl font-black text-slate-900 mb-2 truncate">{action.students?.name}</p>
                    <div className="flex justify-between items-center">
                       <span className="text-2xl font-black text-emerald-600">${action.amount}</span>
-                      <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[9px] font-black">{action.payment_method}</span>
                    </div>
                 </div>
               ))}
@@ -243,7 +254,6 @@ const StatTile = ({ label, value, sub, icon, color }: any) => (
        <p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 md:mb-4">{label}</p>
        <h4 className="text-3xl md:text-5xl font-black text-slate-900 mb-2 md:mb-4 tracking-tighter leading-none">{value}</h4>
        <div className="flex items-center gap-3">
-          <div className={`w-2 h-2 rounded-full ${color} animate-pulse`}></div>
           <p className="text-[9px] md:text-[11px] font-black text-slate-300 uppercase tracking-widest">{sub}</p>
        </div>
     </div>
