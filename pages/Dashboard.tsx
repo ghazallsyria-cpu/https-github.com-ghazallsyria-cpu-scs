@@ -29,9 +29,12 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
+      // 1. جلب ملخص الطلاب
+      let query = supabase.from('student_summary_view').select('*');
       if (!isAdmin) query = query.eq('teacher_id', uid);
-      const { data: stdData } = await query;
+      
+      const { data: stdData, error: stdError } = await query;
+      if (stdError) console.error("Stats fetch error:", stdError);
       
       const totals = (stdData || []).reduce((acc, curr) => ({
         students: acc.students + 1,
@@ -51,6 +54,7 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
         completedStudents: totals.completed 
       });
 
+      // 2. بيانات خاصة بالمدير
       if (isAdmin) {
         const { data: teachers } = await supabase.from('profiles').select('id, full_name').neq('role', 'admin');
         const rankings = (teachers || []).map(t => {
@@ -62,13 +66,17 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
 
         const { data: logs } = await supabase.from('payments').select('*, students(name)').order('created_at', { ascending: false }).limit(5);
         setRecentActions(logs || []);
-      } else {
+      }
+
+      // 3. الجدول اليومي للمعلم
+      if (!isAdmin) {
         const DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
         const today = DAYS[new Date().getDay()];
         const { data: schedData } = await supabase.from('schedules').select('*, students(name)').eq('day_of_week', today).eq('teacher_id', uid).order('start_time');
         setTodaySchedule(schedData || []);
       }
 
+      // 4. الرسم البياني
       let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(50);
       if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
       const { data: lsns } = await lQuery;
@@ -81,11 +89,12 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
       
       setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })).slice(-10));
 
+      // 5. الطلبات المعلقة
       const { data: reqData } = await supabase.from('parent_requests').select('*, students(name, teacher_id)').eq('status', 'pending');
       setPendingRequests(isAdmin ? (reqData || []) : (reqData || []).filter(r => r.students?.teacher_id === uid));
 
     } catch (e) { 
-      console.error(e); 
+      console.error("Dashboard Global Fetch Error:", e); 
     } finally { 
       setLoading(false); 
     }
@@ -93,7 +102,7 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
 
   useEffect(() => { 
     fetchData(); 
-  }, [year, semester, uid]);
+  }, [year, semester, uid, role]);
 
   if (loading) return (
     <div className="h-96 flex items-center justify-center">
@@ -189,7 +198,7 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
              <h3 className="text-2xl font-black mb-10 flex items-center gap-4"><Clock size={28} className="text-indigo-400"/> جدول الحصص اليوم</h3>
              <div className="space-y-4 flex-1 overflow-y-auto no-scrollbar">
                 {todaySchedule.length > 0 ? todaySchedule.map((s, i) => (
-                  <div key={i} className="bg-white/5 border border-white/10 p-5 rounded-[2rem] flex items-center justify-between group hover:bg-white/10 transition-all">
+                  <div key={i} className="bg-white/5 border border-white/10 p-5 rounded-[1.8rem] flex items-center justify-between group hover:bg-white/10 transition-all">
                      <div className="flex items-center gap-4">
                         <div className="bg-indigo-600 w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black">
                           <span className="text-sm leading-none">{s.start_time.split(':')[0]}</span>
@@ -199,7 +208,6 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
                   </div>
                 )) : (
                   <div className="text-center py-20 opacity-30 flex flex-col items-center gap-4">
-                    {/* Added ZapOff to fix 'Cannot find name ZapOff' */}
                     <ZapOff className="w-12 h-12" />
                     <p className="text-sm font-black">لا توجد حصص اليوم</p>
                   </div>
