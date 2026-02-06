@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Use standard v6 hook from react-router-dom
+// @ts-ignore: useNavigate might not be seen as exported in this environment
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
