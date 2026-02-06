@@ -3,54 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>نظام القمة V4.2 - إدارة المحتوى التعليمي</title>
-    
-    <!-- لمنع التخزين المؤقت (Anti-Cache) -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-
-    <!-- PWA & Mobile Optimization -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#4f46e5">
-    
-    <!-- Fonts & Tailwind -->
+    <title>نظام القمة V4.5 - إدارة المحتوى التعليمي</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-      body { 
-        font-family: 'Cairo', sans-serif; 
-        background-color: #fcfdfe; 
-        margin: 0;
-        -webkit-tap-highlight-color: transparent;
-        overflow-x: hidden;
-        overscroll-behavior-y: contain;
-      }
-      ::-webkit-scrollbar { width: 6px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: #4f46e5; }
-
+      body { font-family: 'Cairo', sans-serif; background-color: #fcfdfe; margin: 0; -webkit-tap-highlight-color: transparent; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-      @media (max-width: 768px) {
-        h1 { font-size: 1.5rem !important; line-height: 1.2 !important; }
-        h2 { font-size: 1.35rem !important; }
-        .rounded-\[5rem\], .rounded-\[6rem\], .rounded-\[4rem\], .rounded-\[5.5rem\], .rounded-\[4.5rem\] { border-radius: 2rem !important; }
-      }
-
-      .blob-bg {
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        z-index: -1;
-        overflow: hidden;
-        background: radial-gradient(circle at 50% 50%, #f8fafc 0%, #f1f5f9 100%);
-      }
     </style>
-
     <script type="importmap">
 {
   "imports": {
@@ -71,7 +32,6 @@
 </script>
   </head>
   <body>
-    <div class="blob-bg"></div>
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
   </body>

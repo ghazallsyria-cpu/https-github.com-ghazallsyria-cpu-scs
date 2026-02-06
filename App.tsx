@@ -19,6 +19,7 @@ import Statistics from './pages/Statistics';
 import Messaging from './pages/Messaging';
 import ParentPortal from './pages/ParentPortal';
 import Settings from './pages/Settings';
+import Reports from './pages/Reports';
 
 const ADMIN_PHONE = '55315661';
 const APP_VERSION = "V4.5 SUPREME";
@@ -72,10 +73,6 @@ const App: React.FC = () => {
       
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       
-      if (error && !isHardcodedAdmin) {
-        console.error("Profile Error:", error);
-      }
-
       setProfile({
         ...(data || {}),
         id: user.id,
@@ -102,7 +99,7 @@ const App: React.FC = () => {
     <div className="h-screen flex items-center justify-center bg-white font-['Cairo']">
       <div className="flex flex-col items-center gap-6">
         <div className="w-20 h-20 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-black text-indigo-900 animate-pulse text-xl">تأمين الاتصال {APP_VERSION}...</p>
+        <p className="font-black text-indigo-900 animate-pulse text-xl">جاري التحميل {APP_VERSION}...</p>
       </div>
     </div>
   );
@@ -119,6 +116,7 @@ const App: React.FC = () => {
     { to: "/payments", icon: <Wallet />, label: "المالية" },
     { to: "/statistics", icon: <BarChart3 />, label: "إحصائيات" },
     { to: "/messaging", icon: <Radio />, label: "بث" },
+    { to: "/reports", icon: <LayoutDashboard />, label: "التقارير" },
     { to: "/settings", icon: <SettingsIcon />, label: "الأمان" },
   ] : (isParent ? [
     { to: "/", icon: <School />, label: "المتابعة" },
@@ -141,9 +139,7 @@ const App: React.FC = () => {
               {isAdmin ? <ShieldAlert size={40} /> : (isParent ? <School size={40} /> : <GraduationCap size={40} />)}
             </div>
             <span className={`font-black text-2xl tracking-tighter ${isAdmin ? 'text-white' : 'text-slate-900'}`}>القمة التعليمية</span>
-            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{APP_VERSION}</span>
           </div>
-          
           <nav className="flex-1 px-8 py-10 space-y-3 overflow-y-auto no-scrollbar">
             {navItems.map(item => (
               <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2rem] font-black text-[13px] transition-all duration-300 ${isActive ? 'bg-indigo-600 text-white shadow-xl' : (isAdmin ? 'text-slate-500 hover:bg-white/5 hover:text-indigo-400' : 'text-slate-400 hover:bg-slate-50')}`}>
@@ -151,7 +147,6 @@ const App: React.FC = () => {
               </NavLink>
             ))}
           </nav>
-
           <div className="p-10 border-t border-white/5">
              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-4 py-5 text-rose-500 font-black hover:bg-rose-500/10 rounded-2xl transition-all">
                <LogOut size={22} /> خروج
@@ -185,6 +180,7 @@ const App: React.FC = () => {
                   <Route path="/statistics" element={<Statistics role={profile?.role} uid={profile?.id} year={currentYear} semester={currentSemester} />} />
                   <Route path="/messaging" element={isAdmin ? <Messaging /> : <Navigate to="/" />} />
                   <Route path="/schedule" element={<Schedule role={profile?.role} uid={profile?.id} />} />
+                  <Route path="/reports" element={<Reports role={profile?.role} uid={profile?.id} year={currentYear} semester={currentSemester} />} />
                   {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={() => {}} />} />}
                 </>
               )}

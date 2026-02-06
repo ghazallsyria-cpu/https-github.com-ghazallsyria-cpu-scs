@@ -1,11 +1,5 @@
-// @ts-ignore: Reference to Vite client types to provide environment and module definitions
-/// <reference types="vite/client" />
-
-/**
- * Fix: Removed redundant 'declare module' blocks for SVG, PNG, and CSS 
- * as they are already provided by 'vite/client' and were causing 
- * "Duplicate identifier 'src'" errors when overlapping with Vite's internal types.
- */
+// Fix: Removed the 'vite/client' reference which was causing a "Cannot find type definition" error in environments where the vite types are not explicitly available.
+// Manual declarations for ImportMetaEnv and ImportMeta provide the necessary type safety for Vite-based projects.
 
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
