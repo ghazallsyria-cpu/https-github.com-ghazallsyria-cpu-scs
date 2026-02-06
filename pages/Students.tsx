@@ -2,10 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { 
-  Users, Plus, Search, MapPin, 
+  Users, Plus, Search, 
   GraduationCap, Trash2, Edit3, 
-  AlertCircle, ChevronRight, Filter, 
-  CheckCircle2, X, Clock
+  ChevronRight, X, Clock, Copy, 
+  Phone, Smartphone
 } from 'lucide-react';
 
 const Students = ({ isAdmin, profile }: any) => {
@@ -13,14 +13,16 @@ const Students = ({ isAdmin, profile }: any) => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<any>(null);
   const [form, setForm] = useState({
     name: '', grade: '12', address: '', academic_year: '2024-2025', semester: '1',
-    agreed_amount: '0', is_hourly: false, price_per_hour: '0'
+    agreed_amount: '0', is_hourly: false, price_per_hour: '0', phones: [{number: '', label: 'الطالب'}]
   });
 
-  useEffect(() => {
-    fetchStudents();
-  }, []);
+  const [transferForm, setTransferForm] = useState({ year: '2025-2026', semester: '1', studentId: '' });
+
+  useEffect(() => { fetchStudents(); }, []);
 
   const fetchStudents = async () => {
     setLoading(true);
@@ -31,82 +33,87 @@ const Students = ({ isAdmin, profile }: any) => {
     setLoading(false);
   };
 
-  const handleAddStudent = async (e: React.FormEvent) => {
+  const handleSaveStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload = {
       ...form,
       teacher_id: profile.id,
       agreed_amount: parseFloat(form.agreed_amount),
-      price_per_hour: parseFloat(form.price_per_hour),
-      phones: []
+      price_per_hour: parseFloat(form.price_per_hour)
     };
-    const { error } = await supabase.from('students').insert([payload]);
+
+    if (editingStudent) {
+      await supabase.from('students').update(payload).eq('id', editingStudent.id);
+    } else {
+      await supabase.from('students').insert([payload]);
+    }
+    
+    setIsModalOpen(false);
+    setEditingStudent(null);
+    fetchStudents();
+  };
+
+  const handleTransfer = async () => {
+    const student = students.find(s => s.id === transferForm.studentId);
+    if (!student) return;
+    
+    const { error } = await supabase.from('students').insert([{
+      ...student,
+      id: undefined, // Let DB generate new ID
+      academic_year: transferForm.year,
+      semester: transferForm.semester,
+      created_at: undefined,
+      total_lessons: undefined,
+      total_paid: undefined,
+      remaining_balance: undefined
+    }]);
+
     if (!error) {
-      setIsModalOpen(false);
+      setIsTransferModalOpen(false);
+      alert("تم نسخ الطالب للفصل الجديد بنجاح.");
       fetchStudents();
     }
+  };
+
+  const openEdit = (s: any) => {
+    setEditingStudent(s);
+    setForm({
+      name: s.name, grade: s.grade, address: s.address, academic_year: s.academic_year,
+      semester: s.semester, agreed_amount: s.agreed_amount.toString(),
+      is_hourly: s.is_hourly, price_per_hour: s.price_per_hour.toString(),
+      phones: s.phones || [{number: '', label: 'الطالب'}]
+    });
+    setIsModalOpen(true);
   };
 
   const filtered = students.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-700">
-      
-      {/* Dynamic Header */}
-      <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-8 overflow-hidden relative group">
-        <div className="flex items-center gap-6 z-10">
-          <div className="bg-indigo-600 p-5 rounded-[2rem] text-white shadow-xl shadow-indigo-100 group-hover:rotate-6 transition-transform">
-            <Users size={32} />
-          </div>
+    <div className="space-y-10">
+      <div className="bg-white p-12 rounded-[3.5rem] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-8">
+        <div className="flex items-center gap-6">
+          <div className="bg-indigo-600 p-5 rounded-[2rem] text-white"><Users size={32} /></div>
           <div>
-            <h2 className="text-3xl font-black text-slate-900 leading-tight">إدارة <span className="text-indigo-600">الطلاب</span></h2>
-            <p className="text-slate-400 font-bold mt-1">لديك الآن {students.length} طلاب مسجلين في النظام.</p>
+            <h2 className="text-3xl font-black">إدارة <span className="text-indigo-600">الطلاب</span></h2>
+            <p className="text-slate-400 font-bold">المعلم: {profile?.full_name} | المادة: {profile?.subjects}</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-4 w-full md:w-auto z-10">
-          <div className="relative flex-1 md:w-96 group">
-            <Search className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
-            <input 
-              type="text" 
-              placeholder="ابحث بالاسم أو الصف..." 
-              className="w-full pr-14 pl-6 py-5 bg-slate-50 border-none rounded-[2rem] focus:ring-4 ring-indigo-500/10 font-bold transition-all"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <button onClick={() => setIsModalOpen(true)} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black flex items-center gap-3 hover:bg-slate-800 transition-all shadow-2xl active:scale-[0.98]">
-            <Plus size={22} /> <span className="hidden sm:inline text-lg">إضافة طالب</span>
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <input placeholder="بحث بالاسم..." className="w-full md:w-64 p-5 bg-slate-50 border-none rounded-[2rem] font-bold" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          <button onClick={() => { setEditingStudent(null); setIsModalOpen(true); }} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black flex items-center gap-3">
+            <Plus size={22} /> إضافة
           </button>
         </div>
-
-        {/* Abstract shape */}
-        <div className="absolute top-[-50%] right-[-10%] w-64 h-64 bg-indigo-50/50 blur-[80px] rounded-full"></div>
       </div>
 
-      {/* Grid Display */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {loading ? (
-          <div className="col-span-full py-32 text-center">
-             <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-             <p className="font-black text-slate-400">جاري تحميل السجلات...</p>
-          </div>
-        ) : filtered.length > 0 ? filtered.map(s => (
-          <div key={s.id} className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group relative overflow-hidden">
-             
-             {/* Completion Badge */}
-             <div className={`absolute top-8 left-8 p-3 rounded-2xl ${s.is_completed ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-                {/* Fixed: Use Clock component imported from lucide-react */}
-                {s.is_completed ? <CheckCircle2 size={24} /> : <Clock size={24} />}
-             </div>
-
+        {filtered.map(s => (
+          <div key={s.id} className="bg-white p-10 rounded-[4rem] border shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
              <div className="flex flex-col items-center text-center mb-10">
-                <div className="w-24 h-24 bg-gradient-to-br from-slate-50 to-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-600 font-black text-4xl border-2 border-white shadow-inner mb-6 group-hover:scale-110 transition-transform">
-                   {s.name[0]}
-                </div>
-                <h4 className="font-black text-slate-900 text-2xl group-hover:text-indigo-600 transition-colors">{s.name}</h4>
-                <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase mt-2 tracking-widest">
-                   <GraduationCap size={14} className="text-indigo-400" /> الصف {s.grade}
+                <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-indigo-600 font-black text-4xl mb-6">{s.name[0]}</div>
+                <h4 className="font-black text-slate-900 text-2xl group-hover:text-indigo-600">{s.name}</h4>
+                <div className="flex items-center gap-2 text-slate-400 text-xs font-black uppercase mt-2">
+                   <GraduationCap size={14} /> الصف {s.grade} | {s.semester === '1' ? 'كورس أول' : 'كورس ثان'}
                 </div>
              </div>
 
@@ -116,69 +123,75 @@ const Students = ({ isAdmin, profile }: any) => {
                    <span className={`text-xl font-black ${s.remaining_balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>${s.remaining_balance.toLocaleString()}</span>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-3xl">
-                   <span className="text-[10px] font-black text-slate-400 block mb-1">الحصص</span>
+                   <span className="text-[10px] font-black text-slate-400 block mb-1">الدروس</span>
                    <span className="text-xl font-black text-slate-900">{s.total_lessons} حصة</span>
                 </div>
              </div>
 
              <div className="flex items-center gap-4">
-                <button className="flex-1 bg-indigo-600 text-white py-5 rounded-[2rem] font-black text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
-                   تفاصيل الملف <ChevronRight size={18} />
-                </button>
-                <button className="p-5 bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white rounded-[2rem] transition-all">
-                   <Trash2 size={22} />
-                </button>
+                <button onClick={() => openEdit(s)} className="flex-1 bg-indigo-600 text-white py-5 rounded-[2rem] font-black text-sm flex items-center justify-center gap-2"><Edit3 size={18} /> تعديل</button>
+                <button onClick={() => { setTransferForm({...transferForm, studentId: s.id}); setIsTransferModalOpen(true); }} className="p-5 bg-blue-50 text-blue-600 rounded-[2rem] hover:bg-blue-600 hover:text-white transition-all"><Copy size={22} /></button>
+                <button className="p-5 bg-rose-50 text-rose-500 rounded-[2rem] hover:bg-rose-500 hover:text-white transition-all"><Trash2 size={22} /></button>
              </div>
           </div>
-        )) : (
-          <div className="col-span-full bg-white p-24 rounded-[5rem] text-center border-2 border-dashed border-slate-100">
-            <div className="bg-indigo-50 w-28 h-28 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 text-indigo-600">
-              <Users size={56} />
-            </div>
-            <h3 className="text-3xl font-black text-slate-900">القائمة فارغة تماماً</h3>
-            <p className="text-slate-400 font-bold mt-4 text-xl">ابدأ بإضافة أول طالب لنظام القمة اليوم وابدأ رحلة التميز.</p>
-          </div>
-        )}
+        ))}
       </div>
 
-      {/* Modern Modal */}
+      {/* Modal إضافة/تعديل */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-500">
-           <form onSubmit={handleAddStudent} className="bg-white w-full max-w-2xl p-12 rounded-[4rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] space-y-8 relative overflow-hidden">
-              
-              <div className="flex items-center justify-between mb-8">
-                 <h3 className="text-3xl font-black text-slate-900">إضافة <span className="text-indigo-600">عضو جديد</span></h3>
-                 <button type="button" onClick={() => setIsModalOpen(false)} className="p-3 hover:bg-slate-50 rounded-full transition-colors"><X size={28} /></button>
-              </div>
-
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-xl">
+           <form onSubmit={handleSaveStudent} className="bg-white w-full max-w-2xl p-12 rounded-[4rem] space-y-8 max-h-[90vh] overflow-y-auto">
+              <h3 className="text-3xl font-black">{editingStudent ? 'تعديل بيانات' : 'إضافة طالب'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="text-sm font-black text-slate-700 mr-2">الاسم الكامل</label>
-                  <input required className="w-full p-5 bg-slate-50 rounded-3xl outline-none focus:ring-4 ring-indigo-500/10 font-bold transition-all" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                <div className="space-y-2">
+                   <label className="text-sm font-black text-slate-700">الاسم</label>
+                   <input required className="w-full p-5 bg-slate-50 rounded-3xl font-bold" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                 </div>
-                <div className="space-y-3">
-                  <label className="text-sm font-black text-slate-700 mr-2">الصف</label>
-                  <select className="w-full p-5 bg-slate-50 rounded-3xl outline-none font-bold" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
-                     <option value="10">الصف العاشر</option>
-                     <option value="11">الصف الحادي عشر</option>
-                     <option value="12">الصف الثاني عشر</option>
-                  </select>
+                <div className="space-y-2">
+                   <label className="text-sm font-black text-slate-700">الصف</label>
+                   <select className="w-full p-5 bg-slate-50 rounded-3xl font-bold" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
+                     <option value="10">العاشر</option><option value="11">الحادي عشر</option><option value="12">الثاني عشر</option>
+                   </select>
                 </div>
-                <div className="space-y-3">
-                  <label className="text-sm font-black text-slate-700 mr-2">المبلغ الكلي المتفق عليه</label>
-                  <input type="number" className="w-full p-5 bg-slate-50 rounded-3xl outline-none font-bold" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-sm font-black text-slate-700 mr-2">منطقة السكن</label>
-                  <input className="w-full p-5 bg-slate-50 rounded-3xl outline-none font-bold" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+                {form.phones.map((ph, idx) => (
+                  <div key={idx} className="space-y-2 md:col-span-2 flex gap-4">
+                    <div className="flex-1">
+                      <label className="text-sm font-black text-slate-700">رقم الهاتف ({ph.label})</label>
+                      <input className="w-full p-5 bg-slate-50 rounded-3xl font-bold" value={ph.number} onChange={e => {
+                        const newPh = [...form.phones]; newPh[idx].number = e.target.value; setForm({...form, phones: newPh});
+                      }} />
+                    </div>
+                  </div>
+                ))}
+                <div className="space-y-2">
+                   <label className="text-sm font-black text-slate-700">المبلغ المتفق عليه</label>
+                   <input type="number" className="w-full p-5 bg-slate-50 rounded-3xl font-bold" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} />
                 </div>
               </div>
-
-              <div className="flex gap-6 pt-10">
-                 <button type="submit" className="flex-1 py-6 bg-slate-900 text-white rounded-[2.5rem] font-black shadow-2xl hover:bg-slate-800 transition-all text-xl">حفظ البيانات</button>
-                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-10 py-6 bg-slate-100 text-slate-500 rounded-[2.5rem] font-black hover:bg-slate-200 transition-all">إلغاء</button>
+              <div className="flex gap-6">
+                 <button type="submit" className="flex-1 py-6 bg-slate-900 text-white rounded-[2.5rem] font-black">حفظ التغييرات</button>
+                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-10 py-6 bg-slate-100 rounded-[2.5rem] font-black">إلغاء</button>
               </div>
            </form>
+        </div>
+      )}
+
+      {/* Modal النقل */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-xl">
+           <div className="bg-white w-full max-w-md p-10 rounded-[3rem] space-y-8">
+              <h3 className="text-2xl font-black">نسخ الطالب لفصل جديد</h3>
+              <div className="space-y-4">
+                 <div><label className="text-sm font-black">السنة الدراسية</label><input className="w-full p-4 bg-slate-50 rounded-2xl" value={transferForm.year} onChange={e => setTransferForm({...transferForm, year: e.target.value})} /></div>
+                 <div><label className="text-sm font-black">الكورس</label>
+                   <select className="w-full p-4 bg-slate-50 rounded-2xl" value={transferForm.semester} onChange={e => setTransferForm({...transferForm, semester: e.target.value})}>
+                     <option value="1">الكورس الأول</option><option value="2">الكورس الثاني</option>
+                   </select>
+                 </div>
+              </div>
+              <button onClick={handleTransfer} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black">إتمام النسخ</button>
+              <button onClick={() => setIsTransferModalOpen(false)} className="w-full py-5 bg-slate-50 text-slate-400 rounded-2xl font-black">إلغاء</button>
+           </div>
         </div>
       )}
     </div>

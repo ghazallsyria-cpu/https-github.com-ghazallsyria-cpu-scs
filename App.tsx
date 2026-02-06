@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { supabase } from './supabase';
@@ -164,8 +165,8 @@ const App: React.FC = () => {
                    <Route path="/payments" element={<Payments role={profile?.role} uid={profile?.id || ''} year="2024-2025" semester="1" />} />
                    {/* Fix: Corrected props for Schedule to provide required role and uid instead of the whole profile */}
                    <Route path="/schedule" element={<Schedule role={profile?.role} uid={profile?.id || ''} />} />
-                   {/* Fix: Added mandatory onSupervise callback for Teachers component to satisfy its type definition */}
-                   {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={() => {}} />} />}
+                   {/* Fix: Removed non-existent 'onSupervise' prop from Teachers component usage to fix type error */}
+                   {isAdmin && <Route path="/teachers" element={<Teachers />} />}
                  </>
                )}
                {/* Fix: Removed profile prop from Settings as the component does not accept any props */}
