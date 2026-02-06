@@ -33,14 +33,7 @@ const App: React.FC = () => {
   const currentSemester = localStorage.getItem('selectedSemester') || '1';
 
   useEffect(() => {
-    // 1. مسح الكاش القديم إذا كان الإصدار مسجلاً بشكل خاطئ
-    const lastVer = localStorage.getItem('app_version');
-    if (lastVer !== APP_VERSION) {
-      console.log("New Version Detected! Purging cache...");
-      localStorage.setItem('app_version', APP_VERSION);
-    }
-
-    // 2. التحقق من جلسة ولي الأمر أولاً
+    // التحقق من جلسة ولي الأمر أولاً
     const parentPhone = localStorage.getItem('parent_session_phone');
     if (parentPhone) {
       setIsParentSession(true);
@@ -52,7 +45,7 @@ const App: React.FC = () => {
       });
       setLoading(false);
     } else {
-      // 3. التحقق من جلسة المعلم/المدير
+      // التحقق من جلسة المعلم/المدير
       supabase.auth.getSession().then(({ data: { session: s } }) => {
         setSession(s);
         if (s) fetchProfile(s.user);
@@ -86,7 +79,7 @@ const App: React.FC = () => {
           profileData = data;
           break;
         }
-        await new Promise(r => setTimeout(r, 1000)); // انتظر ثانية
+        await new Promise(r => setTimeout(r, 1000));
       }
       
       const userPhone = user.user_metadata?.phone || '';
