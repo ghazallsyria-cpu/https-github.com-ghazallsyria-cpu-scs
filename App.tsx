@@ -1,11 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
-// Fix: Consolidate and clean up react-router-dom imports to resolve "no exported member" errors
 import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings, Bell, Star, RefreshCw, CheckCircle, Sparkles, BarChart3, Radio, Heart
+  BookOpen, Calendar, Settings, Bell, Star, RefreshCw, CheckCircle, Sparkles, BarChart3, Radio, School
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -32,7 +31,6 @@ const App: React.FC = () => {
   const [currentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
 
   useEffect(() => {
-    // 1. التحقق أولاً من وجود جلسة ولي أمر سريعة
     const parentPhone = localStorage.getItem('parent_session_phone');
     if (parentPhone) {
       setIsParentSession(true);
@@ -46,7 +44,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // 2. التحقق من Auth العادي للمعلمين
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       if (s) fetchProfile(s.user);
@@ -114,7 +111,7 @@ const App: React.FC = () => {
   ];
 
   const parentNav = [
-    { to: "/", icon: <Heart size={24} />, label: "بوابة المتابعة" },
+    { to: "/", icon: <School size={24} />, label: "بوابة المتابعة" },
   ];
 
   const navItems = isParent ? parentNav : teacherNav;
@@ -122,8 +119,6 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row text-right font-['Cairo']" dir="rtl">
-        
-        {/* SIDEBAR */}
         <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-sm">
           <div className="p-10 flex flex-col items-center gap-4 border-b border-slate-50">
             <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} p-5 rounded-[2.2rem] text-white shadow-xl`}>
@@ -159,7 +154,6 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* MOBILE NAV */}
         <nav className="lg:hidden fixed bottom-4 inset-x-4 bg-white/90 backdrop-blur-2xl border border-slate-100 flex justify-around items-center px-2 py-4 z-[100] shadow-2xl rounded-[2.5rem]">
           {navItems.map(item => (
             <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-4 py-2 rounded-2xl ${isActive ? (isParent ? 'text-emerald-600 bg-emerald-50' : 'text-indigo-600 bg-indigo-50') : 'text-slate-400'}`}>
@@ -173,7 +167,6 @@ const App: React.FC = () => {
           </button>
         </nav>
 
-        {/* MAIN */}
         <main className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
           <header className="h-20 md:h-28 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 md:px-10 flex items-center justify-between border-b border-slate-100">
              <div className="flex flex-col text-right">
