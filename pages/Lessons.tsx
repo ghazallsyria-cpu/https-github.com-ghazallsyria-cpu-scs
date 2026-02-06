@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// Fix: Clean up react-router-dom imports and resolve "no exported member" errors
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
-  Calendar, Clock, BookOpen, ChevronLeft, Plus, Info, 
-  Wallet, MessageCircle, School, Star, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, History, DollarSign, Folder, FolderOpen, RefreshCw, FileText, Save, Edit3, BarChart3, Zap, Activity
+  Calendar, Clock, BookOpen, ChevronLeft, Plus, 
+  Wallet, School, Target, TrendingUp, X, Trash2, CheckCircle, AlertCircle, RefreshCw, Save, Edit3, BarChart3, Zap, Activity
 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 
@@ -14,8 +15,6 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
   
   const [students, setStudents] = useState<any[]>([]);
   const [studentLessons, setStudentLessons] = useState<any[]>([]);
-  const [studentPayments, setStudentPayments] = useState<any[]>([]);
-  const [academicRecords, setAcademicRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(location.state?.studentToOpen || null);
@@ -53,14 +52,12 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
   const fetchRecords = async (sid: string) => {
     setLoading(true);
     try {
-      const [l, p, a] = await Promise.all([
+      const [l] = await Promise.all([
         supabase.from('lessons').select('*').eq('student_id', sid).order('lesson_date', { ascending: false }),
         supabase.from('payments').select('*').eq('student_id', sid).order('payment_date', { ascending: false }),
         supabase.from('academic_records').select('*').eq('student_id', sid).order('created_at', { ascending: false })
       ]);
       setStudentLessons(l.data || []);
-      setStudentPayments(p.data || []);
-      setAcademicRecords(a.data || []);
     } catch (e) {
       showFeedback("خطأ في جلب بيانات الطالب", "error");
     } finally {
@@ -257,7 +254,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
                   {studentLessons.map(l => (
                     <div key={l.id} className="p-10 bg-slate-50/50 border-2 border-slate-50 rounded-[3.5rem] flex flex-col lg:flex-row justify-between items-center gap-8 hover:bg-white hover:border-indigo-100 hover:shadow-xl transition-all group">
                        <div className="flex items-center gap-8 w-full">
-                          <div className="bg-indigo-600 text-white p-6 rounded-[2.2rem] shadow-2xl group-hover:scale-110 transition-transform"><Calendar size={32}/></div>
+                          <div className="bg-indigo-600 text-white p-6 rounded-[2.2rem] shadow-2xl group-hover:scale-110 transition-transform"><Activity size={32}/></div>
                           <div className="flex-1">
                             <p className="text-2xl font-black text-slate-900">{new Date(l.lesson_date).toLocaleDateString('ar-EG', { dateStyle: 'full' })}</p>
                             <div className="flex items-center gap-4 mt-3">
