@@ -5,7 +5,8 @@ import {
   Users, Calendar, Clock, DollarSign, ArrowUpRight, GraduationCap, 
   Sun, Moon, Coffee, RefreshCw, TrendingUp, Award, CreditCard, 
   Activity, PieChart, ShieldCheck, Sparkles, Zap, Bell, BellOff, BellRing, Heart, ChevronLeft,
-  Briefcase, TrendingDown, Target, ZapOff, Users2, BarChart3, LineChart
+  Briefcase, TrendingDown, Target, ZapOff, Users2, BarChart3, LineChart,
+  History as HistoryIcon
 } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, Cell } from 'recharts';
 
@@ -19,7 +20,6 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
   const [recentActions, setRecentActions] = useState<any[]>([]);
 
   const isAdmin = role === 'admin';
-  const COLORS = ['#4f46e5', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -31,7 +31,6 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch stats
       let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
       if (!isAdmin) query = query.eq('teacher_id', uid);
       const { data: stdData } = await query;
@@ -47,7 +46,6 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
 
       setStats({ totalStudents: totals.students, totalLessons: totals.lessons, totalHours: totals.hours, totalIncome: totals.income, pendingPayments: totals.debts, completedStudents: totals.completed });
 
-      // If Admin, calculate teacher rankings
       if (isAdmin) {
         const { data: teachers } = await supabase.from('profiles').select('id, full_name').neq('role', 'admin');
         const rankings = (teachers || []).map(t => {
@@ -57,18 +55,15 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
         }).sort((a, b) => b.collected - a.collected).slice(0, 5);
         setTeacherRankings(rankings);
 
-        // Fetch Recent Actions (Global)
         const { data: logs } = await supabase.from('payments').select('*, students(name)').order('created_at', { ascending: false }).limit(5);
         setRecentActions(logs || []);
       } else {
-        // Fetch Today's Schedule (Personal)
         const DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
         const today = DAYS[new Date().getDay()];
         const { data: schedData } = await supabase.from('schedules').select('*, students(name)').eq('day_of_week', today).eq('teacher_id', uid).order('start_time');
         setTodaySchedule(schedData || []);
       }
 
-      // Chart Data
       let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(50);
       if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
       const { data: lsns } = await lQuery;
@@ -79,7 +74,6 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
       }, {});
       setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })).slice(-10));
 
-      // Pending Requests
       let qReq = supabase.from('parent_requests').select('*, students(name, teacher_id)').eq('status', 'pending');
       const { data: reqData } = await qReq;
       setPendingRequests(isAdmin ? (reqData || []) : (reqData || []).filter(r => r.students?.teacher_id === uid));
@@ -89,19 +83,12 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
 
   useEffect(() => { fetchData(); }, [year, semester, uid]);
 
-  const handleHandleRequest = async (id: string, status: 'accepted' | 'rejected') => {
-    await supabase.from('parent_requests').update({ status }).eq('id', id);
-    fetchData();
-  };
-
   if (loading) return (
     <div className="h-96 flex items-center justify-center"><div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>
   );
 
   return (
     <div className={`space-y-12 animate-in fade-in slide-in-from-bottom-10 duration-1000 text-right font-['Cairo'] pb-32`}>
-      
-      {/* HEADER SECTION (COMMANDER MODE) */}
       <div className={`grid grid-cols-1 lg:grid-cols-4 gap-10`}>
         <div className={`lg:col-span-3 ${isAdmin ? 'bg-slate-900 border-white/5' : 'bg-indigo-900 border-white/5'} p-12 lg:p-20 rounded-[5rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center border group`}>
            <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
@@ -131,7 +118,6 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
         </div>
       </div>
 
-      {/* KPI TILES (Global for Admin, Personal for Teacher) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
          <StatTile label={isAdmin ? "إجمالي الطلاب بالمنصة" : "طلابي"} value={stats.totalStudents} sub={`${stats.completedStudents} خريجون`} icon={<Users size={24}/>} color="bg-indigo-600" />
          <StatTile label={isAdmin ? "إجمالي الحصص المنفذة" : "حصصي"} value={stats.totalLessons} sub="إنجاز تراكمي" icon={<Calendar size={24}/>} color="bg-blue-600" />
@@ -139,9 +125,7 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
          <StatTile label={isAdmin ? "الديون الخارجية الكلية" : "ديون الطلاب المتبقية"} value={`$${stats.pendingPayments.toLocaleString()}`} sub="مطالبات جارية" icon={<CreditCard size={24}/>} color="bg-rose-600" />
       </div>
 
-      {/* MAIN ADMIN TOOLS / TEACHER TOOLS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        {/* CHART SECTION */}
         <div className="lg:col-span-2 bg-white p-12 lg:p-20 rounded-[5rem] border border-slate-100 shadow-2xl relative group">
            <div className="flex justify-between items-center mb-16">
               <div>
@@ -171,7 +155,6 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
            </div>
         </div>
 
-        {/* ADMIN RANKINGS OR TEACHER SCHEDULE */}
         {isAdmin ? (
           <div className="bg-slate-900 p-12 lg:p-16 rounded-[5rem] text-white shadow-2xl relative overflow-hidden flex flex-col">
              <div className="absolute top-0 right-0 w-full h-full bg-indigo-600/5"></div>
@@ -222,12 +205,11 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
         )}
       </div>
 
-      {/* RECENT ACTIONS (LIVE FEED) */}
       {isAdmin && (
         <div className="bg-white p-12 lg:p-20 rounded-[5rem] border border-slate-100 shadow-2xl">
            <div className="flex items-center gap-6 mb-14">
               <div className="bg-emerald-50 p-5 rounded-3xl text-emerald-600 shadow-inner">
-                <History size={32} />
+                <HistoryIcon size={32} />
               </div>
               <div>
                  <h3 className="text-4xl font-black text-slate-900">سجل النشاط المالي الحي</h3>
