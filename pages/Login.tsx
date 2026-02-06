@@ -1,12 +1,13 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
-import { GraduationCap, Phone, Lock, RefreshCw, AlertCircle } from 'lucide-react';
+import { GraduationCap, Phone, Lock, RefreshCw, AlertCircle, Heart, ChevronLeft, ShieldCheck } from 'lucide-react';
 
 const ADMIN_PHONE = '55315661';
 
 const Login = () => {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isParentMode, setIsParentMode] = useState(true); // الوضع الافتراضي هو ولي الأمر للسهولة
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,12 +15,11 @@ const Login = () => {
     fullName: '', mobile: '', password: ''
   });
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleParentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // 1. تطهير رقم الهاتف فوراً
     const mobileClean = formData.mobile.replace(/\D/g, '');
     if (mobileClean.length < 8) {
       setError("يرجى إدخال رقم هاتف صحيح");
@@ -27,69 +27,57 @@ const Login = () => {
       return;
     }
 
+    try {
+      // البحث عن الطالب المرتبط بهذا الرقم مباشرة في قاعدة البيانات
+      const { data, error: rpcError } = await supabase.rpc('verify_parent_access', { 
+        phone_to_check: mobileClean 
+      });
+
+      if (rpcError) throw rpcError;
+
+      if (data && data.length > 0) {
+        // ذكاء: بدلاً من Auth، نخزن بيانات الجلسة في المتصفح
+        // هذا يسمح لولي الأمر بالدخول فوراً
+        localStorage.setItem('parent_session_phone', mobileClean);
+        localStorage.setItem('parent_student_name', data[0].student_name);
+        
+        // إعادة تحميل الصفحة؛ App.tsx سيتعرف على هذه البيانات
+        window.location.reload();
+      } else {
+        setError("عذراً، هذا الرقم غير مسجل لدينا كولي أمر. يرجى التواصل مع المعلم لإضافتك.");
+      }
+    } catch (err: any) {
+      setError("حدث خطأ في النظام، يرجى المحاولة لاحقاً");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTeacherLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const mobileClean = formData.mobile.replace(/\D/g, '');
     const virtualEmail = `${mobileClean}@summit.edu`.toLowerCase();
-    // إذا لم يدخل كلمة سر، نفترض أنها رقم الهاتف (الحالة الافتراضية لأولياء الأمور)
-    const loginPassword = formData.password.trim() || mobileClean;
 
     try {
       if (isSignUp) {
-        // منطق المعلم الجديد
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
-          password: loginPassword,
+          password: formData.password,
           options: { data: { phone: mobileClean, full_name: formData.fullName } }
         });
         if (signUpError) throw signUpError;
-        if (authData.user) {
-          await ensureProfileExists(authData.user.id, mobileClean, formData.fullName, 'teacher');
-          setIsSignUp(false);
-          setError("تم تقديم طلبك بنجاح. يرجى الانتظار حتى يتم تفعيل حسابك.");
-        }
+        setError("تم تقديم طلبك بنجاح. يرجى انتظار تفعيل الحساب.");
+        setIsSignUp(false);
       } else {
-        // محاولة تسجيل الدخول مباشرة
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: virtualEmail,
-          password: loginPassword
+          password: formData.password
         });
-
-        if (!signInError) {
-          window.location.reload();
-          return;
-        }
-
-        // إذا فشل الدخول العادي، نتحقق بذكاء: هل هو ولي أمر؟
-        const { data: parentCheck } = await supabase.rpc('check_parent_phone', { phone_to_check: mobileClean });
-
-        if (parentCheck && parentCheck.length > 0) {
-          const studentName = parentCheck[0].student_name;
-          
-          // محاولة إنشاء حساب "صامت" لولي الأمر إذا لم يكن موجوداً
-          const { data: autoUser, error: autoError } = await supabase.auth.signUp({
-            email: virtualEmail,
-            password: mobileClean, // كلمة السر هي الرقم
-            options: { data: { phone: mobileClean, full_name: `ولي أمر ${studentName}` } }
-          });
-
-          if (autoError) {
-            // إذا كان مسجلاً بالفعل، نحاول الدخول بكلمة السر الافتراضية (الرقم)
-            // في حال كان المستخدم قد نسي أنه مسجل أو نسي كلمة السر
-            const { error: finalTryError } = await supabase.auth.signInWithPassword({
-              email: virtualEmail,
-              password: mobileClean
-            });
-            
-            if (finalTryError) {
-              throw new Error("بيانات الدخول غير صحيحة. يرجى استخدام رقم هاتفك ككلمة سر.");
-            }
-          } else if (autoUser.user) {
-            await ensureProfileExists(autoUser.user.id, mobileClean, `ولي أمر ${studentName}`, 'parent');
-            await supabase.auth.signInWithPassword({ email: virtualEmail, password: mobileClean });
-          }
-          window.location.reload();
-          return;
-        }
-
-        throw new Error("بيانات الدخول غير صحيحة أو الرقم غير مسجل في النظام.");
+        if (signInError) throw new Error("رقم الهاتف أو كلمة المرور غير صحيحة.");
+        window.location.reload();
       }
     } catch (err: any) {
       setError(err.message);
@@ -98,26 +86,25 @@ const Login = () => {
     }
   };
 
-  const ensureProfileExists = async (userId: string, phone: string, name: string, role: string) => {
-    const isAdmin = phone === ADMIN_PHONE;
-    await supabase.from('profiles').upsert([{
-      id: userId,
-      full_name: name,
-      phone: phone,
-      role: isAdmin ? 'admin' : role,
-      is_approved: true
-    }]);
-  };
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 font-['Cairo'] text-right" dir="rtl">
-      <div className="bg-white w-full max-w-lg p-10 rounded-[3rem] shadow-2xl relative border border-slate-100">
+      <div className="bg-white w-full max-w-lg p-10 rounded-[3.5rem] shadow-2xl relative border border-slate-100 overflow-hidden">
+        
+        {/* Header */}
         <div className="flex flex-col items-center mb-10">
-          <div className="p-5 rounded-3xl bg-indigo-600 text-white mb-6 shadow-xl">
-            <GraduationCap size={40} />
+          <div className={`p-5 rounded-3xl ${isParentMode ? 'bg-emerald-600' : 'bg-indigo-600'} text-white mb-6 shadow-xl transition-colors duration-500`}>
+            {isParentMode ? <Heart size={40} /> : <GraduationCap size={40} />}
           </div>
           <h2 className="text-2xl font-black text-slate-900">منصة القمة التعليمية</h2>
-          <p className="text-slate-400 font-bold mt-1">بوابة الدخول الذكية</p>
+          <p className="text-slate-400 font-bold mt-1">
+            {isParentMode ? 'بوابة أولياء الأمور (دخول سريع)' : 'بوابة المعلمين والمدراء'}
+          </p>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl mb-8">
+           <button onClick={() => {setIsParentMode(true); setError(null);}} className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${isParentMode ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>أنا ولي أمر</button>
+           <button onClick={() => {setIsParentMode(false); setError(null);}} className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${!isParentMode ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>أنا معلم</button>
         </div>
 
         {error && (
@@ -126,43 +113,57 @@ const Login = () => {
           </div>
         )}
 
-        <form onSubmit={handleAuth} className="space-y-5">
-          {isSignUp && (
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">الاسم الكامل</label>
-              <input required placeholder="الاسم الثلاثي..." className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none focus:bg-white focus:border-indigo-600 transition-all" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
+        {isParentMode ? (
+          /* نموذج ولي الأمر: هاتف فقط */
+          <form onSubmit={handleParentLogin} className="space-y-6">
+            <div className="space-y-2">
+               <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">رقم الهاتف المسجل</label>
+               <div className="relative">
+                 <Phone className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                 <input required type="tel" placeholder="أدخل رقم هاتفك..." className="w-full p-5 pr-12 bg-slate-50 border rounded-2xl font-black text-left outline-none focus:bg-white focus:border-emerald-600 transition-all text-xl" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
+               </div>
             </div>
-          )}
-          
-          <div className="space-y-1">
-             <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">رقم الهاتف</label>
-             <div className="relative">
-               <Phone className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-               <input required type="tel" placeholder="أدخل رقمك المسجل..." className="w-full p-4 pr-12 bg-slate-50 border rounded-2xl font-black text-left outline-none focus:bg-white focus:border-indigo-600 transition-all" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
-             </div>
-          </div>
-
-          <div className="space-y-1">
-             <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">كلمة المرور</label>
-             <div className="relative">
-               <Lock className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-               <input type="password" placeholder="••••••••" className="w-full p-4 pr-12 bg-slate-50 border rounded-2xl font-black text-left outline-none focus:bg-white focus:border-indigo-600 transition-all" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-             </div>
-             {!isSignUp && <p className="text-[9px] text-slate-400 font-bold mt-2 mr-4">💡 لولي الأمر: إذا لم تكن تعرف كلمة سرك، استخدم رقم هاتفك.</p>}
-          </div>
-
-          <button disabled={loading} className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-lg transition-all flex items-center justify-center gap-3">
-            {loading ? <RefreshCw className="animate-spin" /> : (isSignUp ? 'تسجيل جديد' : 'دخول سريع')}
-          </button>
-        </form>
-
-        <div className="mt-8 flex justify-center">
-           <button onClick={() => setIsSignUp(!isSignUp)} className="text-indigo-600 font-black text-xs hover:underline">
-             {isSignUp ? 'العودة لصفحة الدخول' : 'هل أنت معلم جديد؟ سجل هنا'}
-           </button>
-        </div>
+            <button disabled={loading} className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black shadow-lg transition-all flex items-center justify-center gap-3 text-lg">
+              {loading ? <RefreshCw className="animate-spin" /> : 'دخول فوري للمتابعة'}
+              <ChevronLeft size={20} />
+            </button>
+            <p className="text-center text-[10px] text-slate-400 font-bold">لا حاجة لكلمة سر، سيتم التحقق من رقمك في سجلات الطلاب.</p>
+          </form>
+        ) : (
+          /* نموذج المعلم: هاتف وكلمة سر */
+          <form onSubmit={handleTeacherLogin} className="space-y-5">
+            {isSignUp && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">الاسم الكامل</label>
+                <input required placeholder="الاسم الثلاثي..." className="w-full p-4 bg-slate-50 border rounded-2xl font-black outline-none focus:border-indigo-600 transition-all" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
+              </div>
+            )}
+            <div className="space-y-1">
+               <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">رقم الهاتف</label>
+               <div className="relative">
+                 <Phone className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                 <input required type="tel" className="w-full p-4 pr-12 bg-slate-50 border rounded-2xl font-black text-left outline-none focus:border-indigo-600 transition-all" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
+               </div>
+            </div>
+            <div className="space-y-1">
+               <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">كلمة المرور</label>
+               <div className="relative">
+                 <Lock className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                 <input required type="password" placeholder="••••••••" className="w-full p-4 pr-12 bg-slate-50 border rounded-2xl font-black text-left outline-none focus:border-indigo-600 transition-all" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+               </div>
+            </div>
+            <button disabled={loading} className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-lg transition-all flex items-center justify-center gap-3">
+              {loading ? <RefreshCw className="animate-spin" /> : (isSignUp ? 'تقديم طلب انضمام' : 'دخول المعلمين')}
+            </button>
+            <div className="text-center">
+               <button type="button" onClick={() => setIsSignUp(!isSignUp)} className="text-indigo-600 font-black text-xs hover:underline">
+                 {isSignUp ? 'لديك حساب؟ سجل دخولك' : 'معلم جديد؟ قدم طلب انضمام'}
+               </button>
+            </div>
+          </form>
+        )}
       </div>
-      <p className="mt-8 text-slate-400 font-black text-[10px] uppercase">Summit System © 2025</p>
+      <p className="mt-8 text-slate-400 font-black text-[10px] uppercase tracking-widest">Summit Education System © 2025</p>
     </div>
   );
 };
