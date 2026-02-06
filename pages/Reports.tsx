@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
-import { Download, FileCode, Zip, RefreshCw, Layers } from 'lucide-react';
+import { Download, FileCode, Archive, RefreshCw, Layers } from 'lucide-react';
 
 const Reports = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
   const [loading, setLoading] = useState(false);
@@ -26,7 +26,7 @@ const Reports = ({ role, uid, year, semester }: { role: any, uid: string, year: 
   };
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-500 pb-32">
+    <div className="space-y-10 animate-in fade-in duration-500 pb-32 font-['Cairo']">
       <div className="bg-slate-900 p-12 md:p-20 rounded-[4rem] text-white text-center shadow-2xl relative overflow-hidden">
          <div className="relative z-10">
             <h1 className="text-4xl md:text-6xl font-black mb-6">مركز استخراج البيانات</h1>
@@ -47,7 +47,7 @@ const Reports = ({ role, uid, year, semester }: { role: any, uid: string, year: 
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
          <ReportCard title="تقرير الحصص" desc="ملخص لجميع الحصص المنجزة في هذا الفصل" icon={<Layers className="text-blue-500" />} />
-         <ReportCard title="تقرير المالية" desc="كشف حساب تفصيلي للديون والتحصيل" icon={<Zip className="text-emerald-500" />} />
+         <ReportCard title="تقرير المالية" desc="كشف حساب تفصيلي للديون والتحصيل" icon={<Archive className="text-emerald-500" />} />
       </div>
     </div>
   );
