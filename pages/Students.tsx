@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// Fix: Use standard v6 hook from react-router-dom
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
-  Plus, Trash2, CheckCircle, X, AlertCircle, Users, 
+  Plus, CheckCircle, AlertCircle, Users, 
   Phone, Search, RefreshCw, ChevronLeft, Save, 
-  Settings, ArrowRightLeft, Database, HardDriveDownload, 
-  Sparkles, UserCheck, Link as LinkIcon, Briefcase, GraduationCap
+  Settings, UserCheck, Link as LinkIcon, Briefcase
 } from 'lucide-react';
 
 const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, role: any, uid: string, year: string, semester: string }) => {
@@ -14,7 +14,7 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedGrade, setSelectedGrade] = useState<string>('الكل');
+  const [selectedGrade] = useState<string>('الكل');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -186,7 +186,7 @@ const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, ro
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-3xl z-[600] flex items-center justify-center p-6">
           <form onSubmit={handleSaveStudent} className="bg-white w-full max-w-3xl p-14 lg:p-20 rounded-[5rem] shadow-2xl relative animate-in zoom-in duration-500 max-h-[95vh] overflow-y-auto no-scrollbar border border-white/20">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-14 left-14 text-slate-300 hover:text-rose-500 transition-all"><X size={44}/></button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="absolute top-14 left-14 text-slate-300 hover:text-rose-500 transition-all"><Settings size={44}/></button>
             <h2 className="text-4xl font-black mb-16 text-slate-900 flex items-center gap-6">
               <div className="bg-indigo-600 p-5 rounded-[2rem] text-white shadow-2xl">{isEditMode ? <Settings size={32}/> : <Plus size={32}/>}</div>
               {isEditMode ? 'تحديث السجل' : 'تسجيل هوية جديدة'}
