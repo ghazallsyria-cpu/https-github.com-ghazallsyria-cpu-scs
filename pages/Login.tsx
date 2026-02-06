@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
-import { GraduationCap, Phone, Lock, RefreshCw, ShieldCheck, Heart, AlertCircle, UserCheck, UserPlus } from 'lucide-react';
+import { GraduationCap, Phone, Lock, RefreshCw, AlertCircle } from 'lucide-react';
 
 const ADMIN_PHONE = '55315661';
 
@@ -19,21 +19,22 @@ const Login = () => {
     setLoading(true);
     setError(null);
 
-    // تنظيف رقم الهاتف من أي مسافات أو رموز غير مرغوبة
-    const mobileClean = formData.mobile.trim().replace(/\s+/g, '');
-    if (!mobileClean) {
-      setError("يرجى إدخال رقم هاتف صحيح");
+    // 1. تطهير رقم الهاتف (إزالة المسافات، الرموز، وأي حروف)
+    const mobileClean = formData.mobile.trim().replace(/\D/g, '');
+    if (mobileClean.length < 8) {
+      setError("يرجى إدخال رقم هاتف صحيح (8 أرقام على الأقل)");
       setLoading(false);
       return;
     }
 
-    const virtualEmail = `${mobileClean}@summit.edu`; 
-    // ولي الأمر كلمة سره الافتراضية هي رقم هاتفه إذا لم يكتب غير ذلك
+    // 2. توحيد البريد الإلكتروني الافتراضي (دائماً أحرف صغيرة)
+    const virtualEmail = `${mobileClean.toLowerCase()}@summit.edu`; 
+    
+    // 3. تحديد كلمة السر (إذا كانت فارغة نستخدم رقم الهاتف)
     const loginPassword = formData.password.trim() || mobileClean;
 
     try {
       if (isSignUp) {
-        // منطق تسجيل المعلم الجديد
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
           password: loginPassword,
@@ -53,11 +54,11 @@ const Login = () => {
         });
         
         if (signInError) {
-          // إذا فشل تسجيل الدخول، نتحقق هل هذا الرقم ينتمي لولي أمر في سجلات الطلاب؟
+          // إذا فشل الدخول، نتحقق هل هذا الرقم ينتمي لولي أمر في سجلات الطلاب؟
           const { data: linkedParent, error: rpcError } = await supabase.rpc('check_parent_phone', { phone_to_check: mobileClean });
           
           if (linkedParent && linkedParent.length > 0) {
-            // الرقم موجود، نرى إن كان الحساب موجوداً أصلاً في Auth (بسبب "already registered" سابقاً)
+            // الرقم موجود كولي أمر، نحاول إنشاء الحساب الآن
             const { data: newParent, error: createError } = await supabase.auth.signUp({
               email: virtualEmail,
               password: mobileClean, // تعيين رقم الهاتف ككلمة سر افتراضية
@@ -65,13 +66,17 @@ const Login = () => {
             });
 
             if (createError) {
-               // إذا كان مسجلاً بالفعل، نحاول تسجيل الدخول برقم الهاتف ككلمة سر (في حال نسيها أو حدث خطأ)
+               // إذا كان مسجلاً بالفعل، فهذا يعني أن كلمة السر المدخلة غير صحيحة
                if (createError.message.toLowerCase().includes("already registered")) {
+                  // محاولة أخيرة بكلمة سر هي رقم الهاتف في حال نسيها المستخدم
                   const { error: retryError } = await supabase.auth.signInWithPassword({
                     email: virtualEmail,
                     password: mobileClean
                   });
-                  if (retryError) throw new Error("بيانات الدخول غير صحيحة. يرجى مراجعة رقم الهاتف أو كلمة السر.");
+                  
+                  if (retryError) {
+                    throw new Error("بيانات الدخول غير صحيحة. يرجى التأكد من رقم الهاتف وكلمة السر. إذا كنت ولي أمر، فكلمة السر الافتراضية هي رقم هاتفك.");
+                  }
                   window.location.reload();
                   return;
                }
@@ -80,13 +85,13 @@ const Login = () => {
 
             if (newParent.user) {
               await ensureProfileExists(newParent.user.id, mobileClean, `ولي أمر ${linkedParent[0].student_name}`, 'parent');
-              // تسجيل دخول فوري بعد الإنشاء
               await supabase.auth.signInWithPassword({ email: virtualEmail, password: mobileClean });
               window.location.reload();
               return;
             }
           }
-          throw new Error("عذراً، هذا الرقم غير مسجل في المنصة. يرجى التأكد من المدرس أن الرقم مسجل بشكل صحيح.");
+          // إذا لم يجد الرقم في سجلات الطلاب ولا في المعلمين
+          throw new Error("عذراً، هذا الرقم غير مسجل. يرجى التأكد من المدرس أن رقمك مضاف في بيانات الطالب.");
         }
       }
     } catch (err: any) {
@@ -134,7 +139,7 @@ const Login = () => {
           )}
           
           <div className="space-y-2">
-             <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">رقم الهاتف المسجل</label>
+             <label className="text-[10px] font-black text-slate-400 mr-4 uppercase tracking-widest">رقم الهاتف</label>
              <div className="relative">
                <Phone className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                <input required type="tel" placeholder="رقم الهاتف..." className="w-full p-4 pr-14 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all tracking-widest" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
@@ -147,7 +152,7 @@ const Login = () => {
                <Lock className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                <input required type="password" placeholder="••••••••" className="w-full p-4 pr-14 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
              </div>
-             {!isSignUp && <p className="text-[9px] text-slate-400 font-bold mt-2 mr-4">💡 لولي الأمر: كلمة السر الافتراضية هي رقم هاتفك.</p>}
+             {!isSignUp && <p className="text-[9px] text-slate-400 font-bold mt-2 mr-4 leading-relaxed">💡 تنبيه لولي الأمر: إذا لم تقم بتغيير كلمة سرك، استخدم رقم هاتفك للدخول.</p>}
           </div>
 
           <button disabled={loading} className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1.8rem] font-black shadow-xl transition-all flex items-center justify-center gap-4 text-lg">
@@ -161,7 +166,7 @@ const Login = () => {
            </button>
         </div>
       </div>
-      <p className="mt-8 text-slate-400 font-black text-[10px] tracking-widest uppercase">Ehab Ghazzal System © 2025</p>
+      <p className="mt-8 text-slate-400 font-black text-[10px] tracking-widest uppercase text-center w-full">Ehab Ghazzal System © 2025</p>
     </div>
   );
 };
