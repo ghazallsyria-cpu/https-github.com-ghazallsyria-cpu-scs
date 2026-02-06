@@ -84,6 +84,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     localStorage.removeItem('parent_session_phone');
     localStorage.removeItem('parent_student_name');
+    localStorage.removeItem('lastSelectedStudent');
     await supabase.auth.signOut();
     window.location.reload();
   };
@@ -92,7 +93,7 @@ const App: React.FC = () => {
     <div className="h-screen flex items-center justify-center bg-white">
       <div className="flex flex-col items-center gap-6">
         <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-black text-indigo-600 animate-pulse tracking-widest">تحميل القمة التعليمية...</p>
+        <p className="font-black text-indigo-600 animate-pulse tracking-widest text-sm uppercase">جاري التحميل...</p>
       </div>
     </div>
   );
@@ -120,26 +121,29 @@ const App: React.FC = () => {
 
   const parentNav = [
     { to: "/", icon: <School size={24} />, label: "بوابة المتابعة" },
+    { to: "/settings", icon: <SettingsIcon size={24} />, label: "الإعدادات" },
   ];
 
-  const navItems = isParent ? parentNav : teacherNav;
+  const desktopNavItems = isParent ? parentNav : teacherNav;
+  // Combine all items for mobile with horizontal scroll support
   const mobileNavItems = isParent ? parentNav : (isAdmin ? [...teacherNav, ...adminNavExtras] : teacherNav);
 
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row text-right font-['Cairo']" dir="rtl">
+        
         {/* SIDEBAR (Desktop Only) */}
         <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-sm">
           <div className="p-10 flex flex-col items-center gap-4 border-b border-slate-50">
             <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} p-5 rounded-[2.2rem] text-white shadow-xl`}>
               {isParent ? <School size={40} /> : <GraduationCap size={40} />}
             </div>
-            <span className="font-black text-slate-900 text-2xl">منصة القمة</span>
+            <span className="font-black text-slate-900 text-2xl tracking-tighter">القمة التعليمية</span>
           </div>
           
           <nav className="flex-1 px-8 py-10 space-y-4 overflow-y-auto no-scrollbar">
-            {navItems.map(item => (
-              <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all ${isActive ? (isParent ? 'bg-emerald-600' : 'bg-indigo-600') + ' text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
+            {desktopNavItems.map(item => (
+              <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-3xl font-black text-sm transition-all ${isActive ? (isParent ? 'bg-emerald-600' : 'bg-indigo-600') + ' text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
                 {item.icon} {item.label}
               </NavLink>
             ))}
@@ -147,34 +151,33 @@ const App: React.FC = () => {
             {isAdmin && (
               <div className="pt-6 mt-6 border-t border-slate-50 space-y-4">
                 <span className="px-8 text-[10px] font-black text-slate-300 uppercase tracking-widest">أدوات الإدارة</span>
-                <NavLink to="/messaging" className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all ${isActive ? 'bg-amber-600 text-white shadow-xl' : 'text-amber-600 bg-amber-50 hover:bg-amber-100'}`}>
-                  <Radio size={24} /> مركز البث الفوري
-                </NavLink>
-                <NavLink to="/teachers" className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all ${isActive ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
-                  <ShieldCheck size={24} /> إدارة المعلمين
-                </NavLink>
+                {adminNavExtras.map(item => (
+                  <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-3xl font-black text-sm transition-all ${isActive ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
+                    {item.icon} {item.label}
+                  </NavLink>
+                ))}
               </div>
             )}
           </nav>
 
           <div className="p-10 border-t border-slate-50">
-             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-4 py-5 text-rose-500 font-black hover:bg-rose-50 rounded-[2rem] transition-all">
+             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-4 py-5 text-rose-500 font-black hover:bg-rose-50 rounded-2xl transition-all">
                <LogOut size={22} /> تسجيل الخروج
              </button>
           </div>
         </aside>
 
-        {/* MOBILE BOTTOM NAV (Improved) */}
-        <nav className="lg:hidden fixed bottom-4 inset-x-4 bg-white/95 backdrop-blur-2xl border border-slate-100 flex justify-around items-center px-1 py-3 z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] rounded-[2.5rem] overflow-x-auto no-scrollbar">
+        {/* MOBILE BOTTOM NAV (Improved with horizontal scroll) */}
+        <nav className="lg:hidden fixed bottom-4 inset-x-4 bg-white/95 backdrop-blur-2xl border border-slate-100 flex items-center px-4 py-3 z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] rounded-[2.5rem] overflow-x-auto no-scrollbar gap-2">
           {mobileNavItems.map(item => (
-            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-3 py-2 rounded-2xl min-w-[60px] ${isActive ? (isParent ? 'text-emerald-600 bg-emerald-50' : 'text-indigo-600 bg-indigo-50') : 'text-slate-400'}`}>
+            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-4 py-2 rounded-2xl min-w-[70px] ${isActive ? (isParent ? 'text-emerald-600 bg-emerald-50' : 'text-indigo-600 bg-indigo-50') : 'text-slate-400'}`}>
               {React.cloneElement(item.icon as React.ReactElement, { size: 20 })}
-              <span className="text-[8px] font-black whitespace-nowrap">{item.label}</span>
+              <span className="text-[9px] font-black whitespace-nowrap">{item.label}</span>
             </NavLink>
           ))}
-          <button onClick={handleLogout} className="flex flex-col items-center gap-1 px-3 py-2 text-rose-500 min-w-[60px]">
+          <button onClick={handleLogout} className="flex flex-col items-center gap-1 px-4 py-2 text-rose-500 min-w-[70px]">
             <LogOut size={20} />
-            <span className="text-[8px] font-black uppercase">خروج</span>
+            <span className="text-[9px] font-black uppercase">خروج</span>
           </button>
         </nav>
 
@@ -185,14 +188,14 @@ const App: React.FC = () => {
                 <span className={`text-[9px] font-black uppercase tracking-widest ${isParent ? 'text-emerald-500' : 'text-indigo-500'}`}>
                   {isParent ? 'بوابة ولي الأمر' : (isAdmin ? 'المدير العام' : 'المعلم المعتمد')}
                 </span>
-                <span className="text-lg md:text-xl font-black text-slate-900 truncate max-w-[150px]">{profile?.full_name}</span>
+                <span className="text-lg md:text-xl font-black text-slate-900 truncate max-w-[180px]">{profile?.full_name}</span>
              </div>
-             <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} w-10 h-10 md:w-14 md:h-14 rounded-xl flex items-center justify-center text-white font-black shadow-lg`}>
-                {profile?.full_name?.[0] || 'P'}
+             <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} w-10 h-10 md:w-14 md:h-14 rounded-2xl flex items-center justify-center text-white font-black shadow-lg shadow-indigo-100`}>
+                {profile?.full_name?.[0] || 'S'}
              </div>
           </header>
 
-          <div className="flex-1 p-4 md:p-8 lg:p-12 max-w-[1400px] mx-auto w-full pb-24 lg:pb-12">
+          <div className="flex-1 p-4 md:p-8 lg:p-12 max-w-[1600px] mx-auto w-full pb-28 lg:pb-12">
             <Routes>
               {isParent ? (
                 <Route path="/" element={<ParentPortal parentPhone={profile?.phone} />} />
@@ -206,10 +209,10 @@ const App: React.FC = () => {
                   <Route path="/messaging" element={isAdmin ? <Messaging /> : <Navigate to="/" />} />
                   <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
                   <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                  <Route path="/settings" element={<Settings />} />
                   {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
                 </>
               )}
+              <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
