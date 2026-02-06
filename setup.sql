@@ -1,14 +1,9 @@
 
--- 1. تنظيف شامل مع التحقق من الوجود (Idempotent Script)
+-- 1. تنظيف مسبق ذكي
 DROP VIEW IF EXISTS public.student_summary_view CASCADE;
-DROP TABLE IF EXISTS public.payments CASCADE;
-DROP TABLE IF EXISTS public.lessons CASCADE;
-DROP TABLE IF EXISTS public.schedules CASCADE;
-DROP TABLE IF EXISTS public.students CASCADE;
-DROP TABLE IF EXISTS public.profiles CASCADE;
 
--- 2. جدول الملفات الشخصية (البروفايلات)
-CREATE TABLE public.profiles (
+-- 2. التأكد من وجود الجداول الأساسية
+CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name text NOT NULL,
   phone text UNIQUE NOT NULL,
@@ -17,13 +12,12 @@ CREATE TABLE public.profiles (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 3. جدول الطلاب
-CREATE TABLE public.students (
+CREATE TABLE IF NOT EXISTS public.students (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   teacher_id uuid REFERENCES auth.users ON DELETE CASCADE,
   name text NOT NULL,
   grade text NOT NULL,
-  phones jsonb DEFAULT '[]', -- تنسيق: [{number: '...', label: '...'}]
+  phones jsonb DEFAULT '[]',
   address text,
   school_name text,
   agreed_amount numeric DEFAULT 0,
@@ -35,8 +29,7 @@ CREATE TABLE public.students (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 4. جداول العمليات (حصص، مدفوعات، جداول زمنية)
-CREATE TABLE public.lessons (
+CREATE TABLE IF NOT EXISTS public.lessons (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   student_id uuid REFERENCES public.students ON DELETE CASCADE,
   teacher_id uuid REFERENCES auth.users ON DELETE CASCADE,
@@ -46,7 +39,7 @@ CREATE TABLE public.lessons (
   created_at timestamp with time zone DEFAULT now()
 );
 
-CREATE TABLE public.payments (
+CREATE TABLE IF NOT EXISTS public.payments (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   student_id uuid REFERENCES public.students ON DELETE CASCADE,
   teacher_id uuid REFERENCES auth.users ON DELETE CASCADE,
@@ -59,32 +52,29 @@ CREATE TABLE public.payments (
   created_at timestamp with time zone DEFAULT now()
 );
 
-CREATE TABLE public.schedules (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  teacher_id uuid REFERENCES auth.users ON DELETE CASCADE,
-  student_id uuid REFERENCES public.students ON DELETE CASCADE,
-  day_of_week text NOT NULL,
-  start_time time NOT NULL,
-  duration_hours numeric DEFAULT 1.5,
-  created_at timestamp with time zone DEFAULT now()
-);
-
--- 5. تفعيل الأمن (RLS)
+-- 3. تفعيل RLS (إذا لم يكن مفعلاً)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 
--- 6. سياسات الوصول الذكية (تجنب الـ Recursion عبر الـ JWT Metadata)
--- سياسة البروفايلات
+-- 4. حذف السياسات القديمة لتجنب أخطاء التكرار عند إعادة التشغيل
+DO $$ 
+BEGIN
+    DROP POLICY IF EXISTS "profiles_select_policy" ON public.profiles;
+    DROP POLICY IF EXISTS "profiles_admin_policy" ON public.profiles;
+    DROP POLICY IF EXISTS "students_master_access" ON public.students;
+    DROP POLICY IF EXISTS "ops_access" ON public.lessons;
+    DROP POLICY IF EXISTS "pays_access" ON public.payments;
+END $$;
+
+-- 5. إعادة إنشاء السياسات الأمنية
 CREATE POLICY "profiles_select_policy" ON public.profiles FOR SELECT TO authenticated 
 USING (auth.uid() = id OR (auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661');
 
 CREATE POLICY "profiles_admin_policy" ON public.profiles FOR ALL TO authenticated 
 USING ((auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661');
 
--- سياسة الطلاب
 CREATE POLICY "students_master_access" ON public.students FOR ALL TO authenticated 
 USING (
   teacher_id = auth.uid() 
@@ -95,15 +85,12 @@ USING (
   )
 );
 
--- سياسة العمليات (الحصص والمدفوعات)
 CREATE POLICY "ops_access" ON public.lessons FOR ALL TO authenticated USING (teacher_id = auth.uid() OR (auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661');
 CREATE POLICY "pays_access" ON public.payments FOR ALL TO authenticated USING (teacher_id = auth.uid() OR (auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661');
 
--- 7. معالجة الـ Trigger والوظائف (حل خطأ Permission Denied و Already Exists)
--- نقوم بمسح التريجر القديم أولاً من مخطط auth
+-- 6. معالجة الـ Trigger والوظائف بشكل آمن تماماً
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
--- إنشاء وظيفة المعالجة في المخطط العام
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, full_name, phone, role, is_approved)
@@ -111,19 +98,26 @@ BEGIN
     new.id,
     COALESCE(new.raw_user_meta_data->>'full_name', 'مستخدم جديد'),
     new.raw_user_meta_data->>'phone',
-    CASE WHEN (new.raw_user_meta_data->>'phone' = '55315661') THEN 'admin' ELSE 'teacher' END,
-    CASE WHEN (new.raw_user_meta_data->>'phone' = '55315661') THEN true ELSE false END
+    CASE 
+      WHEN (new.raw_user_meta_data->>'phone' = '55315661') THEN 'admin' 
+      WHEN (new.raw_user_meta_data->>'role' = 'parent') THEN 'parent'
+      ELSE 'teacher' 
+    END,
+    CASE 
+      WHEN (new.raw_user_meta_data->>'phone' = '55315661') THEN true 
+      WHEN (new.raw_user_meta_data->>'role' = 'parent') THEN true -- أولياء الأمور مفعلين تلقائياً للمشاهدة
+      ELSE false 
+    END
   );
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- إعادة إنشاء التريجر بأمان
 CREATE TRIGGER on_auth_user_created 
 AFTER INSERT ON auth.users 
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 8. العرض المالي الذكي (View)
+-- 7. العرض المالي الذكي (View)
 CREATE OR REPLACE VIEW public.student_summary_view AS
 SELECT 
     s.*,
