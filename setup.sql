@@ -1,10 +1,10 @@
--- 1. تنظيف البيئة القديمة لضمان عدم التعارض
-DROP VIEW IF EXISTS public.student_summary_view;
-DROP FUNCTION IF EXISTS public.get_student_by_parent_phone(text);
-DROP FUNCTION IF EXISTS public.verify_parent_access(text);
-DROP FUNCTION IF EXISTS public.normalize_phone(text);
+-- تنظيف شامل للبيئة (Nuclear Clean-up)
+DROP VIEW IF EXISTS public.student_summary_view CASCADE;
+DROP FUNCTION IF EXISTS public.get_student_by_parent_phone(text) CASCADE;
+DROP FUNCTION IF EXISTS public.verify_parent_access(text) CASCADE;
+DROP FUNCTION IF EXISTS public.normalize_phone(text) CASCADE;
 
--- 2. وظيفة تطهير الأرقام
+-- 1. وظيفة تطهير الأرقام (أساسية للبحث)
 CREATE OR REPLACE FUNCTION public.normalize_phone(p_phone text)
 RETURNS text AS $$
 BEGIN
@@ -12,41 +12,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
--- 3. بناء الجدول الأساسي للطلاب (إذا لم يكن موجوداً)
-CREATE TABLE IF NOT EXISTS public.students (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    teacher_id uuid REFERENCES auth.users(id),
-    name text NOT NULL,
-    address text,
-    phones jsonb DEFAULT '[]'::jsonb,
-    school_name text,
-    grade text,
-    agreed_amount numeric DEFAULT 0,
-    is_hourly boolean DEFAULT false,
-    price_per_hour numeric DEFAULT 0,
-    is_completed boolean DEFAULT false,
-    academic_year text,
-    semester text,
-    created_at timestamptz DEFAULT now()
-);
-
--- 4. إنشاء مشهد ملخص الطلاب (القلب النابض للإحصائيات)
+-- 2. إعادة بناء مشهد ملخص الطلاب ليكون دقيقاً 100%
 CREATE OR REPLACE VIEW public.student_summary_view AS
 SELECT 
     s.*,
-    COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) as total_hours,
-    COALESCE((SELECT COUNT(l.id) FROM public.lessons l WHERE l.student_id = s.id), 0) as total_lessons,
-    COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0) as total_paid,
+    COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0)::numeric as total_hours,
+    COALESCE((SELECT COUNT(l.id) FROM public.lessons l WHERE l.student_id = s.id), 0)::bigint as total_lessons,
+    COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)::numeric as total_paid,
     CASE 
         WHEN s.is_hourly THEN 
-            (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) * s.price_per_hour) - 
-            COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)
+            (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0)::numeric * COALESCE(s.price_per_hour, 0)) - 
+            COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)::numeric
         ELSE 
-            s.agreed_amount - COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)
-    END as remaining_balance
+            COALESCE(s.agreed_amount, 0) - COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)::numeric
+    END::numeric as remaining_balance
 FROM public.students s;
 
--- 5. دالة التحقق لولي الأمر
+-- 3. دالة التحقق الذكي لولي الأمر (تعديل نوع الإخراج ليتوافق مع الواجهة)
 CREATE OR REPLACE FUNCTION public.verify_parent_access(phone_to_check text)
 RETURNS TABLE (
     student_id uuid,
@@ -71,7 +53,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 6. دالة جلب الطلاب لولي الأمر
+-- 4. دالة جلب البيانات لبوابة ولي الأمر
 CREATE OR REPLACE FUNCTION public.get_student_by_parent_phone(phone_val text)
 RETURNS TABLE (
     id uuid,
