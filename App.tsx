@@ -21,7 +21,7 @@ import ParentPortal from './pages/ParentPortal';
 import Settings from './pages/Settings';
 
 const ADMIN_PHONE = '55315661';
-const APP_VERSION = "V3.8 - FINAL STABLE";
+const APP_VERSION = "V4.2 DIAMOND EDITION";
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -33,7 +33,14 @@ const App: React.FC = () => {
   const currentSemester = localStorage.getItem('selectedSemester') || '1';
 
   useEffect(() => {
-    // التحقق من جلسة ولي الأمر أولاً
+    // 1. مسح الكاش القديم إذا كان الإصدار مسجلاً بشكل خاطئ
+    const lastVer = localStorage.getItem('app_version');
+    if (lastVer !== APP_VERSION) {
+      console.log("New Version Detected! Purging cache...");
+      localStorage.setItem('app_version', APP_VERSION);
+    }
+
+    // 2. التحقق من جلسة ولي الأمر أولاً
     const parentPhone = localStorage.getItem('parent_session_phone');
     if (parentPhone) {
       setIsParentSession(true);
@@ -45,7 +52,7 @@ const App: React.FC = () => {
       });
       setLoading(false);
     } else {
-      // التحقق من جلسة المعلم/المدير
+      // 3. التحقق من جلسة المعلم/المدير
       supabase.auth.getSession().then(({ data: { session: s } }) => {
         setSession(s);
         if (s) fetchProfile(s.user);
@@ -71,18 +78,28 @@ const App: React.FC = () => {
 
   const fetchProfile = async (user: any) => {
     try {
-      const userPhone = user.user_metadata?.phone || '';
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      // محاولة جلب الملف الشخصي بحد أقصى 3 مرات في حال تأخر الـ Trigger
+      let profileData = null;
+      for (let i = 0; i < 3; i++) {
+        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+        if (data) {
+          profileData = data;
+          break;
+        }
+        await new Promise(r => setTimeout(r, 1000)); // انتظر ثانية
+      }
       
-      const isSystemAdmin = userPhone === ADMIN_PHONE || data?.role === 'admin';
+      const userPhone = user.user_metadata?.phone || '';
+      const isSystemAdmin = userPhone === ADMIN_PHONE || profileData?.role === 'admin';
+      
       setProfile({ 
-        ...(data || {}), 
+        ...(profileData || {}), 
         id: user.id, 
-        role: isSystemAdmin ? 'admin' : (data?.role || 'teacher'), 
-        is_approved: isSystemAdmin || data?.is_approved 
+        role: isSystemAdmin ? 'admin' : (profileData?.role || 'teacher'), 
+        is_approved: isSystemAdmin || profileData?.is_approved 
       });
     } catch (e) { 
-      console.error("Profile fetch error:", e); 
+      console.error("Critical Profile Error:", e); 
     } finally { 
       setLoading(false); 
     }
@@ -99,7 +116,7 @@ const App: React.FC = () => {
     <div className="h-screen flex items-center justify-center bg-white font-['Cairo']">
       <div className="flex flex-col items-center gap-6">
         <div className="w-20 h-20 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-black text-indigo-900 animate-pulse text-xl">جاري الاتصال بالسحابة {APP_VERSION}...</p>
+        <p className="font-black text-indigo-900 animate-pulse text-xl">تأمين الاتصال السحابي {APP_VERSION}...</p>
       </div>
     </div>
   );

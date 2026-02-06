@@ -1,10 +1,44 @@
--- تنظيف شامل للبيئة (Nuclear Clean-up)
-DROP VIEW IF EXISTS public.student_summary_view CASCADE;
-DROP FUNCTION IF EXISTS public.get_student_by_parent_phone(text) CASCADE;
-DROP FUNCTION IF EXISTS public.verify_parent_access(text) CASCADE;
-DROP FUNCTION IF EXISTS public.normalize_phone(text) CASCADE;
+-- 1. تنظيف شامل للوظائف السابقة لضمان التحديث
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
 
--- 1. وظيفة تطهير الأرقام (أساسية للبحث)
+-- 2. وظيفة معالجة المستخدمين الجدد (تنشأ تلقائياً عند التسجيل)
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, phone, role, is_approved)
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'full_name', 'مستخدم جديد'),
+    COALESCE(new.raw_user_meta_data->>'phone', ''),
+    CASE 
+      WHEN (new.raw_user_meta_data->>'phone') = '55315661' THEN 'admin' 
+      ELSE 'teacher' 
+    END,
+    CASE 
+      WHEN (new.raw_user_meta_data->>'phone') = '55315661' THEN true 
+      ELSE false 
+    END
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    phone = EXCLUDED.phone,
+    full_name = EXCLUDED.full_name,
+    role = CASE WHEN EXCLUDED.phone = '55315661' THEN 'admin' ELSE profiles.role END;
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 3. تفعيل المشغل (Trigger)
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 4. إصلاح جدول Profiles لضمان عدم وجود أخطاء في القيود
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check 
+  CHECK (role IN ('admin', 'teacher', 'parent'));
+
+-- 5. تحديث كافة الدوال الأمنية لولي الأمر لضمان الدقة
 CREATE OR REPLACE FUNCTION public.normalize_phone(p_phone text)
 RETURNS text AS $$
 BEGIN
@@ -12,37 +46,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
--- 2. إعادة بناء مشهد ملخص الطلاب ليكون دقيقاً 100%
-CREATE OR REPLACE VIEW public.student_summary_view AS
-SELECT 
-    s.*,
-    COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0)::numeric as total_hours,
-    COALESCE((SELECT COUNT(l.id) FROM public.lessons l WHERE l.student_id = s.id), 0)::bigint as total_lessons,
-    COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)::numeric as total_paid,
-    CASE 
-        WHEN s.is_hourly THEN 
-            (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0)::numeric * COALESCE(s.price_per_hour, 0)) - 
-            COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)::numeric
-        ELSE 
-            COALESCE(s.agreed_amount, 0) - COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)::numeric
-    END::numeric as remaining_balance
-FROM public.students s;
-
--- 3. دالة التحقق الذكي لولي الأمر (تعديل نوع الإخراج ليتوافق مع الواجهة)
 CREATE OR REPLACE FUNCTION public.verify_parent_access(phone_to_check text)
-RETURNS TABLE (
-    student_id uuid,
-    student_name text,
-    teacher_name text,
-    grade text
-) AS $$
+RETURNS TABLE (student_id uuid, student_name text, teacher_name text, grade text) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
-        s.id, 
-        s.name, 
-        p.full_name as teacher_name,
-        s.grade
+    SELECT s.id, s.name, p.full_name, s.grade
     FROM public.students s
     JOIN public.profiles p ON s.teacher_id = p.id
     WHERE EXISTS (
@@ -50,38 +58,5 @@ BEGIN
         WHERE public.normalize_phone(ph->>'number') = public.normalize_phone(phone_to_check)
     )
     AND s.is_completed = false;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 4. دالة جلب البيانات لبوابة ولي الأمر
-CREATE OR REPLACE FUNCTION public.get_student_by_parent_phone(phone_val text)
-RETURNS TABLE (
-    id uuid,
-    name text,
-    grade text,
-    teacher_name text,
-    remaining_balance numeric,
-    total_lessons bigint,
-    total_paid numeric,
-    total_hours numeric
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        v.id, 
-        v.name, 
-        v.grade,
-        p.full_name as teacher_name,
-        v.remaining_balance,
-        v.total_lessons,
-        v.total_paid,
-        v.total_hours
-    FROM public.student_summary_view v
-    JOIN public.profiles p ON v.teacher_id = p.id
-    WHERE EXISTS (
-        SELECT 1 FROM jsonb_array_elements(v.phones) AS ph
-        WHERE public.normalize_phone(ph->>'number') = public.normalize_phone(phone_val)
-    )
-    AND v.is_completed = false;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

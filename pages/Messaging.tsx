@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { 
@@ -48,7 +47,6 @@ const Messaging = () => {
     try {
       const targets = targetType === 'all' ? teachers.map(t => t.id) : selectedTeachers;
       
-      // تسجيل الرسالة في جدول البث
       const { error } = await supabase.from('broadcast_messages').insert([{
         title,
         body: message,
@@ -78,13 +76,13 @@ const Messaging = () => {
       )}
 
       {/* ADMIN HERO BOX */}
-      <div className="bg-slate-900 p-12 lg:p-20 rounded-[5rem] text-white shadow-2xl relative overflow-hidden group">
+      <div className="bg-slate-900 p-12 lg:p-20 rounded-[4.5rem] md:rounded-[5rem] text-white shadow-2xl relative overflow-hidden group">
          <div className="absolute top-0 right-0 w-full h-full bg-indigo-600/10 opacity-100"></div>
          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-10">
             <div>
                <div className="flex items-center gap-4 mb-6">
                  <Radio size={32} className="text-amber-400 animate-pulse" />
-                 <span className="bg-white/10 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">البث الفوري المركز V3</span>
+                 <span className="bg-white/10 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">البث الفوري المركز V4.0</span>
                </div>
                <h1 className="text-5xl lg:text-7xl font-black leading-tight tracking-tighter mb-6">مركز التواصل <br/><span className="text-indigo-400">الإداري الشامل</span></h1>
                <p className="text-indigo-100/50 font-black text-xl max-w-xl">تحكم في وصول المعلومات. رسالتك ستظهر كإشعار فوري لجميع المعلمين حتى والموقع مغلق.</p>
@@ -98,7 +96,7 @@ const Messaging = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
         {/* FORM */}
-        <form onSubmit={handleBroadcast} className="lg:col-span-3 bg-white p-14 lg:p-20 rounded-[6rem] border border-slate-100 shadow-2xl space-y-12">
+        <form onSubmit={handleBroadcast} className="lg:col-span-3 bg-white p-14 lg:p-20 rounded-[4.5rem] md:rounded-[6rem] border border-slate-100 shadow-2xl space-y-12">
           <div className="space-y-4">
              <label className="text-[11px] font-black text-slate-400 mr-8 uppercase tracking-widest">عنوان الرسالة الإدارية</label>
              <input required className="w-full p-8 bg-slate-50 border-none rounded-[2.5rem] font-black text-xl outline-none focus:bg-white focus:ring-4 focus:ring-amber-50 transition-all shadow-inner" value={title} onChange={e => setTitle(e.target.value)} />
@@ -106,64 +104,26 @@ const Messaging = () => {
 
           <div className="space-y-4">
              <label className="text-[11px] font-black text-slate-400 mr-8 uppercase tracking-widest">نص التنبيه</label>
-             <textarea required placeholder="اكتب ما تريد قوله للمعلمين..." className="w-full p-8 bg-slate-50 border-none rounded-[3.5rem] h-60 font-bold text-lg outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all shadow-inner resize-none" value={message} onChange={e => setMessage(e.target.value)} />
+             <textarea required placeholder="اكتب ما تريد قوله للمعلمين..." className="w-full p-8 bg-slate-50 border-none rounded-[3rem] md:rounded-[3.5rem] h-60 font-bold text-lg outline-none focus:bg-white focus:ring-4 focus:ring-indigo-50 transition-all shadow-inner resize-none" value={message} onChange={e => setMessage(e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-6">
-             <button type="button" onClick={() => setTargetType('all')} className={`p-10 rounded-[3rem] border-4 transition-all flex flex-col items-center gap-4 ${targetType === 'all' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 bg-slate-50 text-slate-400'}`}>
-                <Users size={40}/>
-                <span className="font-black">بث للكل</span>
+             <button type="button" onClick={() => setTargetType('all')} className={`p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] border-4 transition-all flex flex-col items-center gap-4 ${targetType === 'all' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 bg-slate-50 text-slate-400'}`}>
+                <Users size={32}/>
+                <span className="font-black text-xs md:text-base">بث للكل</span>
              </button>
-             <button type="button" onClick={() => setTargetType('selected')} className={`p-10 rounded-[3rem] border-4 transition-all flex flex-col items-center gap-4 ${targetType === 'selected' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 bg-slate-50 text-slate-400'}`}>
-                <ShieldCheck size={40}/>
-                <span className="font-black">تحديد معلمين</span>
+             <button type="button" onClick={() => setTargetType('selected')} className={`p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] border-4 transition-all flex flex-col items-center gap-4 ${targetType === 'selected' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-50 bg-slate-50 text-slate-400'}`}>
+                <ShieldCheck size={32}/>
+                <span className="font-black text-xs md:text-base">تحديد معلمين</span>
              </button>
           </div>
 
-          <div className="flex gap-4">
-            <button type="button" onClick={() => setShowPreview(true)} className="flex-1 py-8 bg-slate-100 text-slate-600 font-black rounded-[3rem] hover:bg-slate-200 transition-all flex items-center justify-center gap-4 text-xl">
-               <Eye size={28}/> معاينة الإشعار
-            </button>
-            <button disabled={sending} className="flex-[2] py-8 bg-indigo-600 text-white font-black rounded-[3rem] shadow-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 active:scale-95 text-2xl group">
-               {sending ? <RefreshCw className="animate-spin" /> : <Send size={32} className="group-hover:translate-x-3 transition-transform" />}
-               إرسال الآن
-            </button>
-          </div>
+          <button disabled={sending} className="w-full py-8 bg-indigo-600 text-white font-black rounded-[2.5rem] md:rounded-[3rem] shadow-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 active:scale-95 text-2xl group">
+             {sending ? <RefreshCw className="animate-spin" /> : <Send size={32} className="group-hover:translate-x-3 transition-transform" />}
+             إرسال الآن
+          </button>
         </form>
-
-        {/* SELECTOR */}
-        <div className={`lg:col-span-2 bg-white p-14 lg:p-16 rounded-[6rem] border border-slate-100 shadow-2xl transition-all duration-700 ${targetType === 'selected' ? 'opacity-100' : 'opacity-30 pointer-events-none grayscale'}`}>
-           <h3 className="text-3xl font-black text-slate-900 mb-10">اختر المستلمين</h3>
-           <div className="space-y-4 max-h-[600px] overflow-y-auto no-scrollbar pr-4">
-              {teachers.map(t => (
-                <button key={t.id} onClick={() => handleToggleTeacher(t.id)} className={`w-full p-8 rounded-[2.5rem] border-2 text-right transition-all flex items-center justify-between group ${selectedTeachers.includes(t.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 border-slate-50 text-slate-700 hover:border-indigo-100'}`}>
-                   <span className="text-xl font-black">{t.full_name}</span>
-                   {selectedTeachers.includes(t.id) && <CheckCircle size={24} />}
-                </button>
-              ))}
-           </div>
-        </div>
       </div>
-
-      {/* PREVIEW MODAL */}
-      {showPreview && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-2xl z-[500] flex items-center justify-center p-6" onClick={() => setShowPreview(false)}>
-           <div className="bg-white w-full max-w-md p-10 rounded-[4rem] shadow-2xl animate-in zoom-in duration-500 relative" onClick={e => e.stopPropagation()}>
-              <div className="absolute top-0 right-0 w-full h-2 bg-amber-500 rounded-t-full"></div>
-              <div className="flex items-center gap-4 mb-8">
-                <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-lg"><Radio size={24}/></div>
-                <div>
-                   <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">تنبيه فوري من القمة</p>
-                   <p className="text-xl font-black text-slate-900">{title}</p>
-                </div>
-              </div>
-              <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 mb-10">
-                 <p className="text-lg font-bold text-slate-700 leading-relaxed text-right">{message || 'هنا سيظهر محتوى الرسالة التي ستقوم بكتابتها...'}</p>
-              </div>
-              <button onClick={() => setShowPreview(false)} className="w-full py-5 bg-slate-900 text-white font-black rounded-3xl text-lg">إغلاق المعاينة</button>
-           </div>
-        </div>
-      )}
     </div>
   );
 };
