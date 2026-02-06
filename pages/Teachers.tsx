@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { 
@@ -36,7 +35,8 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
       if (error) throw error;
       setTeachers(data || []);
     } catch (err: any) {
-      showFeedback("فشل جلب قائمة المعلمين", 'error');
+      console.error("Fetch Teachers Error:", err);
+      showFeedback("فشل جلب قائمة المعلمين: " + err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -44,28 +44,15 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
 
   const fetchCodes = useCallback(async () => {
     try {
-      // استعلام بسيط ومباشر لضمان جلب البيانات حتى لو فشل الربط مع الجداول الأخرى
       const { data, error } = await supabase
         .from('activation_codes')
-        .select(`
-          id, 
-          code, 
-          is_used, 
-          created_at,
-          used_by,
-          profiles (full_name)
-        `)
+        .select(`id, code, is_used, created_at, used_by`)
         .order('created_at', { ascending: false });
       
-      if (error) {
-        // محاولة جلب الأكواد بدون JOIN في حال الفشل
-        const { data: simpleData } = await supabase.from('activation_codes').select('*').order('created_at', { ascending: false });
-        setActivationCodes(simpleData || []);
-      } else {
-        setActivationCodes(data || []);
-      }
+      if (error) throw error;
+      setActivationCodes(data || []);
     } catch (err: any) {
-      console.error("Critical error fetching codes:", err);
+      console.error("Fetch Codes Error:", err);
     }
   }, []);
 
@@ -119,24 +106,22 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
     if (isGenerating) return;
     setIsGenerating(true);
     
-    // توليد كود سهل القراءة للمدير والمعلم
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const newCode = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
     
     try {
-      const { data, error } = await supabase.from('activation_codes').insert([{ 
+      const { error } = await supabase.from('activation_codes').insert([{ 
         code: newCode, 
         is_used: false 
-      }]).select();
+      }]);
       
       if (error) throw error;
       
       showFeedback("تم التوليد بنجاح: " + newCode);
-      // تحديث فوري للقائمة
       await fetchCodes();
     } catch (err: any) {
       console.error("Code generation error:", err);
-      showFeedback("فشل الحفظ. تأكد من صلاحيات SQL.", 'error');
+      showFeedback("فشل الحفظ: " + err.message, 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -222,6 +207,7 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
               </div>
             </div>
           ))}
+          {teachers.length === 0 && !loading && <div className="col-span-full py-20 text-center text-slate-400 italic font-black">لا يوجد معلمون مسجلون حالياً.</div>}
         </div>
       ) : (
         <div className="space-y-8 animate-in slide-in-from-bottom duration-700">
@@ -242,8 +228,7 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
                   <tr>
                     <th className="p-10">الكود السري</th>
                     <th className="p-10">الحالة التشغيلية</th>
-                    <th className="p-10">استخدم بواسطة</th>
-                    <th className="p-10 text-center">نسخ الكود</th>
+                    <th className="p-10">نسخ الكود</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -255,9 +240,6 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
                           {item.is_used ? 'مستخدَم مسبقاً' : 'جاهز للتفعيل'}
                         </span>
                       </td>
-                      <td className="p-10 font-black text-slate-600 text-sm">
-                        {item.profiles?.full_name || '—'}
-                      </td>
                       <td className="p-10 text-center">
                         <button onClick={() => copyToClipboard(item.code)} className={`p-5 rounded-[1.5rem] transition-all shadow-xl ${copiedCode === item.code ? 'bg-emerald-600 text-white' : 'bg-white text-indigo-600 border border-slate-100 hover:border-indigo-600'}`}>
                           {copiedCode === item.code ? <Check size={24}/> : <Copy size={24}/>}
@@ -265,11 +247,6 @@ const Teachers = ({ onSupervise }: { onSupervise: (teacher: {id: string, name: s
                       </td>
                     </tr>
                   ))}
-                  {activationCodes.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="p-20 text-center text-slate-300 font-bold italic text-lg">لا توجد أكواد تفعيل حالياً. ابدأ بتوليد أول كود.</td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>

@@ -1,21 +1,22 @@
--- 1. تنظيف السياسات والوظائف القديمة تماماً
+-- 1. تنظيف السياسات والوظائف القديمة لمنع أي تداخل
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user();
 DROP FUNCTION IF EXISTS public.get_auth_role();
+DROP FUNCTION IF EXISTS public.is_admin();
 
--- 2. إنشاء وظيفة جلب الدور بأمان (تمنع الدوران اللانهائي)
--- تعتمد هذه الوظيفة على SECURITY DEFINER لتجاوز RLS
-CREATE OR REPLACE FUNCTION public.get_auth_role()
-RETURNS text AS $$
-DECLARE
-  user_role text;
+-- 2. إنشاء وظيفة فحص "المدير" بخاصية SECURITY DEFINER
+-- هذه الوظيفة تتجاوز نظام RLS عند استدعائها، مما يمنع الدوران اللانهائي تماماً
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean AS $$
 BEGIN
-  SELECT role INTO user_role FROM public.profiles WHERE id = auth.uid();
-  RETURN COALESCE(user_role, 'teacher');
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- 3. التأكد من وجود كافة الجداول
+-- 3. التأكد من وجود كافة الجداول بالهيكل الصحيح
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name text,
@@ -82,42 +83,63 @@ CREATE TABLE IF NOT EXISTS public.activation_codes (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 4. تفعيل نظام الأمان (RLS)
+CREATE TABLE IF NOT EXISTS public.schedules (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  teacher_id uuid REFERENCES auth.users ON DELETE CASCADE,
+  student_id uuid REFERENCES public.students ON DELETE CASCADE,
+  day_of_week text NOT NULL,
+  start_time time NOT NULL,
+  duration_hours numeric DEFAULT 1,
+  notes text,
+  created_at timestamp with time zone DEFAULT now()
+);
+
+-- 4. تفعيل RLS على كافة الجداول
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.broadcast_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 
--- 5. بناء سياسات الأمان الذكية (بدون استدعاءات دائرية)
+-- 5. سياسات الوصول الجديدة (المنطق الصحيح)
 
--- PROFILES (الإصلاح الحقيقي)
-DROP POLICY IF EXISTS "Profiles Access" ON public.profiles;
-CREATE POLICY "Profiles Access" ON public.profiles FOR ALL TO authenticated
-USING ( auth.uid() = id OR get_auth_role() = 'admin' );
+-- PROFILES: يمكن للمستخدم رؤية ملفه، والمدير يرى الجميع
+DROP POLICY IF EXISTS "Profiles view" ON public.profiles;
+CREATE POLICY "Profiles view" ON public.profiles FOR SELECT TO authenticated
+USING ( auth.uid() = id OR is_admin() );
 
--- STUDENTS
-DROP POLICY IF EXISTS "Students Access" ON public.students;
-CREATE POLICY "Students Access" ON public.students FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR get_auth_role() = 'admin' );
+DROP POLICY IF EXISTS "Profiles update" ON public.profiles;
+CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE TO authenticated
+USING ( auth.uid() = id OR is_admin() );
 
--- LESSONS
-DROP POLICY IF EXISTS "Lessons Access" ON public.lessons;
-CREATE POLICY "Lessons Access" ON public.lessons FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR get_auth_role() = 'admin' );
+DROP POLICY IF EXISTS "Profiles full admin" ON public.profiles;
+CREATE POLICY "Profiles full admin" ON public.profiles FOR ALL TO authenticated
+USING ( is_admin() );
 
--- PAYMENTS
-DROP POLICY IF EXISTS "Payments Access" ON public.payments;
-CREATE POLICY "Payments Access" ON public.payments FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR get_auth_role() = 'admin' );
+-- STUDENTS, LESSONS, PAYMENTS, SCHEDULES: المعلم يرى طلابه، والمدير يرى الجميع
+DO $$ 
+DECLARE 
+  t text;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY['students', 'lessons', 'payments', 'schedules']) LOOP
+    EXECUTE format('DROP POLICY IF EXISTS "Access own or admin" ON public.%I', t);
+    EXECUTE format('CREATE POLICY "Access own or admin" ON public.%I FOR ALL TO authenticated USING ( teacher_id = auth.uid() OR is_admin() )', t);
+  END LOOP;
+END $$;
 
 -- BROADCAST
 DROP POLICY IF EXISTS "Broadcast Access" ON public.broadcast_messages;
 CREATE POLICY "Broadcast Access" ON public.broadcast_messages FOR ALL TO authenticated
-USING ( get_auth_role() = 'admin' OR auth.uid() = ANY(targets) );
+USING ( is_admin() OR auth.uid() = ANY(targets) );
 
--- 6. المشغل المطور للمستخدمين الجدد (يمنح دور admin فوراً للرقم المطلوب)
+-- CODES
+DROP POLICY IF EXISTS "Codes Access" ON public.activation_codes;
+CREATE POLICY "Codes Access" ON public.activation_codes FOR ALL TO authenticated
+USING ( is_admin() );
+
+-- 6. مشغل إنشاء البروفايل التلقائي
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -142,5 +164,5 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 7. ترقية يدوية فورية لضمان عمل حساب المدير الحالي
+-- 7. الترقية الفورية والنهائية للمدير
 UPDATE public.profiles SET role = 'admin', is_approved = true WHERE phone = '55315661';

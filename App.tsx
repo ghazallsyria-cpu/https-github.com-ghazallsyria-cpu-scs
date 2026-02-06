@@ -21,7 +21,7 @@ import ParentPortal from './pages/ParentPortal';
 import Settings from './pages/Settings';
 
 const ADMIN_PHONE = '55315661';
-const APP_VERSION = "V4.4 SUPREME";
+const APP_VERSION = "V4.5 SUPREME";
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -67,28 +67,22 @@ const App: React.FC = () => {
 
   const fetchProfile = async (user: any) => {
     try {
-      let profileData = null;
-      // محاولات جلب البروفايل مع دعم التحقق من رقم الهاتف مباشرة
       const userPhone = user.user_metadata?.phone || '';
+      const isHardcodedAdmin = userPhone === ADMIN_PHONE;
       
-      for (let i = 0; i < 3; i++) {
-        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-        if (data) {
-          profileData = data;
-          break;
-        }
-        await new Promise(r => setTimeout(r, 1000));
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      
+      if (error && !isHardcodedAdmin) {
+        console.error("Profile Error:", error);
       }
-      
-      // إذا لم يجد بروفايل في الجدول، نعتمد على ميتاداتا الهاتف مؤقتاً لضمان الدخول
-      const isSystemAdmin = userPhone === ADMIN_PHONE || profileData?.role === 'admin';
-      
-      setProfile({ 
-        ...(profileData || { full_name: user.user_metadata?.full_name }), 
-        id: user.id, 
+
+      setProfile({
+        ...(data || {}),
+        id: user.id,
         phone: userPhone,
-        role: isSystemAdmin ? 'admin' : (profileData?.role || 'teacher'), 
-        is_approved: isSystemAdmin || profileData?.is_approved 
+        full_name: data?.full_name || user.user_metadata?.full_name || 'مستخدم',
+        role: isHardcodedAdmin ? 'admin' : (data?.role || 'teacher'),
+        is_approved: isHardcodedAdmin ? true : (data?.is_approved || false)
       });
     } catch (e) { 
       console.error("Profile Fetch Error:", e); 
@@ -108,7 +102,7 @@ const App: React.FC = () => {
     <div className="h-screen flex items-center justify-center bg-white font-['Cairo']">
       <div className="flex flex-col items-center gap-6">
         <div className="w-20 h-20 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-black text-indigo-900 animate-pulse text-xl">تفعيل الصلاحيات {APP_VERSION}...</p>
+        <p className="font-black text-indigo-900 animate-pulse text-xl">تأمين الاتصال {APP_VERSION}...</p>
       </div>
     </div>
   );
@@ -141,8 +135,6 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row text-right font-['Cairo']" dir="rtl">
-        
-        {/* SIDEBAR */}
         <aside className={`hidden lg:flex w-80 ${isAdmin ? 'bg-slate-900 border-indigo-500/10' : 'bg-white border-slate-100'} border-l flex-col sticky top-0 h-screen z-50`}>
           <div className="p-10 flex flex-col items-center gap-4 border-b border-white/5">
             <div className={`${isAdmin ? 'bg-indigo-600 shadow-indigo-500/50' : (isParent ? 'bg-emerald-600' : 'bg-indigo-600')} p-6 rounded-[2.5rem] text-white shadow-2xl transition-transform hover:scale-110`}>
