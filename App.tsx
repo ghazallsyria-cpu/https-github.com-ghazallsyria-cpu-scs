@@ -1,10 +1,10 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings as SettingsIcon, ShieldAlert, Bell, Clock, ShieldX, RefreshCcw
+  BookOpen, Calendar, Settings as SettingsIcon, ShieldAlert, Clock, ShieldX, RefreshCcw, WifiOff
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -22,17 +22,13 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const retryCount = useRef(0);
 
-  // دالة جلب البروفايل - تم تحسينها لتكون مستقلة وقوية
   const fetchProfile = useCallback(async (user: any) => {
-    if (!user) {
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
-
+    if (!user) return;
+    
     try {
-      // محاولة جلب البيانات
+      // محاولة جلب البيانات مع سياسة RLS المحدثة
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -43,8 +39,9 @@ const App: React.FC = () => {
 
       if (data) {
         setProfile(data);
+        setErrorStatus(null);
       } else {
-        // إذا لم يوجد بروفايل، نقوم بإنشائه (إصلاح ذاتي)
+        // إنشاء بروفايل تلقائي في حال الفقدان (Self-Healing)
         const meta = user.user_metadata;
         const { data: newProfile, error: insError } = await supabase
           .from('profiles')
@@ -63,8 +60,13 @@ const App: React.FC = () => {
         setProfile(newProfile);
       }
     } catch (err: any) {
-      console.error("Profile Fetch Error:", err);
-      setErrorStatus(err.message || "تعذر الاتصال بقاعدة البيانات");
+      console.error("Auth Error:", err);
+      // إذا كان الخطأ متعلق بالتكرار أو الـ RLS، نعطي تنبيهاً واضحاً
+      if (err.message?.includes('recursion')) {
+        setErrorStatus("خطأ في صلاحيات قاعدة البيانات (Recursion). يرجى تحديث الـ SQL.");
+      } else {
+        setErrorStatus(err.message || "فشل الاتصال بخادم البيانات");
+      }
     } finally {
       setLoading(false);
     }
@@ -73,36 +75,41 @@ const App: React.FC = () => {
   useEffect(() => {
     let mounted = true;
 
-    // توحيد منطق التعامل مع الجلسة لمنع التكرار (Race Condition)
-    const handleAuthChange = async (currSession: any) => {
-      if (!mounted) return;
+    const initialize = async () => {
+      setLoading(true);
+      const { data: { session: initSession } } = await supabase.auth.getSession();
       
-      setSession(currSession);
-      if (currSession?.user) {
-        await fetchProfile(currSession.user);
-      } else {
-        setProfile(null);
-        setLoading(false);
+      if (mounted) {
+        setSession(initSession);
+        if (initSession?.user) {
+          await fetchProfile(initSession.user);
+        } else {
+          setLoading(false);
+        }
       }
     };
 
-    // التحقق الأولي
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted) handleAuthChange(session);
+    initialize();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (mounted) {
+        setSession(newSession);
+        if (newSession?.user) {
+          fetchProfile(newSession.user);
+        } else {
+          setProfile(null);
+          setLoading(false);
+        }
+      }
     });
 
-    // الاشتراك في التغييرات
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (mounted) handleAuthChange(session);
-    });
-
-    // موقت أمان (Safety Timeout) لضمان عدم تجمد الشاشة للأبد
+    // زيادة مهلة الأمان لـ 30 ثانية لضمان استقرار التحميل على الشبكات الضعيفة
     const safetyTimer = setTimeout(() => {
       if (mounted && loading) {
         setLoading(false);
-        if (!session) setErrorStatus("انتهى وقت محاولة التحقق. يرجى إعادة المحاولة.");
+        if (!session && !errorStatus) setErrorStatus("استغرقت العملية وقتاً طويلاً. يرجى التحقق من اتصالك بالإنترنت.");
       }
-    }, 10000); // 10 ثوانٍ كحد أقصى
+    }, 30000);
 
     return () => {
       mounted = false;
@@ -117,40 +124,43 @@ const App: React.FC = () => {
     window.location.reload();
   };
 
-  // شاشة التحميل (تم إضافة زر إصلاح في حال التوقف)
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-6 text-center">
-      <div className="relative w-24 h-24 mb-8">
+      <div className="relative w-28 h-28 mb-8">
         <div className="absolute inset-0 border-4 border-indigo-100 rounded-full"></div>
         <div className="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+        <div className="absolute inset-0 flex items-center justify-center text-indigo-600">
+           <ShieldAlert size={32} className="animate-pulse" />
+        </div>
       </div>
-      <h2 className="text-xl font-black text-slate-900 mb-2">جاري التحقق من الهوية الرقمية</h2>
-      <p className="text-slate-400 font-bold animate-pulse">يرجى الانتظار ثوانٍ معدودة...</p>
-      
-      <button 
-        onClick={() => window.location.reload()}
-        className="mt-12 flex items-center gap-2 text-indigo-600 font-black text-sm hover:underline"
-      >
-        <RefreshCcw size={16} /> إذا استغرق الأمر وقتاً طويلاً، اضغط هنا
-      </button>
+      <h2 className="text-2xl font-black text-slate-900 mb-2">تأمين الجلسة الرقمية</h2>
+      <p className="text-slate-400 font-bold max-w-xs mx-auto leading-relaxed">جاري استدعاء بروتوكولات الأمان والمزامنة مع السحابة...</p>
     </div>
   );
 
   if (!session) return <Login />;
 
-  // معالجة الأخطاء (إذا لم يتوفر بروفايل)
-  if (!profile) return (
+  if (errorStatus || !profile) return (
     <div className="h-screen flex items-center justify-center bg-slate-50 p-6 text-center">
-      <div className="max-w-md bg-white p-12 rounded-[4rem] shadow-2xl space-y-8 animate-in zoom-in">
-        <ShieldX size={80} className="mx-auto text-rose-500" />
-        <h2 className="text-3xl font-black text-slate-900">فشل في تهيئة الجلسة</h2>
-        <p className="text-slate-500 font-bold leading-relaxed">
-          {errorStatus || "حدث خطأ غير متوقع أثناء استعادة بيانات حسابك."}
-        </p>
-        <div className="space-y-4">
-          <button onClick={() => window.location.reload()} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">إعادة المحاولة</button>
-          <button onClick={handleLogout} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black">تسجيل الخروج</button>
+      <div className="max-w-md bg-white p-12 rounded-[4rem] shadow-2xl border border-rose-100 space-y-8 animate-in zoom-in duration-500">
+        <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
+           <WifiOff size={48} />
         </div>
+        <div>
+           <h2 className="text-3xl font-black text-slate-900 mb-3">عذراً، تعذر الدخول</h2>
+           <p className="text-slate-500 font-bold leading-relaxed">
+             {errorStatus || "حدث خطأ غير متوقع أثناء تهيئة بياناتك."}
+           </p>
+        </div>
+        <div className="space-y-4">
+          <button onClick={() => window.location.reload()} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 flex items-center justify-center gap-3">
+             <RefreshCcw size={20} /> إعادة المحاولة الآن
+          </button>
+          <button onClick={handleLogout} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">
+             تسجيل الخروج
+          </button>
+        </div>
+        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">خطأ تقني: RLS_POLICY_CONFLICT_V4</p>
       </div>
     </div>
   );
@@ -158,15 +168,14 @@ const App: React.FC = () => {
   const isAdmin = profile.role === 'admin';
   const isParent = profile.role === 'parent';
 
-  // شاشة الانتظار للمعلمين
   if (profile.role === 'teacher' && !profile.is_approved) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
-         <div className="bg-white p-12 rounded-[4rem] shadow-2xl border text-center max-w-md space-y-8">
+         <div className="bg-white p-12 rounded-[4rem] shadow-2xl border text-center max-w-md space-y-8 animate-in fade-in">
             <div className="w-24 h-24 bg-amber-50 text-amber-500 rounded-[2rem] flex items-center justify-center mx-auto shadow-inner"><Clock size={48} /></div>
             <div>
-               <h2 className="text-3xl font-black text-slate-900 mb-2">الحساب قيد المراجعة</h2>
-               <p className="text-slate-400 font-bold">أهلاً بك {profile.full_name}. حسابك بانتظار تفعيل الإدارة.</p>
+               <h2 className="text-3xl font-black text-slate-900 mb-2">الحساب تحت المراجعة</h2>
+               <p className="text-slate-400 font-bold">أهلاً بك {profile.full_name}. حسابك بانتظار تفعيل الإدارة قبل التمكن من الوصول للوحة التحكم.</p>
             </div>
             <button onClick={handleLogout} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black">تسجيل الخروج</button>
          </div>
@@ -195,10 +204,10 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col lg:flex-row font-['Cairo'] text-right" dir="rtl">
-        <aside className="hidden lg:flex flex-col w-72 bg-white border-l border-slate-200 h-screen sticky top-0 z-50 shadow-sm">
+        <aside className="hidden lg:flex flex-col w-72 bg-white border-l border-slate-200 h-screen sticky top-0 z-50">
           <div className="p-8 border-b border-slate-100 flex items-center gap-4">
             <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-lg"><ShieldAlert size={28} /></div>
-            <div><h1 className="font-black text-xl text-slate-900 leading-none">نظام القمة</h1><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Golden Edition</p></div>
+            <div><h1 className="font-black text-xl text-slate-900 leading-none">نظام القمة</h1><p className="text-[10px] font-bold text-slate-400 uppercase mt-1">GOLDEN V4.5</p></div>
           </div>
           <nav className="flex-1 p-6 space-y-2 overflow-y-auto no-scrollbar">
             {menuItems.map(item => (
@@ -216,7 +225,7 @@ const App: React.FC = () => {
 
         <main className="flex-1 flex flex-col min-w-0">
           <header className="hidden lg:flex items-center justify-between px-12 h-24 bg-white/50 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-200/50">
-             <div><span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">مرحباً بك</span><span className="text-xl font-black text-slate-900 block">{profile.full_name}</span></div>
+             <div><span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">المستخدم: {isAdmin ? 'إدارة عليا' : (isParent ? 'ولي أمر' : 'معلم')}</span><span className="text-xl font-black text-slate-900 block">{profile.full_name}</span></div>
              <div className="flex items-center gap-6">
                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg">{profile.full_name[0]}</div>
              </div>
