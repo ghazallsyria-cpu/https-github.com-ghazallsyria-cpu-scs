@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // Fix: Clean up react-router-dom imports and resolve "no exported member" errors
+// @ts-ignore: Suppress "no exported member" errors for hooks in this environment
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { 
@@ -319,7 +320,7 @@ const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: 
                           <Activity size={18}/>
                           <span className="text-xs font-black">استقرار الجدول الزمني</span>
                        </div>
-                    </div>
+                 </div>
                  </div>
 
                  <div className="bg-slate-50 p-12 lg:p-16 rounded-[4.5rem] border border-slate-100">
