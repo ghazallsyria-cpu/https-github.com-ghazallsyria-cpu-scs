@@ -1,13 +1,13 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
-import { GraduationCap, Phone, Lock, RefreshCw, AlertCircle, Heart, ChevronLeft, ShieldCheck } from 'lucide-react';
+import { GraduationCap, Phone, Lock, RefreshCw, AlertCircle, School, ChevronLeft } from 'lucide-react';
 
 const ADMIN_PHONE = '55315661';
 
 const Login = () => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [isParentMode, setIsParentMode] = useState(true); // الوضع الافتراضي هو ولي الأمر للسهولة
+  const [isParentMode, setIsParentMode] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,7 +28,6 @@ const Login = () => {
     }
 
     try {
-      // البحث عن الطالب المرتبط بهذا الرقم مباشرة في قاعدة البيانات
       const { data, error: rpcError } = await supabase.rpc('verify_parent_access', { 
         phone_to_check: mobileClean 
       });
@@ -36,12 +35,8 @@ const Login = () => {
       if (rpcError) throw rpcError;
 
       if (data && data.length > 0) {
-        // ذكاء: بدلاً من Auth، نخزن بيانات الجلسة في المتصفح
-        // هذا يسمح لولي الأمر بالدخول فوراً
         localStorage.setItem('parent_session_phone', mobileClean);
         localStorage.setItem('parent_student_name', data[0].student_name);
-        
-        // إعادة تحميل الصفحة؛ App.tsx سيتعرف على هذه البيانات
         window.location.reload();
       } else {
         setError("عذراً، هذا الرقم غير مسجل لدينا كولي أمر. يرجى التواصل مع المعلم لإضافتك.");
@@ -90,10 +85,9 @@ const Login = () => {
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 font-['Cairo'] text-right" dir="rtl">
       <div className="bg-white w-full max-w-lg p-10 rounded-[3.5rem] shadow-2xl relative border border-slate-100 overflow-hidden">
         
-        {/* Header */}
         <div className="flex flex-col items-center mb-10">
           <div className={`p-5 rounded-3xl ${isParentMode ? 'bg-emerald-600' : 'bg-indigo-600'} text-white mb-6 shadow-xl transition-colors duration-500`}>
-            {isParentMode ? <Heart size={40} /> : <GraduationCap size={40} />}
+            {isParentMode ? <School size={40} /> : <GraduationCap size={40} />}
           </div>
           <h2 className="text-2xl font-black text-slate-900">منصة القمة التعليمية</h2>
           <p className="text-slate-400 font-bold mt-1">
@@ -101,7 +95,6 @@ const Login = () => {
           </p>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl mb-8">
            <button onClick={() => {setIsParentMode(true); setError(null);}} className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${isParentMode ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>أنا ولي أمر</button>
            <button onClick={() => {setIsParentMode(false); setError(null);}} className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${!isParentMode ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>أنا معلم</button>
@@ -114,7 +107,6 @@ const Login = () => {
         )}
 
         {isParentMode ? (
-          /* نموذج ولي الأمر: هاتف فقط */
           <form onSubmit={handleParentLogin} className="space-y-6">
             <div className="space-y-2">
                <label className="text-[10px] font-black text-slate-400 mr-4 uppercase">رقم الهاتف المسجل</label>
@@ -130,7 +122,6 @@ const Login = () => {
             <p className="text-center text-[10px] text-slate-400 font-bold">لا حاجة لكلمة سر، سيتم التحقق من رقمك في سجلات الطلاب.</p>
           </form>
         ) : (
-          /* نموذج المعلم: هاتف وكلمة سر */
           <form onSubmit={handleTeacherLogin} className="space-y-5">
             {isSignUp && (
               <div className="space-y-1">
