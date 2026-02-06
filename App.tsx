@@ -5,7 +5,8 @@ import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings as SettingsIcon, Bell, Star, RefreshCw, CheckCircle, Sparkles, BarChart3, Radio, School
+  BookOpen, Calendar, Settings as SettingsIcon, Bell, Star, RefreshCw, CheckCircle, Sparkles, BarChart3, Radio, School,
+  Activity, Database, ShieldAlert, History
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -90,10 +91,10 @@ const App: React.FC = () => {
   };
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-white">
+    <div className="h-screen flex items-center justify-center bg-white font-['Cairo']">
       <div className="flex flex-col items-center gap-6">
-        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-black text-indigo-600 animate-pulse tracking-widest text-sm uppercase">جاري التحميل...</p>
+        <div className="w-20 h-20 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="font-black text-indigo-900 animate-pulse text-xl tracking-tighter">جاري تهيئة مركز القيادة...</p>
       </div>
     </div>
   );
@@ -105,18 +106,26 @@ const App: React.FC = () => {
   const effectiveUid = supervisedTeacher ? supervisedTeacher.id : (session?.user?.id);
   const effectiveRole = isAdmin && !supervisedTeacher ? 'admin' : (isParent ? 'parent' : 'teacher');
 
-  const teacherNav = [
-    { to: "/", icon: <LayoutDashboard size={24} />, label: "الرئيسية" },
-    { to: "/schedule", icon: <Calendar size={24} />, label: "الجدول" },
-    { to: "/students", icon: <Users size={24} />, label: "الطلاب" },
-    { to: "/lessons", icon: <BookOpen size={24} />, label: "الحصص" },
-    { to: "/payments", icon: <Wallet size={24} />, label: "المالية" },
-    { to: "/settings", icon: <SettingsIcon size={24} />, label: "الإعدادات" },
+  // Admin Navigation - Global View
+  const adminNav = [
+    { to: "/", icon: <Activity size={24} />, label: "مركز القيادة" },
+    { to: "/teachers", icon: <ShieldCheck size={24} />, label: "إدارة المعلمين" },
+    { to: "/students", icon: <Users size={24} />, label: "دليل الطلاب العام" },
+    { to: "/payments", icon: <Wallet size={24} />, label: "الرقابة المالية" },
+    { to: "/statistics", icon: <BarChart3 size={24} />, label: "الإحصائيات الكلية" },
+    { to: "/messaging", icon: <Radio size={24} />, label: "البث الفوري" },
+    { to: "/reports", icon: <Database size={24} />, label: "تصدير البيانات" },
+    { to: "/settings", icon: <SettingsIcon size={24} />, label: "الأمان" },
   ];
 
-  const adminNavExtras = [
-    { to: "/messaging", icon: <Radio size={24} />, label: "البث" },
-    { to: "/teachers", icon: <ShieldCheck size={24} />, label: "المعلمون" },
+  // Teacher Navigation - Operational View
+  const teacherNav = [
+    { to: "/", icon: <LayoutDashboard size={24} />, label: "الرئيسية" },
+    { to: "/schedule", icon: <Calendar size={24} />, label: "جدولي الدراسي" },
+    { to: "/students", icon: <Users size={24} />, label: "طلابي" },
+    { to: "/lessons", icon: <BookOpen size={24} />, label: "سجل الحصص" },
+    { to: "/payments", icon: <Wallet size={24} />, label: "المحفظة المالية" },
+    { to: "/settings", icon: <SettingsIcon size={24} />, label: "الإعدادات" },
   ];
 
   const parentNav = [
@@ -124,78 +133,75 @@ const App: React.FC = () => {
     { to: "/settings", icon: <SettingsIcon size={24} />, label: "الإعدادات" },
   ];
 
-  const desktopNavItems = isParent ? parentNav : teacherNav;
-  // Combine all items for mobile with horizontal scroll support
-  const mobileNavItems = isParent ? parentNav : (isAdmin ? [...teacherNav, ...adminNavExtras] : teacherNav);
+  const currentNav = isAdmin ? adminNav : (isParent ? parentNav : teacherNav);
 
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row text-right font-['Cairo']" dir="rtl">
         
-        {/* SIDEBAR (Desktop Only) */}
-        <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-sm">
-          <div className="p-10 flex flex-col items-center gap-4 border-b border-slate-50">
-            <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} p-5 rounded-[2.2rem] text-white shadow-xl`}>
-              {isParent ? <School size={40} /> : <GraduationCap size={40} />}
+        {/* SIDEBAR (Desktop) */}
+        <aside className={`hidden lg:flex w-80 ${isAdmin ? 'bg-slate-900 border-indigo-500/10' : 'bg-white border-slate-100'} border-l flex-col sticky top-0 h-screen z-50 shadow-2xl`}>
+          <div className="p-10 flex flex-col items-center gap-4 border-b border-white/5">
+            <div className={`${isAdmin ? 'bg-indigo-600 shadow-indigo-500/50' : (isParent ? 'bg-emerald-600' : 'bg-indigo-600')} p-6 rounded-[2.5rem] text-white shadow-2xl animate-in zoom-in duration-1000`}>
+              {isAdmin ? <ShieldAlert size={40} /> : (isParent ? <School size={40} /> : <GraduationCap size={40} />)}
             </div>
-            <span className="font-black text-slate-900 text-2xl tracking-tighter">القمة التعليمية</span>
+            <span className={`font-black text-2xl tracking-tighter ${isAdmin ? 'text-white' : 'text-slate-900'}`}>القمة التعليمية</span>
+            {isAdmin && <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">نظام المدير العام</span>}
           </div>
           
-          <nav className="flex-1 px-8 py-10 space-y-4 overflow-y-auto no-scrollbar">
-            {desktopNavItems.map(item => (
-              <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-3xl font-black text-sm transition-all ${isActive ? (isParent ? 'bg-emerald-600' : 'bg-indigo-600') + ' text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
+          <nav className="flex-1 px-8 py-10 space-y-3 overflow-y-auto no-scrollbar">
+            {currentNav.map(item => (
+              <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2rem] font-black text-[13px] transition-all duration-300 ${isActive ? (isAdmin ? 'bg-indigo-600 text-white shadow-[0_15px_30px_-5px_rgba(79,70,229,0.5)]' : (isParent ? 'bg-emerald-600 text-white shadow-xl' : 'bg-indigo-600 text-white shadow-xl')) : (isAdmin ? 'text-slate-500 hover:bg-white/5 hover:text-indigo-400' : 'text-slate-400 hover:bg-slate-50')}`}>
                 {item.icon} {item.label}
               </NavLink>
             ))}
-            
-            {isAdmin && (
-              <div className="pt-6 mt-6 border-t border-slate-50 space-y-4">
-                <span className="px-8 text-[10px] font-black text-slate-300 uppercase tracking-widest">أدوات الإدارة</span>
-                {adminNavExtras.map(item => (
-                  <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-3xl font-black text-sm transition-all ${isActive ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
-                    {item.icon} {item.label}
-                  </NavLink>
-                ))}
-              </div>
-            )}
           </nav>
 
-          <div className="p-10 border-t border-slate-50">
-             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-4 py-5 text-rose-500 font-black hover:bg-rose-50 rounded-2xl transition-all">
+          <div className="p-10 border-t border-white/5">
+             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-4 py-5 text-rose-500 font-black hover:bg-rose-500/10 rounded-2xl transition-all">
                <LogOut size={22} /> تسجيل الخروج
              </button>
           </div>
         </aside>
 
-        {/* MOBILE BOTTOM NAV (Improved with horizontal scroll) */}
-        <nav className="lg:hidden fixed bottom-4 inset-x-4 bg-white/95 backdrop-blur-2xl border border-slate-100 flex items-center px-4 py-3 z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] rounded-[2.5rem] overflow-x-auto no-scrollbar gap-2">
-          {mobileNavItems.map(item => (
-            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-4 py-2 rounded-2xl min-w-[70px] ${isActive ? (isParent ? 'text-emerald-600 bg-emerald-50' : 'text-indigo-600 bg-indigo-50') : 'text-slate-400'}`}>
+        {/* MOBILE NAV (Bottom) */}
+        <nav className={`lg:hidden fixed bottom-4 inset-x-4 ${isAdmin ? 'bg-slate-900/95 border-white/10' : 'bg-white/95 border-slate-100'} backdrop-blur-2xl border flex items-center px-4 py-3 z-[100] shadow-2xl rounded-[2.5rem] overflow-x-auto no-scrollbar gap-2`}>
+          {currentNav.map(item => (
+            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-5 py-3 rounded-[1.8rem] min-w-[75px] ${isActive ? (isAdmin ? 'text-white bg-indigo-600' : (isParent ? 'text-white bg-emerald-600' : 'text-white bg-indigo-600')) : (isAdmin ? 'text-slate-500' : 'text-slate-400')}`}>
               {React.cloneElement(item.icon as React.ReactElement, { size: 20 })}
               <span className="text-[9px] font-black whitespace-nowrap">{item.label}</span>
             </NavLink>
           ))}
-          <button onClick={handleLogout} className="flex flex-col items-center gap-1 px-4 py-2 text-rose-500 min-w-[70px]">
+          <button onClick={handleLogout} className="flex flex-col items-center gap-1 px-5 py-3 text-rose-500 min-w-[75px]">
             <LogOut size={20} />
-            <span className="text-[9px] font-black uppercase">خروج</span>
+            <span className="text-[9px] font-black">خروج</span>
           </button>
         </nav>
 
-        {/* MAIN AREA */}
+        {/* MAIN CONTENT AREA */}
         <main className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
-          <header className="h-20 md:h-28 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 md:px-10 flex items-center justify-between border-b border-slate-100">
+          <header className={`h-24 md:h-28 ${isAdmin ? 'bg-slate-900 border-white/5' : 'bg-white/80 border-slate-100'} backdrop-blur-md sticky top-0 z-40 px-6 md:px-12 flex items-center justify-between border-b transition-colors`}>
              <div className="flex flex-col text-right">
-                <span className={`text-[9px] font-black uppercase tracking-widest ${isParent ? 'text-emerald-500' : 'text-indigo-500'}`}>
-                  {isParent ? 'بوابة ولي الأمر' : (isAdmin ? 'المدير العام' : 'المعلم المعتمد')}
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isAdmin ? 'text-indigo-400' : (isParent ? 'text-emerald-500' : 'text-indigo-500')}`}>
+                  {isAdmin ? 'الإدارة المركزية' : (isParent ? 'بوابة ولي الأمر' : 'المعلم المعتمد')}
                 </span>
-                <span className="text-lg md:text-xl font-black text-slate-900 truncate max-w-[180px]">{profile?.full_name}</span>
+                <span className={`text-xl md:text-2xl font-black truncate max-w-[200px] ${isAdmin ? 'text-white' : 'text-slate-900'}`}>{profile?.full_name}</span>
              </div>
-             <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} w-10 h-10 md:w-14 md:h-14 rounded-2xl flex items-center justify-center text-white font-black shadow-lg shadow-indigo-100`}>
-                {profile?.full_name?.[0] || 'S'}
+             
+             <div className="flex items-center gap-6">
+                {isAdmin && (
+                  <div className="hidden md:flex flex-col items-end">
+                    <span className="text-[10px] font-black text-emerald-400 animate-pulse">النظام نشط</span>
+                    <span className="text-white/40 text-[9px] font-bold tracking-tighter">V4.0 COMMANDER EDITION</span>
+                  </div>
+                )}
+                <div className={`${isAdmin ? 'bg-indigo-600 shadow-indigo-500/20' : (isParent ? 'bg-emerald-600' : 'bg-indigo-600')} w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-white font-black shadow-2xl`}>
+                    {profile?.full_name?.[0] || 'A'}
+                </div>
              </div>
           </header>
 
-          <div className="flex-1 p-4 md:p-8 lg:p-12 max-w-[1600px] mx-auto w-full pb-28 lg:pb-12">
+          <div className="flex-1 p-4 md:p-8 lg:p-14 max-w-[1800px] mx-auto w-full pb-32 lg:pb-16">
             <Routes>
               {isParent ? (
                 <Route path="/" element={<ParentPortal parentPhone={profile?.phone} />} />

@@ -4,9 +4,10 @@ import { supabase } from '../supabase';
 import { 
   Users, Calendar, Clock, DollarSign, ArrowUpRight, GraduationCap, 
   Sun, Moon, Coffee, RefreshCw, TrendingUp, Award, CreditCard, 
-  Activity, PieChart, ShieldCheck, Sparkles, Zap, Bell, BellOff, BellRing, Heart, ChevronLeft
+  Activity, PieChart, ShieldCheck, Sparkles, Zap, Bell, BellOff, BellRing, Heart, ChevronLeft,
+  Briefcase, TrendingDown, Target, ZapOff, Users2, BarChart3, LineChart
 } from 'lucide-react';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, Cell } from 'recharts';
 
 const Dashboard = ({ role, uid, year, semester }: any) => {
   const [stats, setStats] = useState({ totalStudents: 0, totalLessons: 0, totalHours: 0, totalIncome: 0, pendingPayments: 0, completedStudents: 0 });
@@ -14,21 +15,27 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
   const [loading, setLoading] = useState(true);
   const [todaySchedule, setTodaySchedule] = useState<any[]>([]);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [teacherRankings, setTeacherRankings] = useState<any[]>([]);
+  const [recentActions, setRecentActions] = useState<any[]>([]);
 
   const isAdmin = role === 'admin';
+  const COLORS = ['#4f46e5', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
+
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return { text: 'يومك سعيد، أستاذنا', icon: <Coffee className="text-amber-500 animate-bounce"/> };
-    if (hour < 18) return { text: 'تحية إنجاز، أستاذ', icon: <Sun className="text-orange-500 animate-spin-slow"/> };
-    return { text: 'ليلة هادئة، أستاذ', icon: <Moon className="text-indigo-400 animate-pulse"/> };
-  }, []);
+    if (hour < 12) return { text: isAdmin ? 'صباح السيادة، سيادة المدير' : 'يومك سعيد، أستاذنا', icon: <Coffee className="text-amber-500 animate-bounce"/> };
+    if (hour < 18) return { text: isAdmin ? 'تحية إنجاز، سيادة المدير' : 'تحية إنجاز، أستاذ', icon: <Sun className="text-orange-500 animate-spin-slow"/> };
+    return { text: isAdmin ? 'ليلة هادئة، سيادة المدير' : 'ليلة هادئة، أستاذ', icon: <Moon className="text-indigo-400 animate-pulse"/> };
+  }, [isAdmin]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Fetch stats
       let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
       if (!isAdmin) query = query.eq('teacher_id', uid);
       const { data: stdData } = await query;
+      
       const totals = (stdData || []).reduce((acc, curr) => ({
         students: acc.students + 1,
         lessons: acc.lessons + (curr.total_lessons || 0),
@@ -40,19 +47,29 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
 
       setStats({ totalStudents: totals.students, totalLessons: totals.lessons, totalHours: totals.hours, totalIncome: totals.income, pendingPayments: totals.debts, completedStudents: totals.completed });
 
-      const DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-      const today = DAYS[new Date().getDay()];
-      
-      let qSched = supabase.from('schedules').select('*, students(name)').eq('day_of_week', today);
-      if (!isAdmin) qSched = qSched.eq('teacher_id', uid);
-      const { data: schedData } = await qSched.order('start_time');
-      setTodaySchedule(schedData || []);
+      // If Admin, calculate teacher rankings
+      if (isAdmin) {
+        const { data: teachers } = await supabase.from('profiles').select('id, full_name').neq('role', 'admin');
+        const rankings = (teachers || []).map(t => {
+           const tStds = (stdData || []).filter(s => s.teacher_id === t.id);
+           const collected = tStds.reduce((sum, s) => sum + (s.total_paid || 0), 0);
+           return { name: t.full_name, collected };
+        }).sort((a, b) => b.collected - a.collected).slice(0, 5);
+        setTeacherRankings(rankings);
 
-      let qReq = supabase.from('parent_requests').select('*, students(name, teacher_id)').eq('status', 'pending');
-      const { data: reqData } = await qReq;
-      setPendingRequests(isAdmin ? (reqData || []) : (reqData || []).filter(r => r.students?.teacher_id === uid));
+        // Fetch Recent Actions (Global)
+        const { data: logs } = await supabase.from('payments').select('*, students(name)').order('created_at', { ascending: false }).limit(5);
+        setRecentActions(logs || []);
+      } else {
+        // Fetch Today's Schedule (Personal)
+        const DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+        const today = DAYS[new Date().getDay()];
+        const { data: schedData } = await supabase.from('schedules').select('*, students(name)').eq('day_of_week', today).eq('teacher_id', uid).order('start_time');
+        setTodaySchedule(schedData || []);
+      }
 
-      let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(20);
+      // Chart Data
+      let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(50);
       if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
       const { data: lsns } = await lQuery;
       const grouped = (lsns || []).reverse().reduce((acc: any, curr) => {
@@ -60,7 +77,13 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
         acc[date] = (acc[date] || 0) + Number(curr.hours);
         return acc;
       }, {});
-      setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })));
+      setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })).slice(-10));
+
+      // Pending Requests
+      let qReq = supabase.from('parent_requests').select('*, students(name, teacher_id)').eq('status', 'pending');
+      const { data: reqData } = await qReq;
+      setPendingRequests(isAdmin ? (reqData || []) : (reqData || []).filter(r => r.students?.teacher_id === uid));
+
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
@@ -72,84 +95,64 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
   };
 
   if (loading) return (
-    <div className="h-96 flex items-center justify-center"><div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>
+    <div className="h-96 flex items-center justify-center"><div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>
   );
 
   return (
-    <div className="space-y-6 md:space-y-12 animate-in fade-in slide-in-from-bottom-10 duration-1000 text-right">
+    <div className={`space-y-12 animate-in fade-in slide-in-from-bottom-10 duration-1000 text-right font-['Cairo'] pb-32`}>
       
-      {/* BENTO HERO */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-10">
-        <div className="lg:col-span-3 bg-gradient-to-br from-[#1E1B4B] via-[#2A266F] to-[#1E1B4B] p-8 md:p-12 lg:p-20 rounded-[2.5rem] md:rounded-[5rem] text-white shadow-2xl relative overflow-hidden min-h-[250px] md:min-h-[500px] flex flex-col justify-center border border-white/5 group">
-           <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 group-hover:opacity-20 transition-opacity"></div>
+      {/* HEADER SECTION (COMMANDER MODE) */}
+      <div className={`grid grid-cols-1 lg:grid-cols-4 gap-10`}>
+        <div className={`lg:col-span-3 ${isAdmin ? 'bg-slate-900 border-white/5' : 'bg-indigo-900 border-white/5'} p-12 lg:p-20 rounded-[5rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center border group`}>
+           <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
            <div className="relative z-10">
-              <div className="flex items-center gap-3 md:gap-5 mb-6 md:mb-14">
-                <span className="bg-white/10 backdrop-blur-3xl border border-white/20 px-4 md:px-8 py-2 md:py-3 rounded-full text-[9px] md:text-[11px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] flex items-center gap-2 md:gap-3">
-                  <Sparkles size={16} className="text-amber-400" /> الذكاء الإحصائي للقمة
+              <div className="flex items-center gap-5 mb-10">
+                <span className="bg-white/10 backdrop-blur-3xl border border-white/20 px-8 py-3 rounded-full text-[11px] font-black uppercase tracking-[0.3em] flex items-center gap-4">
+                  {isAdmin ? <ShieldCheck size={20} className="text-emerald-400" /> : <Sparkles size={20} className="text-amber-400" />}
+                  {isAdmin ? 'مركز الإدارة المركزية والرقابة' : 'نظام القمة التعليمي - حساب المعلم'}
                 </span>
               </div>
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-10 mb-4 md:mb-10">
-                <h1 className="text-3xl md:text-5xl lg:text-8xl font-black leading-tight tracking-tighter drop-shadow-2xl">{greeting.text}</h1>
+              <h1 className="text-5xl lg:text-8xl font-black leading-tight tracking-tighter mb-8 drop-shadow-2xl">{greeting.text}</h1>
+              <p className="text-indigo-100/50 font-black text-2xl lg:text-3xl max-w-2xl leading-relaxed">
+                {isAdmin ? 'تتم مراقبة أداء المنصة المالي والتعليمي بالكامل في هذه اللحظة.' : 'أنت الآن تدير مستقبلاً تعليمياً. إليك أحدث الأرقام لمنصتك.'}
+              </p>
+           </div>
+        </div>
+
+        <div className={`lg:col-span-1 ${isAdmin ? 'bg-indigo-600 text-white' : 'bg-white text-slate-900'} p-12 rounded-[5rem] shadow-2xl flex flex-col justify-between group relative overflow-hidden border border-slate-100`}>
+           <div className={`p-8 rounded-[2.5rem] flex items-center justify-center shadow-2xl relative z-10 transition-transform group-hover:rotate-12 ${isAdmin ? 'bg-white text-indigo-600' : 'bg-indigo-600 text-white'}`}>
+             {isAdmin ? <Activity size={48} /> : <BellRing size={48} />}
+           </div>
+           <div className="relative z-10 mt-10">
+              <p className={`text-[12px] font-black uppercase tracking-widest mb-4 opacity-50`}>حالة الإشعارات</p>
+              <h2 className="text-3xl font-black mb-6">طلبات معلقة</h2>
+              <p className="text-sm font-bold leading-relaxed">لديك {pendingRequests.length} طلبات جديدة {isAdmin ? 'عبر جميع المعلمين' : 'من أولياء أمورك'} بانتظار الرد.</p>
+           </div>
+        </div>
+      </div>
+
+      {/* KPI TILES (Global for Admin, Personal for Teacher) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+         <StatTile label={isAdmin ? "إجمالي الطلاب بالمنصة" : "طلابي"} value={stats.totalStudents} sub={`${stats.completedStudents} خريجون`} icon={<Users size={24}/>} color="bg-indigo-600" />
+         <StatTile label={isAdmin ? "إجمالي الحصص المنفذة" : "حصصي"} value={stats.totalLessons} sub="إنجاز تراكمي" icon={<Calendar size={24}/>} color="bg-blue-600" />
+         <StatTile label={isAdmin ? "إجمالي الدخل العام" : "محفظتي المالية"} value={`$${stats.totalIncome.toLocaleString()}`} sub="إجمالي المحصل" icon={<DollarSign size={24}/>} color="bg-emerald-600" />
+         <StatTile label={isAdmin ? "الديون الخارجية الكلية" : "ديون الطلاب المتبقية"} value={`$${stats.pendingPayments.toLocaleString()}`} sub="مطالبات جارية" icon={<CreditCard size={24}/>} color="bg-rose-600" />
+      </div>
+
+      {/* MAIN ADMIN TOOLS / TEACHER TOOLS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        {/* CHART SECTION */}
+        <div className="lg:col-span-2 bg-white p-12 lg:p-20 rounded-[5rem] border border-slate-100 shadow-2xl relative group">
+           <div className="flex justify-between items-center mb-16">
+              <div>
+                 <h3 className="text-4xl font-black text-slate-900">{isAdmin ? 'معدل الإنتاجية التدريسية العام' : 'تحليل مجهودي الشخصي'}</h3>
+                 <p className="text-slate-400 font-black text-sm uppercase mt-3 tracking-widest">تحليل الساعات المنجزة (آخر 10 أيام)</p>
               </div>
-              <p className="text-indigo-100/60 font-black max-w-2xl text-sm md:text-xl lg:text-3xl leading-relaxed">أنت الآن تدير مستقبلاً تعليمياً. إليك أحدث الأرقام لمنصتك.</p>
+              <div className="bg-indigo-50 p-6 rounded-3xl text-indigo-600 shadow-inner group-hover:scale-110 transition-transform">
+                 <LineChart size={32} />
+              </div>
            </div>
-        </div>
-
-        <div className="lg:col-span-1 bg-white p-8 md:p-14 rounded-[2.5rem] md:rounded-[5rem] border border-slate-100 shadow-xl flex flex-col justify-between group hover:-translate-y-2 transition-all duration-700 relative overflow-hidden">
-           <div className="bg-indigo-600 text-white w-12 h-12 md:w-24 md:h-24 rounded-[1.2rem] md:rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-indigo-200 group-hover:scale-110 group-hover:rotate-12 transition-all relative z-10">
-             <BellRing size={24} className="md:w-12 md:h-12" />
-           </div>
-           <div className="relative z-10 mt-6 md:mt-10">
-              <p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase tracking-widest mb-2 md:mb-4">تنبيهات النظام</p>
-              <h2 className="text-xl md:text-3xl font-black text-slate-900 mb-2 md:mb-6">إشعارات القمة</h2>
-              <p className="text-[10px] md:text-xs text-slate-400 font-bold leading-relaxed">لديك {pendingRequests.length} طلبات جديدة من أولياء الأمور بانتظار الرد.</p>
-           </div>
-        </div>
-      </div>
-
-      {/* PENDING REQUESTS SECTION */}
-      {pendingRequests.length > 0 && (
-        <div className="bg-emerald-50 p-6 md:p-12 rounded-[2rem] md:rounded-[3rem] border border-emerald-100 animate-in slide-in-from-right duration-700">
-           <div className="flex items-center gap-4 mb-6">
-              <Heart className="text-emerald-600 animate-pulse" size={20} />
-              <h3 className="text-lg md:text-2xl font-black text-emerald-900">طلبات أولياء الأمور المعلقة</h3>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pendingRequests.map(req => (
-                <div key={req.id} className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-emerald-100 flex flex-col justify-between group hover:shadow-md transition-all">
-                   <div>
-                      <div className="flex justify-between items-start mb-3">
-                         <span className={`text-[8px] font-black px-3 py-1 rounded-full ${req.type === 'apology' ? 'bg-rose-100 text-rose-600' : (req.type === 'payment_intent' ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600')}`}>
-                            {req.type === 'apology' ? 'اعتذار' : (req.type === 'payment_intent' ? 'إشعار دفع' : 'ملاحظة')}
-                         </span>
-                         <span className="text-[8px] font-black text-slate-400">{new Date(req.created_at).toLocaleDateString('ar-EG')}</span>
-                      </div>
-                      <p className="font-black text-slate-900 text-sm mb-1">الطالب: {req.students?.name}</p>
-                      <p className="text-[10px] font-bold text-slate-500 mb-4 italic line-clamp-2">"{req.content}"</p>
-                   </div>
-                   <div className="flex gap-2 pt-3 border-t border-slate-50">
-                      <button onClick={() => handleHandleRequest(req.id, 'accepted')} className="flex-1 py-2 bg-emerald-600 text-white rounded-xl font-black text-[9px] hover:bg-emerald-700 active:scale-95 transition-all">قبول</button>
-                      <button onClick={() => handleHandleRequest(req.id, 'rejected')} className="flex-1 py-2 bg-slate-100 text-slate-400 rounded-xl font-black text-[9px] hover:bg-rose-50 hover:text-rose-500 active:scale-95 transition-all">رفض</button>
-                   </div>
-                </div>
-              ))}
-           </div>
-        </div>
-      )}
-
-      {/* STATS TILES */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-10">
-         <StatTile label="الطلاب" value={stats.totalStudents} sub={`${stats.completedStudents} خريجون`} icon={<Users size={20}/>} color="bg-indigo-600 shadow-indigo-200" />
-         <StatTile label="الحصص" value={stats.totalLessons} sub="حصة مكتملة" icon={<Calendar size={20}/>} color="bg-blue-500 shadow-blue-200" />
-         <StatTile label="الساعات" value={stats.totalHours.toFixed(1)} sub="ساعة فعلية" icon={<Clock size={20}/>} color="bg-amber-500 shadow-amber-200" />
-         <StatTile label="الأرباح" value={`$${stats.totalIncome.toLocaleString()}`} sub="محصل" icon={<DollarSign size={20}/>} color="bg-emerald-500 shadow-emerald-200" />
-      </div>
-
-      {/* CHARTS & AGENDA */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-12">
-        <div className="lg:col-span-2 bg-white p-6 md:p-16 lg:p-20 rounded-[2rem] md:rounded-[6rem] border border-slate-100 shadow-2xl relative overflow-hidden">
-           <h3 className="text-xl md:text-4xl font-black text-slate-900 mb-6 md:mb-10">تحليل كفاءة المجهود</h3>
-           <div className="h-[200px] md:h-[450px]">
+           <div className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
                  <AreaChart data={chartData}>
                     <defs>
@@ -159,49 +162,108 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 900}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 900}} />
-                    <Tooltip contentStyle={{borderRadius: '15px', border: 'none', boxShadow: '0 10px 20px rgba(0,0,0,0.1)', fontFamily: 'Cairo', fontWeight: 900, fontSize: '12px'}} />
-                    <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={3} fill="url(#colorVal)" dot={{r: 3, fill: '#fff', strokeWidth: 2, stroke: '#4f46e5'}} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} />
+                    <Tooltip contentStyle={{borderRadius: '25px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', fontFamily: 'Cairo', fontWeight: 900}} />
+                    <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={5} fill="url(#colorVal)" dot={{r: 5, fill: '#fff', strokeWidth: 3, stroke: '#4f46e5'}} />
                  </AreaChart>
               </ResponsiveContainer>
            </div>
         </div>
 
-        <div className="bg-slate-900 p-8 md:p-16 rounded-[2rem] md:rounded-[6rem] text-white shadow-2xl relative overflow-hidden flex flex-col min-h-[350px]">
-           <h3 className="text-xl md:text-4xl font-black mb-8 md:mb-14 leading-tight uppercase tracking-tighter">أجندة<br/><span className="text-indigo-400">اليوم</span></h3>
-           <div className="flex-1 space-y-4 overflow-y-auto no-scrollbar pr-1">
-              {todaySchedule.length > 0 ? todaySchedule.map((s, i) => (
-                <div key={i} className="bg-white/5 border border-white/10 p-4 rounded-[1.5rem] hover:bg-white/10 transition-all flex items-center justify-between">
-                   <div className="flex items-center gap-4">
-                      <div className="bg-indigo-600 text-white w-12 h-12 rounded-[1rem] flex flex-col items-center justify-center font-black shadow-xl shrink-0">
-                        <span className="text-sm">{s.start_time.split(':')[0]}</span>
-                        <span className="text-[8px] opacity-60">:{s.start_time.split(':')[1]}</span>
-                      </div>
-                      <div>
-                        <p className="text-xs md:text-lg font-black truncate max-w-[100px]">{s.students?.name}</p>
-                        <p className="text-[8px] text-slate-500 font-bold mt-0.5 tracking-widest">{s.duration_hours} ساعة</p>
-                      </div>
+        {/* ADMIN RANKINGS OR TEACHER SCHEDULE */}
+        {isAdmin ? (
+          <div className="bg-slate-900 p-12 lg:p-16 rounded-[5rem] text-white shadow-2xl relative overflow-hidden flex flex-col">
+             <div className="absolute top-0 right-0 w-full h-full bg-indigo-600/5"></div>
+             <h3 className="text-3xl font-black mb-12 flex items-center gap-5 relative z-10"><Award size={36} className="text-amber-400"/> النخبة - الأفضل تحصيلاً</h3>
+             <div className="space-y-6 flex-1 relative z-10 overflow-y-auto no-scrollbar">
+                {teacherRankings.map((t, i) => (
+                  <div key={i} className="bg-white/5 border border-white/10 p-8 rounded-[3rem] flex items-center justify-between hover:bg-white/10 transition-all group">
+                     <div className="flex items-center gap-6">
+                        <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center font-black text-xl shadow-2xl group-hover:scale-110 transition-transform">{i+1}</div>
+                        <div>
+                           <p className="text-xl font-black">{t.name}</p>
+                           <p className="text-[10px] text-indigo-400 font-black mt-1 uppercase">معلم معتمد بالمنصة</p>
+                        </div>
+                     </div>
+                     <div className="text-right">
+                        <p className="text-2xl font-black text-emerald-400 leading-none">${t.collected.toLocaleString()}</p>
+                        <p className="text-[9px] text-slate-500 font-black mt-2">صافي المحصل</p>
+                     </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+        ) : (
+          <div className="bg-slate-900 p-12 lg:p-16 rounded-[5rem] text-white shadow-2xl relative overflow-hidden flex flex-col min-h-[500px]">
+             <h3 className="text-3xl font-black mb-12 flex items-center gap-5 relative z-10"><Calendar size={32} className="text-indigo-400"/> أجندة حصصي اليوم</h3>
+             <div className="space-y-4 flex-1 relative z-10 overflow-y-auto no-scrollbar pr-2">
+                {todaySchedule.length > 0 ? todaySchedule.map((s, i) => (
+                  <div key={i} className="bg-white/5 border border-white/10 p-5 rounded-[2.2rem] flex items-center justify-between group hover:bg-white/10 transition-all">
+                     <div className="flex items-center gap-5">
+                        <div className="bg-indigo-600 w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black shadow-xl shrink-0 group-hover:scale-105 transition-transform">
+                          <span className="text-lg leading-none">{s.start_time.split(':')[0]}</span>
+                          <span className="text-[8px] opacity-60">:{s.start_time.split(':')[1]}</span>
+                        </div>
+                        <div>
+                          <p className="text-lg font-black truncate max-w-[150px]">{s.students?.name}</p>
+                          <p className="text-[10px] text-indigo-300 font-black mt-1 uppercase tracking-widest">{s.duration_hours} ساعة مخصصة</p>
+                        </div>
+                     </div>
+                  </div>
+                )) : (
+                  <div className="text-center py-20 opacity-30 flex flex-col items-center gap-4">
+                    <Clock size={48} />
+                    <p className="text-sm font-black italic">لا توجد حصص مجدولة لليوم</p>
+                  </div>
+                )}
+             </div>
+          </div>
+        )}
+      </div>
+
+      {/* RECENT ACTIONS (LIVE FEED) */}
+      {isAdmin && (
+        <div className="bg-white p-12 lg:p-20 rounded-[5rem] border border-slate-100 shadow-2xl">
+           <div className="flex items-center gap-6 mb-14">
+              <div className="bg-emerald-50 p-5 rounded-3xl text-emerald-600 shadow-inner">
+                <History size={32} />
+              </div>
+              <div>
+                 <h3 className="text-4xl font-black text-slate-900">سجل النشاط المالي الحي</h3>
+                 <p className="text-slate-400 font-black text-sm uppercase mt-2 tracking-widest">مراقبة فورية لآخر الدفعات المستلمة عبر المنصة</p>
+              </div>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+              {recentActions.map((action, i) => (
+                <div key={i} className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 hover:bg-white hover:shadow-xl transition-all group">
+                   <p className="text-[10px] font-black text-slate-400 mb-4 uppercase tracking-widest">{new Date(action.created_at).toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'})}</p>
+                   <p className="text-xl font-black text-slate-900 mb-2 truncate">{action.students?.name}</p>
+                   <div className="flex justify-between items-center">
+                      <span className="text-2xl font-black text-emerald-600">${action.amount}</span>
+                      <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[9px] font-black">{action.payment_method}</span>
                    </div>
                 </div>
-              )) : <div className="text-center py-10 opacity-30 italic font-black text-[10px]">لا توجد حصص مجدولة</div>}
+              ))}
            </div>
-           <button onClick={() => fetchData()} className="mt-6 bg-white/10 p-3 rounded-[1rem] font-black text-[9px] hover:bg-white/20 transition-all flex items-center justify-center gap-2"><RefreshCw size={12}/> تحديث الأجندة</button>
         </div>
-      </div>
+      )}
     </div>
   );
 };
 
 const StatTile = ({ label, value, sub, icon, color }: any) => (
-  <div className="bg-white p-5 md:p-12 rounded-[1.5rem] md:rounded-[4rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-500 group relative overflow-hidden">
-    <div className={`${color} w-8 h-8 md:w-20 md:h-20 rounded-[0.8rem] md:rounded-[2.5rem] flex items-center justify-center text-white mb-4 md:mb-10 group-hover:rotate-12 transition-all shadow-2xl relative z-10`}>
-       {React.cloneElement(icon, { size: 16, className: 'md:w-8 md:h-8' })}
+  <div className="bg-white p-8 md:p-12 rounded-[3.5rem] md:rounded-[4.5rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all duration-700 group relative overflow-hidden">
+    <div className={`${color} w-16 h-16 md:w-20 md:h-20 rounded-[1.8rem] md:rounded-[2.5rem] flex items-center justify-center text-white mb-8 md:mb-12 group-hover:rotate-12 group-hover:scale-110 transition-all duration-700 shadow-2xl relative z-10`}>
+       {React.cloneElement(icon, { size: 24, className: 'md:w-10 md:h-10' })}
     </div>
     <div className="relative z-10">
-       <p className="text-[8px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.1em] mb-1 md:mb-3">{label}</p>
-       <h4 className="text-xl md:text-5xl font-black text-slate-900 mb-1 md:mb-3 leading-none tracking-tighter">{value}</h4>
-       <p className="text-[7px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest truncate">{sub}</p>
+       <p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 md:mb-4">{label}</p>
+       <h4 className="text-3xl md:text-5xl font-black text-slate-900 mb-2 md:mb-4 tracking-tighter leading-none">{value}</h4>
+       <div className="flex items-center gap-3">
+          <div className={`w-2 h-2 rounded-full ${color} animate-pulse`}></div>
+          <p className="text-[9px] md:text-[11px] font-black text-slate-300 uppercase tracking-widest">{sub}</p>
+       </div>
     </div>
   </div>
 );
