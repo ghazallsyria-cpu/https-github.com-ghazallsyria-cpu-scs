@@ -21,49 +21,43 @@ const Dashboard = ({ role, profile }: any) => {
 
   useEffect(() => {
     const fetchStats = async () => {
-      // حماية: إذا لم يكن هناك ملف شخصي بعد، انتظر
       if (!profile?.id) return;
-
       setLoading(true);
       try {
-        // 1. جلب الطلاب
-        let qStudents = supabase.from('student_summary_view').select('*');
-        if (!isAdmin) qStudents = qStudents.eq('teacher_id', profile.id);
-        const { data: students } = await qStudents;
+        // جلب الطلاب المحسوبين حسب الصلاحيات
+        let qStds = supabase.from('student_summary_view').select('*');
+        if (!isAdmin) qStds = qStds.eq('teacher_id', profile.id);
+        const { data: stds } = await qStds;
 
-        // 2. جلب الحصص
-        let qLessons = supabase.from('lessons').select('id');
-        if (!isAdmin) qLessons = qLessons.eq('teacher_id', profile.id);
-        const { data: lessons } = await qLessons;
+        // جلب إحصائيات الحصص
+        let qLss = supabase.from('lessons').select('id');
+        if (!isAdmin) qLss = qLss.eq('teacher_id', profile.id);
+        const { data: lss } = await qLss;
 
-        // 3. جلب الدفعات
-        let qPayments = supabase.from('payments').select('amount');
-        if (!isAdmin) qPayments = qPayments.eq('teacher_id', profile.id);
-        const { data: payments } = await qPayments;
+        // جلب إحصائيات الدفعات
+        let qPay = supabase.from('payments').select('amount');
+        if (!isAdmin) qPay = qPay.eq('teacher_id', profile.id);
+        const { data: pays } = await qPay;
 
         setStats({
-          studentsCount: students?.length || 0,
-          lessonsCount: lessons?.length || 0,
-          totalIncome: payments?.reduce((acc, curr) => acc + Number(curr.amount || 0), 0) || 0,
-          pendingPayments: students?.reduce((acc, curr) => acc + Math.max(0, Number(curr.remaining_balance || 0)), 0) || 0,
+          studentsCount: stds?.length || 0,
+          lessonsCount: lss?.length || 0,
+          totalIncome: (pays || []).reduce((acc, c) => acc + Number(c.amount || 0), 0),
+          pendingPayments: (stds || []).reduce((acc, c) => acc + Math.max(0, Number(c.remaining_balance || 0)), 0),
         });
       } catch (err) {
-        console.error("Dashboard Stats Error:", err);
+        console.error("Dashboard Error:", err);
       } finally {
         setLoading(false);
       }
     };
-    
     fetchStats();
   }, [isAdmin, profile?.id]);
 
   if (loading) return (
     <div className="h-[60vh] flex flex-col items-center justify-center gap-6">
-       <div className="relative w-20 h-20">
-          <div className="absolute inset-0 border-4 border-indigo-100 rounded-full"></div>
-          <div className="absolute inset-0 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-       </div>
-       <p className="font-black text-slate-400 animate-pulse">جاري جلب بيانات القمة...</p>
+       <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+       <p className="font-black text-slate-400">تحليل بيانات القمة...</p>
     </div>
   );
 
@@ -77,14 +71,11 @@ const Dashboard = ({ role, profile }: any) => {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
         <div>
           <h1 className="text-6xl font-black text-slate-900 leading-none mb-4">ملخص <span className="text-indigo-600">الإنجاز</span></h1>
-          <p className="text-slate-400 font-bold text-xl">مرحباً {profile?.full_name || 'أيها المدير'}، إليك تحليل شامل للعمليات.</p>
+          <p className="text-slate-400 font-bold text-xl">مرحباً {profile?.full_name}، إليك مراجعة شاملة للأداء.</p>
         </div>
         <div className="flex items-center gap-4 bg-white p-3 rounded-[2.5rem] shadow-sm border border-slate-100">
            <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg"><Zap size={24} /></div>
-           <div className="pr-6 pl-10">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">تحديث البيانات</p>
-              <p className="font-black text-slate-900">مباشر الآن</p>
-           </div>
+           <div className="pr-6 pl-10"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">تحديث البيانات</p><p className="font-black text-slate-900">مباشر الآن</p></div>
         </div>
       </div>
 
@@ -96,12 +87,9 @@ const Dashboard = ({ role, profile }: any) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white p-12 rounded-[4rem] border shadow-sm flex flex-col">
-           <div className="flex justify-between items-center mb-12">
-              <h3 className="text-3xl font-black text-slate-900">الميزان المالي</h3>
-              <PieIcon className="text-slate-200" size={32} />
-           </div>
-           <div className="h-[400px]">
+        <div className="lg:col-span-2 bg-white p-12 rounded-[4rem] border shadow-sm h-[500px]">
+           <h3 className="text-3xl font-black text-slate-900 mb-12">التوازن المالي</h3>
+           <div className="h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
                  <BarChart data={chartData}>
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 14, fontWeight: '900'}} />
@@ -113,16 +101,15 @@ const Dashboard = ({ role, profile }: any) => {
               </ResponsiveContainer>
            </div>
         </div>
-        
         <div className="bg-slate-900 p-12 rounded-[4rem] text-white flex flex-col justify-between shadow-2xl relative overflow-hidden">
            <div className="relative z-10">
               <div className="bg-indigo-600/30 w-20 h-20 rounded-[2rem] flex items-center justify-center text-amber-400 mb-10 border border-white/10"><Award size={40} /></div>
-              <h3 className="text-4xl font-black mb-6 leading-tight">مركز <br/> <span className="text-indigo-400">تحليل البيانات</span></h3>
+              <h3 className="text-4xl font-black mb-6 leading-tight">مركز <br/> <span className="text-indigo-400">تحليل القمة</span></h3>
               <p className="text-slate-400 font-bold text-lg leading-relaxed">
-                {isAdmin ? 'بصفتك مديراً، تظهر لك بيانات كافة المعلمين والطلاب في النظام.' : 'توضح الإحصائيات نسبة التحصيل المالي من إجمالي المستحقات.'}
+                {isAdmin ? 'بصفتك مديراً، يمكنك متابعة كافة الحركات المالية والأكاديمية للنظام بشكل مركزي.' : 'توضح هذه الإحصائيات مجهودك التعليمي وحصادك المالي خلال الفترة الحالية.'}
               </p>
            </div>
-           <button className="relative z-10 w-full bg-indigo-600 py-6 rounded-[2rem] font-black shadow-xl hover:bg-indigo-500 transition-all mt-10">تصدير التقرير العام</button>
+           <button className="relative z-10 w-full bg-indigo-600 py-6 rounded-[2rem] font-black shadow-xl hover:bg-indigo-500 transition-all">تصدير التقرير العام</button>
            <div className="absolute top-[-15%] right-[-15%] w-72 h-72 bg-indigo-500/20 blur-[100px] rounded-full"></div>
         </div>
       </div>
@@ -132,15 +119,15 @@ const Dashboard = ({ role, profile }: any) => {
 
 const StatCard = ({ label, value, sub, icon, color }: any) => {
   const themes: any = {
-    blue: 'bg-blue-50 text-blue-600 border-blue-100/50',
-    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100/50',
-    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100/50',
-    rose: 'bg-rose-50 text-rose-600 border-rose-100/50'
+    blue: 'bg-blue-50 text-blue-600',
+    indigo: 'bg-indigo-50 text-indigo-600',
+    emerald: 'bg-emerald-50 text-emerald-600',
+    rose: 'bg-rose-50 text-rose-600'
   };
   return (
     <div className="bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all group">
       <div className={`${themes[color]} w-16 h-16 rounded-[1.5rem] flex items-center justify-center mb-8 shadow-inner transition-transform group-hover:scale-110`}>{React.cloneElement(icon, { size: 32 })}</div>
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
+      <p className="text-[10px] font-black text-slate-400 uppercase mb-2">{label}</p>
       <h4 className="text-4xl font-black text-slate-900 mb-1 tracking-tighter">{value}</h4>
       <p className="text-xs font-bold text-slate-400">{sub}</p>
     </div>

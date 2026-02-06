@@ -5,14 +5,14 @@ import {
   Users, Plus, Search, 
   GraduationCap, Trash2, Edit3, 
   ChevronRight, X, Clock, Copy, 
-  Phone, DollarSign, BookOpen, Save, MoveHorizontal
+  Phone, DollarSign, BookOpen, Save, MoveHorizontal, AlertTriangle
 } from 'lucide-react';
 
 const Students = ({ isAdmin, profile }: any) => {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeModal, setActiveModal] = useState<'edit' | 'transfer' | 'lesson' | 'payment' | null>(null);
+  const [activeModal, setActiveModal] = useState<'edit' | 'transfer' | 'lesson' | 'payment' | 'confirm_delete' | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   
   const [form, setForm] = useState({
@@ -63,7 +63,8 @@ const Students = ({ isAdmin, profile }: any) => {
       } else if (type === 'transfer') {
         const { id, created_at, total_lessons, total_paid, remaining_balance, teacher_name, teacher_subjects, ...rest } = selectedStudent;
         await supabase.from('students').insert([{ ...rest, academic_year: transferForm.year, semester: transferForm.semester }]);
-        alert("تم النقل بنجاح.");
+      } else if (type === 'delete_student') {
+        await supabase.from('students').delete().eq('id', selectedStudent.id);
       }
       
       setActiveModal(null);
@@ -104,8 +105,11 @@ const Students = ({ isAdmin, profile }: any) => {
           </div>
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto">
-          <input placeholder="بحث بالاسم..." className="w-full md:w-64 p-5 bg-slate-50 border-none rounded-[2rem] font-bold" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-          <button onClick={() => openModal('edit')} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black flex items-center gap-3 hover:scale-105 transition-transform">
+          <div className="relative w-full md:w-64">
+             <Search className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+             <input placeholder="بحث بالاسم..." className="w-full pr-12 pl-6 py-5 bg-slate-50 border-none rounded-[2rem] font-bold outline-none focus:ring-2 ring-indigo-100 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          </div>
+          <button onClick={() => openModal('edit')} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black flex items-center gap-3 hover:scale-105 transition-transform whitespace-nowrap">
             <Plus size={22} /> إضافة طالب
           </button>
         </div>
@@ -137,6 +141,7 @@ const Students = ({ isAdmin, profile }: any) => {
                 <button onClick={() => openModal('lesson', s)} className="flex-1 bg-indigo-50 text-indigo-600 py-4 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all"><BookOpen size={16} /> حصة</button>
                 <button onClick={() => openModal('payment', s)} className="flex-1 bg-emerald-50 text-emerald-600 py-4 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-emerald-600 hover:text-white transition-all"><DollarSign size={16} /> دفعة</button>
                 <button onClick={() => openModal('edit', s)} className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-900 hover:text-white transition-all"><Edit3 size={18} /></button>
+                <button onClick={() => openModal('confirm_delete', s)} className="p-4 bg-rose-50 text-rose-400 rounded-2xl hover:bg-rose-500 hover:text-white transition-all"><Trash2 size={18} /></button>
                 <button onClick={() => openModal('transfer', s)} className="p-4 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all"><MoveHorizontal size={18} /></button>
              </div>
           </div>
@@ -145,62 +150,65 @@ const Students = ({ isAdmin, profile }: any) => {
 
       {activeModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-xl">
-           <div className="bg-white w-full max-w-2xl p-12 rounded-[4rem] shadow-2xl space-y-8 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh]">
+           <div className="bg-white w-full max-w-2xl p-12 rounded-[4rem] shadow-2xl space-y-8 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] no-scrollbar">
               <div className="flex justify-between items-center">
                  <h3 className="text-3xl font-black">
                     {activeModal === 'edit' && (selectedStudent ? 'تعديل بيانات' : 'إضافة طالب جديد')}
                     {activeModal === 'lesson' && `تسجيل حصة لـ ${selectedStudent.name}`}
                     {activeModal === 'payment' && `تسجيل مبلغ من ${selectedStudent.name}`}
                     {activeModal === 'transfer' && `نقل الطالب ${selectedStudent.name}`}
+                    {activeModal === 'confirm_delete' && `تأكيد الحذف`}
                  </h3>
                  <button onClick={() => setActiveModal(null)} className="p-4 bg-slate-100 rounded-full hover:bg-rose-50 hover:text-rose-500 transition-all"><X size={24}/></button>
               </div>
 
-              {activeModal === 'edit' && (
+              {activeModal === 'confirm_delete' ? (
+                <div className="text-center space-y-8 py-4">
+                  <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                    <AlertTriangle size={48} />
+                  </div>
+                  <div>
+                    <h4 className="text-2xl font-black text-slate-900 mb-2">هل أنت متأكد من حذف الطالب؟</h4>
+                    <p className="text-slate-500 font-bold">سيتم حذف كافة بيانات الطالب ({selectedStudent?.name}) بما في ذلك الحصص والدفعات المسجلة له نهائياً.</p>
+                  </div>
+                  <div className="flex gap-4">
+                    <button onClick={() => setActiveModal(null)} className="flex-1 py-6 bg-slate-100 text-slate-500 rounded-[2rem] font-black">إلغاء التراجع</button>
+                    <button onClick={() => handleAction('delete_student')} className="flex-1 py-6 bg-rose-600 text-white rounded-[2rem] font-black shadow-lg shadow-rose-100">تأكيد الحذف النهائي</button>
+                  </div>
+                </div>
+              ) : activeModal === 'edit' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-2"><label className="text-sm font-black">الاسم</label><input className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-sm font-black">الاسم</label><input className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
                   <div className="space-y-2"><label className="text-sm font-black">الصف</label>
-                    <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
+                    <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
                       <option value="10">العاشر</option><option value="11">الحادي عشر</option><option value="12">الثاني عشر</option>
                     </select>
                   </div>
                   <div className="space-y-2 md:col-span-2"><label className="text-sm font-black">رقم هاتف ولي الأمر (ضروري للربط)</label>
-                    <input className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={form.phones[0].number} onChange={e => {
+                    <input className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.phones[0].number} onChange={e => {
                       const n = [...form.phones]; n[0].number = e.target.value; setForm({...form, phones: n});
                     }} />
                   </div>
-                  <div className="space-y-2"><label className="text-sm font-black">السعر المتفق عليه (للكورس كاملاً)</label><input type="number" className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-sm font-black">السعر المتفق عليه (للكورس كاملاً)</label><input type="number" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} /></div>
                   <div className="space-y-2"><label className="text-sm font-black">الفصل الدراسي</label>
-                    <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={form.semester} onChange={e => setForm({...form, semester: e.target.value})}>
+                    <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.semester} onChange={e => setForm({...form, semester: e.target.value})}>
                       <option value="1">كورس أول</option><option value="2">كورس ثان</option>
                     </select>
                   </div>
+                  <button onClick={() => handleAction('save_student')} className="md:col-span-2 w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-xl hover:bg-indigo-600 transition-all mt-4">تأكيد البيانات</button>
                 </div>
-              )}
-
-              {(activeModal === 'lesson' || activeModal === 'payment') && (
+              ) : (
                 <div className="space-y-6">
                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2"><label className="text-sm font-black">التاريخ</label><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})} /></div>
+                      <div className="space-y-2"><label className="text-sm font-black">التاريخ</label><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})} /></div>
                       <div className="space-y-2"><label className="text-sm font-black">{activeModal === 'lesson' ? 'عدد الساعات' : 'المبلغ'}</label>
-                        <input type="number" className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={activeModal === 'lesson' ? recordForm.hours : recordForm.amount} onChange={e => setRecordForm({...recordForm, [activeModal === 'lesson' ? 'hours' : 'amount']: e.target.value})} />
+                        <input type="number" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={activeModal === 'lesson' ? recordForm.hours : recordForm.amount} onChange={e => setRecordForm({...recordForm, [activeModal === 'lesson' ? 'hours' : 'amount']: e.target.value})} />
                       </div>
                    </div>
-                   <div className="space-y-2"><label className="text-sm font-black">ملاحظات</label><textarea className="w-full p-5 bg-slate-50 rounded-2xl font-bold h-32" value={recordForm.notes} onChange={e => setRecordForm({...recordForm, notes: e.target.value})} /></div>
+                   <div className="space-y-2"><label className="text-sm font-black">ملاحظات</label><textarea className="w-full p-5 bg-slate-50 rounded-2xl font-bold h-32 outline-none" value={recordForm.notes} onChange={e => setRecordForm({...recordForm, notes: e.target.value})} /></div>
+                   <button onClick={() => handleAction(activeModal === 'lesson' ? 'record_lesson' : 'record_payment')} className="w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-xl hover:bg-indigo-600 transition-all mt-4">حفظ العملية</button>
                 </div>
               )}
-
-              <button 
-                onClick={() => {
-                   if (activeModal === 'edit') handleAction('save_student');
-                   else if (activeModal === 'lesson') handleAction('record_lesson');
-                   else if (activeModal === 'payment') handleAction('record_payment');
-                   else if (activeModal === 'transfer') handleAction('transfer');
-                }} 
-                className="w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-xl hover:bg-indigo-600 transition-all"
-              >
-                تأكيد العملية
-              </button>
            </div>
         </div>
       )}
