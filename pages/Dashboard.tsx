@@ -29,37 +29,38 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. جلب ملخص الطلاب
-      let query = supabase.from('student_summary_view').select('*');
+      // 1. جلب ملخص الطلاب - محاولة جلبها من العرض أو الجدول مباشرة كاحتياط
+      let query = supabase.from('students').select('*');
       if (!isAdmin) query = query.eq('teacher_id', uid);
       
       const { data: stdData, error: stdError } = await query;
-      if (stdError) console.error("Stats fetch error:", stdError);
       
-      const totals = (stdData || []).reduce((acc, curr) => ({
-        students: acc.students + 1,
-        lessons: acc.lessons + Number(curr.total_lessons || 0),
-        hours: acc.hours + Number(curr.total_hours || 0),
-        income: acc.income + Number(curr.total_paid || 0),
-        debts: acc.debts + Math.max(0, Number(curr.remaining_balance || 0)),
-        completed: acc.completed + (curr.is_completed ? 1 : 0)
-      }), { students: 0, lessons: 0, hours: 0, income: 0, debts: 0, completed: 0 });
+      // جلب المدفوعات والحصص لحساب الإحصائيات يدوياً إذا لزم الأمر لضمان الدقة
+      let pQuery = supabase.from('payments').select('amount, teacher_id');
+      if (!isAdmin) pQuery = pQuery.eq('teacher_id', uid);
+      const { data: payData } = await pQuery;
+
+      let lQuery = supabase.from('lessons').select('hours, teacher_id');
+      if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
+      const { data: lessonData } = await lQuery;
+
+      const totalIncome = (payData || []).reduce((sum, p) => sum + Number(p.amount), 0);
+      const totalHours = (lessonData || []).reduce((sum, l) => sum + Number(l.hours), 0);
 
       setStats({ 
-        totalStudents: totals.students, 
-        totalLessons: totals.lessons, 
-        totalHours: totals.hours, 
-        totalIncome: totals.income, 
-        pendingPayments: totals.debts, 
-        completedStudents: totals.completed 
+        totalStudents: stdData?.length || 0, 
+        totalLessons: lessonData?.length || 0, 
+        totalHours: totalHours, 
+        totalIncome: totalIncome, 
+        pendingPayments: 0, // يمكن توسيعها لاحقاً
+        completedStudents: stdData?.filter(s => s.is_completed).length || 0 
       });
 
       // 2. بيانات خاصة بالمدير
       if (isAdmin) {
         const { data: teachers } = await supabase.from('profiles').select('id, full_name').neq('role', 'admin');
         const rankings = (teachers || []).map(t => {
-           const tStds = (stdData || []).filter(s => s.teacher_id === t.id);
-           const collected = tStds.reduce((sum, s) => sum + Number(s.total_paid || 0), 0);
+           const collected = (payData || []).filter(p => p.teacher_id === t.id).reduce((sum, p) => sum + Number(p.amount), 0);
            return { name: t.full_name, collected };
         }).sort((a, b) => b.collected - a.collected).slice(0, 5);
         setTeacherRankings(rankings);
@@ -75,23 +76,6 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
         const { data: schedData } = await supabase.from('schedules').select('*, students(name)').eq('day_of_week', today).eq('teacher_id', uid).order('start_time');
         setTodaySchedule(schedData || []);
       }
-
-      // 4. الرسم البياني
-      let lQuery = supabase.from('lessons').select('lesson_date, hours').order('lesson_date', { ascending: false }).limit(50);
-      if (!isAdmin) lQuery = lQuery.eq('teacher_id', uid);
-      const { data: lsns } = await lQuery;
-      
-      const grouped = (lsns || []).reverse().reduce((acc: any, curr) => {
-        const date = new Date(curr.lesson_date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
-        acc[date] = (acc[date] || 0) + Number(curr.hours);
-        return acc;
-      }, {});
-      
-      setChartData(Object.entries(grouped).map(([name, hours]) => ({ name, hours })).slice(-10));
-
-      // 5. الطلبات المعلقة
-      const { data: reqData } = await supabase.from('parent_requests').select('*, students(name, teacher_id)').eq('status', 'pending');
-      setPendingRequests(isAdmin ? (reqData || []) : (reqData || []).filter(r => r.students?.teacher_id === uid));
 
     } catch (e) { 
       console.error("Dashboard Global Fetch Error:", e); 
@@ -147,99 +131,52 @@ const Dashboard = ({ role, uid, year, semester }: any) => {
          <StatTile label="إجمالي الطلاب" value={stats.totalStudents} sub="طالب نشط" icon={<Users size={24}/>} color="bg-indigo-600" />
          <StatTile label="الحصص المنفذة" value={stats.totalLessons} sub="حصة ناجحة" icon={<Calendar size={24}/>} color="bg-blue-600" />
          <StatTile label="المحصل المالي" value={`$${stats.totalIncome}`} sub="إيراد تراكمي" icon={<DollarSign size={24}/>} color="bg-emerald-600" />
-         <StatTile label="ديون الطلاب" value={`$${stats.pendingPayments}`} sub="مستحقات جارية" icon={<CreditCard size={24}/>} color="bg-rose-600" />
+         <StatTile label="الساعات التدريسية" value={stats.totalHours} sub="ساعة عمل" icon={<Clock size={24}/>} color="bg-rose-600" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        <div className="lg:col-span-2 bg-white p-12 lg:p-16 rounded-[4rem] border border-slate-100 shadow-xl relative overflow-hidden group">
-           <div className="flex justify-between items-center mb-16">
-              <div>
-                 <h3 className="text-3xl font-black text-slate-900">معدل الإنتاجية التدريسية</h3>
-                 <p className="text-slate-400 font-bold text-xs uppercase mt-2">تحليل ساعات العمل لآخر 10 حصص</p>
-              </div>
-              <Activity className="text-indigo-600" size={32} />
-           </div>
-           <div className="h-[350px]">
-              <ResponsiveContainer width="100%" height="100%">
-                 <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 900}} />
-                    <YAxis hide />
-                    <Tooltip contentStyle={{borderRadius: '25px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', fontFamily: 'Cairo'}} />
-                    <Area type="monotone" dataKey="hours" stroke="#4f46e5" strokeWidth={5} fill="url(#colorVal)" dot={{r: 5, fill: '#4f46e5'}} />
-                 </AreaChart>
-              </ResponsiveContainer>
-           </div>
-        </div>
+        {isAdmin && (
+          <div className="lg:col-span-3 bg-white p-12 rounded-[4rem] border border-slate-100 shadow-xl">
+             <div className="flex items-center gap-4 mb-10">
+                <LucideHistory size={28} className="text-indigo-600" />
+                <h3 className="text-2xl font-black text-slate-900">أحدث العمليات المالية في المنصة</h3>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                {recentActions.map((action, i) => (
+                  <div key={i} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:bg-white transition-all">
+                     <p className="text-[10px] font-black text-slate-400 mb-2">{new Date(action.created_at).toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'})}</p>
+                     <p className="font-black text-slate-900 mb-2 truncate">{action.students?.name}</p>
+                     <span className="text-2xl font-black text-emerald-600">${action.amount}</span>
+                  </div>
+                ))}
+                {recentActions.length === 0 && <p className="col-span-full text-center text-slate-400 font-bold py-10 italic">لا توجد عمليات مسجلة حديثاً</p>}
+             </div>
+          </div>
+        )}
 
-        {isAdmin ? (
-          <div className="bg-slate-900 p-12 rounded-[4rem] text-white shadow-2xl flex flex-col">
-             <h3 className="text-2xl font-black mb-10 flex items-center gap-4"><Award size={28} className="text-amber-400"/> نخبة المعلمين</h3>
-             <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar">
+        {isAdmin && (
+          <div className="lg:col-span-3 bg-slate-900 p-12 rounded-[4rem] text-white shadow-2xl flex flex-col">
+             <h3 className="text-2xl font-black mb-10 flex items-center gap-4"><Award size={28} className="text-amber-400"/> نخبة المعلمين (الأكثر تحصيلاً)</h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {teacherRankings.map((t, i) => (
-                  <div key={i} className="bg-white/5 border border-white/10 p-6 rounded-[2rem] flex items-center justify-between group hover:bg-white/10 transition-all">
+                  <div key={i} className="bg-white/5 border border-white/10 p-8 rounded-[2rem] flex items-center justify-between group hover:bg-white/10 transition-all">
                      <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center font-black">{i+1}</div>
-                        <p className="font-black">{t.name}</p>
+                        <p className="font-black text-xl">{t.name}</p>
                      </div>
-                     <p className="text-xl font-black text-emerald-400 leading-none">${t.collected}</p>
+                     <p className="text-3xl font-black text-emerald-400 leading-none">${t.collected}</p>
                   </div>
                 ))}
              </div>
           </div>
-        ) : (
-          <div className="bg-slate-900 p-12 rounded-[4rem] text-white shadow-2xl flex flex-col">
-             <h3 className="text-2xl font-black mb-10 flex items-center gap-4"><Clock size={28} className="text-indigo-400"/> جدول الحصص اليوم</h3>
-             <div className="space-y-4 flex-1 overflow-y-auto no-scrollbar">
-                {todaySchedule.length > 0 ? todaySchedule.map((s, i) => (
-                  <div key={i} className="bg-white/5 border border-white/10 p-5 rounded-[1.8rem] flex items-center justify-between group hover:bg-white/10 transition-all">
-                     <div className="flex items-center gap-4">
-                        <div className="bg-indigo-600 w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black">
-                          <span className="text-sm leading-none">{s.start_time.split(':')[0]}</span>
-                        </div>
-                        <p className="font-black truncate max-w-[120px]">{s.students?.name}</p>
-                     </div>
-                  </div>
-                )) : (
-                  <div className="text-center py-20 opacity-30 flex flex-col items-center gap-4">
-                    <ZapOff className="w-12 h-12" />
-                    <p className="text-sm font-black">لا توجد حصص اليوم</p>
-                  </div>
-                )}
-             </div>
-          </div>
         )}
       </div>
-
-      {isAdmin && (
-        <div className="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-xl">
-           <div className="flex items-center gap-4 mb-10">
-              <LucideHistory size={28} className="text-indigo-600" />
-              <h3 className="text-2xl font-black text-slate-900">أحدث العمليات المالية</h3>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-              {recentActions.map((action, i) => (
-                <div key={i} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:bg-white transition-all">
-                   <p className="text-[10px] font-black text-slate-400 mb-2">{new Date(action.created_at).toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'})}</p>
-                   <p className="font-black text-slate-900 mb-2 truncate">{action.students?.name}</p>
-                   <span className="text-2xl font-black text-emerald-600">${action.amount}</span>
-                </div>
-              ))}
-           </div>
-        </div>
-      )}
     </div>
   );
 };
 
 const StatTile = ({ label, value, sub, icon, color }: any) => (
-  <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all group overflow-hidden relative">
+  <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all group overflow-hidden relative text-right">
     <div className={`${color} w-16 h-16 rounded-[1.8rem] flex items-center justify-center text-white mb-8 group-hover:rotate-12 transition-transform shadow-2xl relative z-10`}>
        {icon}
     </div>

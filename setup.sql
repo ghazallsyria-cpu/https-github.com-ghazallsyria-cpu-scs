@@ -1,21 +1,21 @@
--- 1. تنظيف شامل للمشغلات والسياسات القديمة
+-- 1. تنظيف السياسات والوظائف القديمة تماماً
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user();
-DROP FUNCTION IF EXISTS public.is_admin();
+DROP FUNCTION IF EXISTS public.get_auth_role();
 
--- 2. إنشاء وظيفة للتحقق من المدير (تمنع الدوران اللانهائي)
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean AS $$
+-- 2. إنشاء وظيفة جلب الدور بأمان (تمنع الدوران اللانهائي)
+-- تعتمد هذه الوظيفة على SECURITY DEFINER لتجاوز RLS
+CREATE OR REPLACE FUNCTION public.get_auth_role()
+RETURNS text AS $$
+DECLARE
+  user_role text;
 BEGIN
-  RETURN (
-    SELECT (role = 'admin')
-    FROM public.profiles
-    WHERE id = auth.uid()
-  );
+  SELECT role INTO user_role FROM public.profiles WHERE id = auth.uid();
+  RETURN COALESCE(user_role, 'teacher');
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- 3. التأكد من وجود الجداول الأساسية
+-- 3. التأكد من وجود كافة الجداول
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name text,
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS public.activation_codes (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 4. تفعيل نظام الأمان RLS
+-- 4. تفعيل نظام الأمان (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
@@ -90,39 +90,34 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.broadcast_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY;
 
--- 5. سياسات الوصول الجديدة (بدون دوران لانهائي)
+-- 5. بناء سياسات الأمان الذكية (بدون استدعاءات دائرية)
 
--- PROFILES
+-- PROFILES (الإصلاح الحقيقي)
 DROP POLICY IF EXISTS "Profiles Access" ON public.profiles;
 CREATE POLICY "Profiles Access" ON public.profiles FOR ALL TO authenticated
-USING ( auth.uid() = id OR (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );
+USING ( auth.uid() = id OR get_auth_role() = 'admin' );
 
 -- STUDENTS
 DROP POLICY IF EXISTS "Students Access" ON public.students;
 CREATE POLICY "Students Access" ON public.students FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );
+USING ( teacher_id = auth.uid() OR get_auth_role() = 'admin' );
 
 -- LESSONS
 DROP POLICY IF EXISTS "Lessons Access" ON public.lessons;
 CREATE POLICY "Lessons Access" ON public.lessons FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );
+USING ( teacher_id = auth.uid() OR get_auth_role() = 'admin' );
 
 -- PAYMENTS
 DROP POLICY IF EXISTS "Payments Access" ON public.payments;
 CREATE POLICY "Payments Access" ON public.payments FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );
+USING ( teacher_id = auth.uid() OR get_auth_role() = 'admin' );
 
 -- BROADCAST
 DROP POLICY IF EXISTS "Broadcast Access" ON public.broadcast_messages;
 CREATE POLICY "Broadcast Access" ON public.broadcast_messages FOR ALL TO authenticated
-USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' OR auth.uid() = ANY(targets) );
+USING ( get_auth_role() = 'admin' OR auth.uid() = ANY(targets) );
 
--- CODES
-DROP POLICY IF EXISTS "Codes Access" ON public.activation_codes;
-CREATE POLICY "Codes Access" ON public.activation_codes FOR ALL TO authenticated
-USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );
-
--- 6. المشغل المطور للمستخدمين الجدد
+-- 6. المشغل المطور للمستخدمين الجدد (يمنح دور admin فوراً للرقم المطلوب)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -147,5 +142,5 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 7. الترقية الفورية للمدير
+-- 7. ترقية يدوية فورية لضمان عمل حساب المدير الحالي
 UPDATE public.profiles SET role = 'admin', is_approved = true WHERE phone = '55315661';
