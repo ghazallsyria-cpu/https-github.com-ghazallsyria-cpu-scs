@@ -109,7 +109,11 @@ const App: React.FC = () => {
     { to: "/students", icon: <Users size={24} />, label: "الطلاب" },
     { to: "/lessons", icon: <BookOpen size={24} />, label: "الحصص" },
     { to: "/payments", icon: <Wallet size={24} />, label: "المالية" },
-    { to: "/statistics", icon: <BarChart3 size={24} />, label: "الإحصائيات" },
+  ];
+
+  const adminNavExtras = [
+    { to: "/messaging", icon: <Radio size={24} />, label: "البث" },
+    { to: "/teachers", icon: <ShieldCheck size={24} />, label: "المعلمون" },
   ];
 
   const parentNav = [
@@ -117,11 +121,12 @@ const App: React.FC = () => {
   ];
 
   const navItems = isParent ? parentNav : teacherNav;
+  const mobileNavItems = isParent ? parentNav : (isAdmin ? [...teacherNav, ...adminNavExtras] : teacherNav);
 
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row text-right font-['Cairo']" dir="rtl">
-        {/* SIDEBAR */}
+        {/* SIDEBAR (Desktop Only) */}
         <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-sm">
           <div className="p-10 flex flex-col items-center gap-4 border-b border-slate-50">
             <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} p-5 rounded-[2.2rem] text-white shadow-xl`}>
@@ -157,35 +162,35 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* MOBILE NAV */}
-        <nav className="lg:hidden fixed bottom-4 inset-x-4 bg-white/90 backdrop-blur-2xl border border-slate-100 flex justify-around items-center px-2 py-4 z-[100] shadow-2xl rounded-[2.5rem]">
-          {navItems.map(item => (
-            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-4 py-2 rounded-2xl ${isActive ? (isParent ? 'text-emerald-600 bg-emerald-50' : 'text-indigo-600 bg-indigo-50') : 'text-slate-400'}`}>
-              {item.icon}
-              <span className="text-[9px] font-black">{item.label}</span>
+        {/* MOBILE BOTTOM NAV (Improved) */}
+        <nav className="lg:hidden fixed bottom-4 inset-x-4 bg-white/95 backdrop-blur-2xl border border-slate-100 flex justify-around items-center px-1 py-3 z-[100] shadow-[0_-20px_50px_rgba(0,0,0,0.1)] rounded-[2.5rem] overflow-x-auto no-scrollbar">
+          {mobileNavItems.map(item => (
+            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-3 py-2 rounded-2xl min-w-[60px] ${isActive ? (isParent ? 'text-emerald-600 bg-emerald-50' : 'text-indigo-600 bg-indigo-50') : 'text-slate-400'}`}>
+              {React.cloneElement(item.icon as React.ReactElement, { size: 20 })}
+              <span className="text-[8px] font-black whitespace-nowrap">{item.label}</span>
             </NavLink>
           ))}
-          <button onClick={handleLogout} className="flex flex-col items-center gap-1 px-4 py-2 text-rose-500">
-            <LogOut size={24} />
-            <span className="text-[9px] font-black">خروج</span>
+          <button onClick={handleLogout} className="flex flex-col items-center gap-1 px-3 py-2 text-rose-500 min-w-[60px]">
+            <LogOut size={20} />
+            <span className="text-[8px] font-black uppercase">خروج</span>
           </button>
         </nav>
 
-        {/* MAIN */}
+        {/* MAIN AREA */}
         <main className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
           <header className="h-20 md:h-28 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 md:px-10 flex items-center justify-between border-b border-slate-100">
              <div className="flex flex-col text-right">
                 <span className={`text-[9px] font-black uppercase tracking-widest ${isParent ? 'text-emerald-500' : 'text-indigo-500'}`}>
                   {isParent ? 'بوابة ولي الأمر' : (isAdmin ? 'المدير العام' : 'المعلم المعتمد')}
                 </span>
-                <span className="text-lg md:text-xl font-black text-slate-900">{profile?.full_name}</span>
+                <span className="text-lg md:text-xl font-black text-slate-900 truncate max-w-[150px]">{profile?.full_name}</span>
              </div>
              <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} w-10 h-10 md:w-14 md:h-14 rounded-xl flex items-center justify-center text-white font-black shadow-lg`}>
                 {profile?.full_name?.[0] || 'P'}
              </div>
           </header>
 
-          <div className="flex-1 p-4 md:p-8 lg:p-12 max-w-[1400px] mx-auto w-full">
+          <div className="flex-1 p-4 md:p-8 lg:p-12 max-w-[1400px] mx-auto w-full pb-24 lg:pb-12">
             <Routes>
               {isParent ? (
                 <Route path="/" element={<ParentPortal parentPhone={profile?.phone} />} />

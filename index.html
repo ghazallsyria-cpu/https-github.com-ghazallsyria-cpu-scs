@@ -22,7 +22,7 @@
         margin: 0;
         -webkit-tap-highlight-color: transparent;
         overflow-x: hidden;
-        overscroll-behavior-y: contain; /* Prevents bounce refresh on mobile */
+        overscroll-behavior-y: contain;
       }
       ::-webkit-scrollbar { width: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }
@@ -34,12 +34,17 @@
 
       /* Mobile-specific adjustments */
       @media (max-width: 768px) {
-        h1, h2, h3 { line-height: 1.2 !important; }
+        h1 { font-size: 1.75rem !important; line-height: 1.2 !important; }
+        h2 { font-size: 1.5rem !important; }
+        .text-8xl { font-size: 3rem !important; }
+        .text-7xl { font-size: 2.5rem !important; }
+        .text-6xl { font-size: 2.25rem !important; }
         .p-20 { padding: 1.5rem !important; }
-        .p-14 { padding: 1.25rem !important; }
+        .p-16 { padding: 1.25rem !important; }
+        .p-14 { padding: 1rem !important; }
         .p-12 { padding: 1rem !important; }
-        .p-16 { padding: 1.5rem !important; }
-        .rounded-\[5rem\], .rounded-\[6rem\] { border-radius: 2rem !important; }
+        .rounded-\[5rem\], .rounded-\[6rem\], .rounded-\[4rem\] { border-radius: 2rem !important; }
+        .gap-10 { gap: 1.5rem !important; }
       }
 
       .blob-bg {
@@ -89,18 +94,5 @@
     </div>
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
-    
-    <!-- Service Worker Registration -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('SW registered: ', registration);
-          }).catch(registrationError => {
-            console.log('SW registration failed: ', registrationError);
-          });
-        });
-      }
-    </script>
   </body>
 </html>
