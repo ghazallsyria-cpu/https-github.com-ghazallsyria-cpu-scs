@@ -5,7 +5,7 @@ import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings, Bell, Star, RefreshCw, CheckCircle, Sparkles, BarChart3, Radio, School
+  BookOpen, Calendar, Settings as SettingsIcon, Bell, Star, RefreshCw, CheckCircle, Sparkles, BarChart3, Radio, School
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -19,6 +19,7 @@ import Reports from './pages/Reports';
 import Statistics from './pages/Statistics';
 import Messaging from './pages/Messaging';
 import ParentPortal from './pages/ParentPortal';
+import Settings from './pages/Settings';
 
 const ADMIN_PHONE = '55315661';
 
@@ -109,6 +110,7 @@ const App: React.FC = () => {
     { to: "/students", icon: <Users size={24} />, label: "الطلاب" },
     { to: "/lessons", icon: <BookOpen size={24} />, label: "الحصص" },
     { to: "/payments", icon: <Wallet size={24} />, label: "المالية" },
+    { to: "/settings", icon: <SettingsIcon size={24} />, label: "الإعدادات" },
   ];
 
   const adminNavExtras = [
@@ -204,6 +206,7 @@ const App: React.FC = () => {
                   <Route path="/messaging" element={isAdmin ? <Messaging /> : <Navigate to="/" />} />
                   <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
                   <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
+                  <Route path="/settings" element={<Settings />} />
                   {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
                 </>
               )}
