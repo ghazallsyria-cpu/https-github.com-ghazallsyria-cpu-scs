@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   base: '/',
   build: {
-    outDir: 'dist',
+    outDir: 'build', // تم التغيير من dist إلى build ليتناسب مع إعدادات Netlify الافتراضية لديك
     assetsDir: 'assets',
     emptyOutDir: true,
   }
