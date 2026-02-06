@@ -19,19 +19,24 @@ const Login = () => {
     setLoading(true);
     setError(null);
 
-    const mobileClean = formData.mobile.trim();
-    // استخدام صيغة بريد إلكتروني موحدة تعتمد على رقم الهاتف فقط
+    // تنظيف رقم الهاتف من أي مسافات أو رموز غير مرغوبة
+    const mobileClean = formData.mobile.trim().replace(/\s+/g, '');
+    if (!mobileClean) {
+      setError("يرجى إدخال رقم هاتف صحيح");
+      setLoading(false);
+      return;
+    }
+
     const virtualEmail = `${mobileClean}@summit.edu`; 
-    
-    // إذا كان تسجيل دخول، نتحقق هل هو ولي أمر؟
     // ولي الأمر كلمة سره الافتراضية هي رقم هاتفه إذا لم يكتب غير ذلك
-    const loginPassword = formData.password || mobileClean;
+    const loginPassword = formData.password.trim() || mobileClean;
 
     try {
       if (isSignUp) {
+        // منطق تسجيل المعلم الجديد
         const { data: authData, error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
-          password: formData.password,
+          password: loginPassword,
           options: { data: { phone: mobileClean, full_name: formData.fullName } }
         });
         if (signUpError) throw signUpError;
@@ -41,40 +46,47 @@ const Login = () => {
           setError("تم تقديم طلبك بنجاح. يرجى الانتظار حتى يتم تفعيل حسابك من الإدارة.");
         }
       } else {
-        // محاولة تسجيل الدخول العادية
+        // محاولة تسجيل الدخول
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: virtualEmail,
           password: loginPassword
         });
         
         if (signInError) {
-          // إذا فشل تسجيل الدخول، نتحقق هل هذا الرقم موجود في قاعدة سجلات الطلاب؟
+          // إذا فشل تسجيل الدخول، نتحقق هل هذا الرقم ينتمي لولي أمر في سجلات الطلاب؟
           const { data: linkedParent, error: rpcError } = await supabase.rpc('check_parent_phone', { phone_to_check: mobileClean });
           
           if (linkedParent && linkedParent.length > 0) {
-            // الرقم موجود كولي أمر، نقوم بإنشاء الحساب له الآن تلقائياً
+            // الرقم موجود، نرى إن كان الحساب موجوداً أصلاً في Auth (بسبب "already registered" سابقاً)
             const { data: newParent, error: createError } = await supabase.auth.signUp({
               email: virtualEmail,
-              password: mobileClean, // كلمة السر هي رقم الهاتف
+              password: mobileClean, // تعيين رقم الهاتف ككلمة سر افتراضية
               options: { data: { phone: mobileClean, full_name: `ولي أمر ${linkedParent[0].student_name}` } }
             });
 
             if (createError) {
-               if (createError.message.includes("already registered")) {
-                  throw new Error("بيانات الدخول غير صحيحة. يرجى التأكد من رقم الهاتف وكلمة السر.");
+               // إذا كان مسجلاً بالفعل، نحاول تسجيل الدخول برقم الهاتف ككلمة سر (في حال نسيها أو حدث خطأ)
+               if (createError.message.toLowerCase().includes("already registered")) {
+                  const { error: retryError } = await supabase.auth.signInWithPassword({
+                    email: virtualEmail,
+                    password: mobileClean
+                  });
+                  if (retryError) throw new Error("بيانات الدخول غير صحيحة. يرجى مراجعة رقم الهاتف أو كلمة السر.");
+                  window.location.reload();
+                  return;
                }
                throw createError;
             }
 
             if (newParent.user) {
               await ensureProfileExists(newParent.user.id, mobileClean, `ولي أمر ${linkedParent[0].student_name}`, 'parent');
-              // محاولة تسجيل دخول ثانية بعد الإنشاء التلقائي
+              // تسجيل دخول فوري بعد الإنشاء
               await supabase.auth.signInWithPassword({ email: virtualEmail, password: mobileClean });
               window.location.reload();
               return;
             }
           }
-          throw new Error("عذراً، هذا الرقم غير مسجل في المنصة. يرجى التواصل مع الإدارة.");
+          throw new Error("عذراً، هذا الرقم غير مسجل في المنصة. يرجى التأكد من المدرس أن الرقم مسجل بشكل صحيح.");
         }
       }
     } catch (err: any) {
@@ -135,7 +147,7 @@ const Login = () => {
                <Lock className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                <input required type="password" placeholder="••••••••" className="w-full p-4 pr-14 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-black text-left outline-none focus:bg-white focus:border-indigo-100 transition-all" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
              </div>
-             {!isSignUp && <p className="text-[9px] text-slate-400 font-bold mt-2 mr-4">💡 ولي الأمر: أدخل رقم هاتفك في خانة كلمة المرور للدخول لأول مرة.</p>}
+             {!isSignUp && <p className="text-[9px] text-slate-400 font-bold mt-2 mr-4">💡 لولي الأمر: كلمة السر الافتراضية هي رقم هاتفك.</p>}
           </div>
 
           <button disabled={loading} className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1.8rem] font-black shadow-xl transition-all flex items-center justify-center gap-4 text-lg">
