@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
-// @ts-ignore: Suppress "no exported member" errors from react-router-dom in some environments
+// @ts-ignore
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
@@ -42,21 +42,22 @@ const App: React.FC = () => {
         is_approved: true
       });
       setLoading(false);
-      return;
+    } else {
+      supabase.auth.getSession().then(({ data: { session: s } }) => {
+        setSession(s);
+        if (s) fetchProfile(s.user);
+        else setLoading(false);
+      });
     }
-
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      if (s) fetchProfile(s.user);
-      else setLoading(false);
-    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, ns) => {
       if (!ns && !localStorage.getItem('parent_session_phone')) {
         setSession(null);
         setProfile(null);
+        setIsParentSession(false);
         setLoading(false);
       } else if (ns) {
+        setIsParentSession(false);
         setSession(ns);
         fetchProfile(ns.user);
       }
@@ -124,7 +125,7 @@ const App: React.FC = () => {
         <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-sm">
           <div className="p-10 flex flex-col items-center gap-4 border-b border-slate-50">
             <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} p-5 rounded-[2.2rem] text-white shadow-xl`}>
-              <GraduationCap size={40} />
+              {isParent ? <School size={40} /> : <GraduationCap size={40} />}
             </div>
             <span className="font-black text-slate-900 text-2xl">منصة القمة</span>
           </div>
