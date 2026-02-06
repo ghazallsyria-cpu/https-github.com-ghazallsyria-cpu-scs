@@ -1,10 +1,11 @@
 
-import { HashRouter, Routes, Route, Link, useLocation, Navigate, NavLink } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
+// Fix: Consolidate and clean up react-router-dom imports to resolve "no exported member" errors
+import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, FileText, Settings, Bell, Star, Menu, X, ShieldAlert, Key, RefreshCw, CheckCircle, Sparkles, BarChart3, Send, Radio, PhoneCall, Heart
+  BookOpen, Calendar, Settings, Bell, Star, RefreshCw, CheckCircle, Sparkles, BarChart3, Radio, Heart
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -25,11 +26,27 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isParentSession, setIsParentSession] = useState(false);
   const [supervisedTeacher, setSupervisedTeacher] = useState<{id: string, name: string} | null>(null);
-  const [currentYear, setCurrentYear] = useState(localStorage.getItem('selectedYear') || '2025-2026');
-  const [currentSemester, setCurrentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
+  const [currentYear] = useState(localStorage.getItem('selectedYear') || '2025-2026');
+  const [currentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
 
   useEffect(() => {
+    // 1. التحقق أولاً من وجود جلسة ولي أمر سريعة
+    const parentPhone = localStorage.getItem('parent_session_phone');
+    if (parentPhone) {
+      setIsParentSession(true);
+      setProfile({
+        full_name: localStorage.getItem('parent_student_name') || 'ولي أمر',
+        phone: parentPhone,
+        role: 'parent',
+        is_approved: true
+      });
+      setLoading(false);
+      return;
+    }
+
+    // 2. التحقق من Auth العادي للمعلمين
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       if (s) fetchProfile(s.user);
@@ -37,9 +54,14 @@ const App: React.FC = () => {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, ns) => {
-      setSession(ns);
-      if (ns) fetchProfile(ns.user);
-      else { setProfile(null); setLoading(false); }
+      if (!ns && !localStorage.getItem('parent_session_phone')) {
+        setSession(null);
+        setProfile(null);
+        setLoading(false);
+      } else if (ns) {
+        setSession(ns);
+        fetchProfile(ns.user);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -48,21 +70,22 @@ const App: React.FC = () => {
     const userPhone = user.user_metadata?.phone || '';
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      
-      // إذا كان المستخدم ولي أمر (تم وسمه في تسجيل الدخول)
-      if (data?.role === 'parent') {
-        setProfile(data);
-      } else {
-        const isSystemAdmin = userPhone === ADMIN_PHONE || data?.role === 'admin';
-        const role = isSystemAdmin ? 'admin' : (data?.role || 'teacher');
-        setProfile({ 
-          ...(data || {}), 
-          id: user.id, 
-          role: role, 
-          is_approved: isSystemAdmin || data?.is_approved 
-        });
-      }
+      const isSystemAdmin = userPhone === ADMIN_PHONE || data?.role === 'admin';
+      const role = isSystemAdmin ? 'admin' : (data?.role || 'teacher');
+      setProfile({ 
+        ...(data || {}), 
+        id: user.id, 
+        role: role, 
+        is_approved: isSystemAdmin || data?.is_approved 
+      });
     } catch (e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  const handleLogout = async () => {
+    localStorage.removeItem('parent_session_phone');
+    localStorage.removeItem('parent_student_name');
+    await supabase.auth.signOut();
+    window.location.reload();
   };
 
   if (loading) return (
@@ -74,11 +97,11 @@ const App: React.FC = () => {
     </div>
   );
 
-  if (!session) return <Login />;
+  if (!session && !isParentSession) return <Login />;
 
-  const isParent = profile?.role === 'parent';
+  const isParent = profile?.role === 'parent' || isParentSession;
   const isAdmin = profile?.role === 'admin';
-  const effectiveUid = supervisedTeacher ? supervisedTeacher.id : session.user.id;
+  const effectiveUid = supervisedTeacher ? supervisedTeacher.id : (session?.user?.id);
   const effectiveRole = isAdmin && !supervisedTeacher ? 'admin' : (isParent ? 'parent' : 'teacher');
 
   const teacherNav = [
@@ -91,7 +114,7 @@ const App: React.FC = () => {
   ];
 
   const parentNav = [
-    { to: "/", icon: <Heart size={24} />, label: "بوابة ولي الأمر" },
+    { to: "/", icon: <Heart size={24} />, label: "بوابة المتابعة" },
   ];
 
   const navItems = isParent ? parentNav : teacherNav;
@@ -130,7 +153,7 @@ const App: React.FC = () => {
           </nav>
 
           <div className="p-10 border-t border-slate-50">
-             <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center justify-center gap-4 py-5 text-rose-500 font-black hover:bg-rose-50 rounded-[2rem] transition-all">
+             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-4 py-5 text-rose-500 font-black hover:bg-rose-50 rounded-[2rem] transition-all">
                <LogOut size={22} /> تسجيل الخروج
              </button>
           </div>
@@ -144,13 +167,17 @@ const App: React.FC = () => {
               <span className="text-[9px] font-black">{item.label}</span>
             </NavLink>
           ))}
+          <button onClick={handleLogout} className="flex flex-col items-center gap-1 px-4 py-2 text-rose-500">
+            <LogOut size={24} />
+            <span className="text-[9px] font-black">خروج</span>
+          </button>
         </nav>
 
         {/* MAIN */}
         <main className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
           <header className="h-20 md:h-28 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 md:px-10 flex items-center justify-between border-b border-slate-100">
-             <div className="flex flex-col">
-                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">
+             <div className="flex flex-col text-right">
+                <span className={`text-[9px] font-black uppercase tracking-widest ${isParent ? 'text-emerald-500' : 'text-indigo-500'}`}>
                   {isParent ? 'بوابة ولي الأمر' : (isAdmin ? 'المدير العام' : 'المعلم المعتمد')}
                 </span>
                 <span className="text-lg md:text-xl font-black text-slate-900">{profile?.full_name}</span>
@@ -180,10 +207,6 @@ const App: React.FC = () => {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
-
-          <footer className="bg-white border-t border-slate-100 py-8 px-6 text-center mt-auto">
-             <p className="font-black text-xs md:text-sm text-slate-400">برمجة الاستاذ ايهاب جمال غزال للإإستفسار : 55315661</p>
-          </footer>
         </main>
       </div>
     </HashRouter>
