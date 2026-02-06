@@ -1,91 +1,22 @@
 
--- 1. جداول النظام الأساسية
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-    full_name text,
-    phone text UNIQUE,
-    role text CHECK (role IN ('admin', 'teacher', 'parent')),
-    subjects text, -- المواد التي يدرسها المعلم
-    is_approved boolean DEFAULT false,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
-);
+-- 1. التأكد من وجود عمود المواد الدراسية في جدول الحسابات
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='subjects') THEN
+        ALTER TABLE public.profiles ADD COLUMN subjects text;
+    END IF;
+END $$;
 
-CREATE TABLE IF NOT EXISTS public.students (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    teacher_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
-    name text NOT NULL,
-    grade text,
-    address text,
-    phones jsonb DEFAULT '[]'::jsonb, -- [{number: '...', label: '...'}]
-    academic_year text,
-    semester text,
-    agreed_amount numeric DEFAULT 0,
-    is_hourly boolean DEFAULT false,
-    price_per_hour numeric DEFAULT 0,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
-);
+-- 2. تحديث جدول الطلاب للتأكد من دعم الربط المتعدد
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='students' AND column_name='phones') THEN
+        ALTER TABLE public.students ADD COLUMN phones jsonb DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
 
-CREATE TABLE IF NOT EXISTS public.lessons (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    teacher_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
-    student_id uuid REFERENCES public.students(id) ON DELETE CASCADE,
-    lesson_date date DEFAULT CURRENT_DATE,
-    hours numeric DEFAULT 1,
-    notes text,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.payments (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    teacher_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
-    student_id uuid REFERENCES public.students(id) ON DELETE CASCADE,
-    amount numeric DEFAULT 0,
-    payment_date date DEFAULT CURRENT_DATE,
-    notes text,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS public.schedules (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    teacher_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
-    student_id uuid REFERENCES public.students(id) ON DELETE CASCADE,
-    day_of_week text NOT NULL,
-    start_time time NOT NULL,
-    duration_hours numeric DEFAULT 1,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now())
-);
-
--- 2. تفعيل سياسات الأمان (RLS)
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
-
--- سياسات المعلم: يرى فقط بياناته
-CREATE POLICY "Teachers can manage their own data" ON public.students 
-FOR ALL USING (teacher_id = auth.uid());
-
-CREATE POLICY "Teachers can manage their lessons" ON public.lessons 
-FOR ALL USING (teacher_id = auth.uid());
-
-CREATE POLICY "Teachers can manage their payments" ON public.payments 
-FOR ALL USING (teacher_id = auth.uid());
-
-CREATE POLICY "Teachers can manage their schedules" ON public.schedules 
-FOR ALL USING (teacher_id = auth.uid());
-
--- سياسة ولي الأمر: يرى الطلاب المرتبطين برقم هاتفه
-CREATE POLICY "Parents view their students" ON public.students 
-FOR SELECT USING (
-    EXISTS (
-        SELECT 1 FROM public.profiles p 
-        WHERE p.id = auth.uid() AND p.role = 'parent' 
-        AND students.phones @> jsonb_build_array(jsonb_build_object('number', p.phone))
-    )
-);
-
--- 3. العروض التفاعلية (Views) للإحصائيات
+-- 3. إعادة بناء العرض التفاعلي (View) بعد التأكد من الأعمدة
+DROP VIEW IF EXISTS public.student_summary_view;
 CREATE OR REPLACE VIEW public.student_summary_view AS
 SELECT 
     s.*,
@@ -101,7 +32,7 @@ SELECT
 FROM public.students s
 JOIN public.profiles p ON s.teacher_id = p.id;
 
--- 4. وظائف الربط التلقائي
+-- 4. تحديث وظيفة بوابة ولي الأمر
 CREATE OR REPLACE FUNCTION public.get_parent_dashboard(parent_phone_val text)
 RETURNS TABLE (
     student_name text,
@@ -119,3 +50,17 @@ BEGIN
     WHERE v.phones @> jsonb_build_array(jsonb_build_object('number', parent_phone_val));
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 5. تفعيل سياسات الأمان الصارمة (RLS)
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+
+-- سياسة المعلم (إدارة ذاتية)
+DROP POLICY IF EXISTS "Teachers can manage their own data" ON public.students;
+CREATE POLICY "Teachers can manage their own data" ON public.students 
+FOR ALL USING (teacher_id = auth.uid());
+
+-- سياسة المدير (رؤية كل شيء)
+CREATE POLICY "Admins can do everything" ON public.profiles FOR ALL USING (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+);

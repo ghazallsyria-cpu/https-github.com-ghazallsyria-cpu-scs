@@ -17,7 +17,7 @@ const Students = ({ isAdmin, profile }: any) => {
   
   const [form, setForm] = useState({
     name: '', grade: '12', address: '', academic_year: '2024-2025', semester: '1',
-    agreed_amount: '0', is_hourly: false, price_per_hour: '0', phones: [{number: '', label: 'الطالب'}]
+    agreed_amount: '0', is_hourly: false, price_per_hour: '0', phones: [{number: '', label: 'ولي الأمر'}]
   });
 
   const [recordForm, setRecordForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], hours: '2', notes: '' });
@@ -27,7 +27,8 @@ const Students = ({ isAdmin, profile }: any) => {
     setLoading(true);
     let query = supabase.from('student_summary_view').select('*');
     if (!isAdmin) query = query.eq('teacher_id', profile.id);
-    const { data } = await query.order('name');
+    const { data, error } = await query.order('name');
+    if (error) console.error("Error fetching students:", error);
     setStudents(data || []);
     setLoading(false);
   }, [isAdmin, profile.id]);
@@ -35,23 +36,43 @@ const Students = ({ isAdmin, profile }: any) => {
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
   const handleAction = async (type: string) => {
-    if (type === 'save_student') {
-      const payload = { ...form, teacher_id: profile.id, agreed_amount: parseFloat(form.agreed_amount), price_per_hour: parseFloat(form.price_per_hour) };
-      if (selectedStudent) await supabase.from('students').update(payload).eq('id', selectedStudent.id);
-      else await supabase.from('students').insert([payload]);
-    } else if (type === 'record_lesson') {
-      await supabase.from('lessons').insert([{ student_id: selectedStudent.id, teacher_id: profile.id, lesson_date: recordForm.date, hours: parseFloat(recordForm.hours), notes: recordForm.notes }]);
-    } else if (type === 'record_payment') {
-      await supabase.from('payments').insert([{ student_id: selectedStudent.id, teacher_id: profile.id, payment_date: recordForm.date, amount: parseFloat(recordForm.amount), notes: recordForm.notes }]);
-    } else if (type === 'transfer') {
-      const { id, created_at, total_lessons, total_paid, remaining_balance, ...rest } = selectedStudent;
-      await supabase.from('students').insert([{ ...rest, academic_year: transferForm.year, semester: transferForm.semester }]);
-      alert("تم نقل الطالب للفصل الدراسي الجديد بنجاح.");
+    try {
+      if (type === 'save_student') {
+        const payload = { 
+          name: form.name,
+          grade: form.grade,
+          address: form.address,
+          academic_year: form.academic_year,
+          semester: form.semester,
+          agreed_amount: parseFloat(form.agreed_amount || '0'),
+          is_hourly: form.is_hourly,
+          price_per_hour: parseFloat(form.price_per_hour || '0'),
+          phones: form.phones,
+          teacher_id: profile.id
+        };
+        
+        if (selectedStudent) {
+          await supabase.from('students').update(payload).eq('id', selectedStudent.id);
+        } else {
+          await supabase.from('students').insert([payload]);
+        }
+      } else if (type === 'record_lesson') {
+        await supabase.from('lessons').insert([{ student_id: selectedStudent.id, teacher_id: profile.id, lesson_date: recordForm.date, hours: parseFloat(recordForm.hours), notes: recordForm.notes }]);
+      } else if (type === 'record_payment') {
+        await supabase.from('payments').insert([{ student_id: selectedStudent.id, teacher_id: profile.id, payment_date: recordForm.date, amount: parseFloat(recordForm.amount), notes: recordForm.notes }]);
+      } else if (type === 'transfer') {
+        const { id, created_at, total_lessons, total_paid, remaining_balance, teacher_name, teacher_subjects, ...rest } = selectedStudent;
+        await supabase.from('students').insert([{ ...rest, academic_year: transferForm.year, semester: transferForm.semester }]);
+        alert("تم النقل بنجاح.");
+      }
+      
+      setActiveModal(null);
+      setSelectedStudent(null);
+      fetchStudents();
+    } catch (err) {
+      alert("حدث خطأ أثناء تنفيذ العملية.");
+      console.error(err);
     }
-    
-    setActiveModal(null);
-    setSelectedStudent(null);
-    fetchStudents();
   };
 
   const openModal = (type: any, student: any = null) => {
@@ -59,9 +80,14 @@ const Students = ({ isAdmin, profile }: any) => {
     if (student && type === 'edit') {
       setForm({
         name: student.name, grade: student.grade, address: student.address, academic_year: student.academic_year,
-        semester: student.semester, agreed_amount: student.agreed_amount.toString(),
-        is_hourly: student.is_hourly, price_per_hour: student.price_per_hour.toString(),
-        phones: student.phones || [{number: '', label: 'الطالب'}]
+        semester: student.semester, agreed_amount: (student.agreed_amount || 0).toString(),
+        is_hourly: student.is_hourly, price_per_hour: (student.price_per_hour || 0).toString(),
+        phones: (student.phones && student.phones.length > 0) ? student.phones : [{number: '', label: 'ولي الأمر'}]
+      });
+    } else {
+      setForm({
+        name: '', grade: '12', address: '', academic_year: '2024-2025', semester: '1',
+        agreed_amount: '0', is_hourly: false, price_per_hour: '0', phones: [{number: '', label: 'ولي الأمر'}]
       });
     }
     setActiveModal(type);
@@ -74,7 +100,7 @@ const Students = ({ isAdmin, profile }: any) => {
           <div className="bg-indigo-600 p-5 rounded-[2rem] text-white shadow-xl"><Users size={32} /></div>
           <div>
             <h2 className="text-3xl font-black">إدارة <span className="text-indigo-600">الطلاب</span></h2>
-            <p className="text-slate-400 font-bold">المعلم: {profile?.full_name} | المادة: {profile?.subjects}</p>
+            <p className="text-slate-400 font-bold">المعلم: {profile?.full_name} | المادة: {profile?.subjects || 'غير محدد'}</p>
           </div>
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto">
@@ -117,10 +143,9 @@ const Students = ({ isAdmin, profile }: any) => {
         ))}
       </div>
 
-      {/* مودال النوافذ المختلفة */}
       {activeModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-xl">
-           <div className="bg-white w-full max-w-2xl p-12 rounded-[4rem] shadow-2xl space-y-8 animate-in zoom-in duration-300">
+           <div className="bg-white w-full max-w-2xl p-12 rounded-[4rem] shadow-2xl space-y-8 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh]">
               <div className="flex justify-between items-center">
                  <h3 className="text-3xl font-black">
                     {activeModal === 'edit' && (selectedStudent ? 'تعديل بيانات' : 'إضافة طالب جديد')}
@@ -139,10 +164,16 @@ const Students = ({ isAdmin, profile }: any) => {
                       <option value="10">العاشر</option><option value="11">الحادي عشر</option><option value="12">الثاني عشر</option>
                     </select>
                   </div>
-                  <div className="space-y-2 md:col-span-2"><label className="text-sm font-black">رقم هاتف ولي الأمر (هام جداً للربط)</label>
+                  <div className="space-y-2 md:col-span-2"><label className="text-sm font-black">رقم هاتف ولي الأمر (ضروري للربط)</label>
                     <input className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={form.phones[0].number} onChange={e => {
                       const n = [...form.phones]; n[0].number = e.target.value; setForm({...form, phones: n});
                     }} />
+                  </div>
+                  <div className="space-y-2"><label className="text-sm font-black">السعر المتفق عليه (للكورس كاملاً)</label><input type="number" className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-sm font-black">الفصل الدراسي</label>
+                    <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={form.semester} onChange={e => setForm({...form, semester: e.target.value})}>
+                      <option value="1">كورس أول</option><option value="2">كورس ثان</option>
+                    </select>
                   </div>
                 </div>
               )}
@@ -156,20 +187,6 @@ const Students = ({ isAdmin, profile }: any) => {
                       </div>
                    </div>
                    <div className="space-y-2"><label className="text-sm font-black">ملاحظات</label><textarea className="w-full p-5 bg-slate-50 rounded-2xl font-bold h-32" value={recordForm.notes} onChange={e => setRecordForm({...recordForm, notes: e.target.value})} /></div>
-                </div>
-              )}
-
-              {activeModal === 'transfer' && (
-                <div className="space-y-6">
-                   <p className="text-slate-500 font-bold">سيتم نسخ بيانات الطالب وحساباته إلى الفصل الدراسي الجديد مع تصفير سجلات الحصص والدفعات هناك.</p>
-                   <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2"><label className="text-sm font-black">السنة الجديدة</label><input className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={transferForm.year} onChange={e => setTransferForm({...transferForm, year: e.target.value})} /></div>
-                      <div className="space-y-2"><label className="text-sm font-black">الكورس</label>
-                         <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold" value={transferForm.semester} onChange={e => setTransferForm({...transferForm, semester: e.target.value})}>
-                            <option value="1">كورس أول</option><option value="2">كورس ثان</option>
-                         </select>
-                      </div>
-                   </div>
                 </div>
               )}
 
