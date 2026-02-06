@@ -21,7 +21,7 @@ import ParentPortal from './pages/ParentPortal';
 import Settings from './pages/Settings';
 
 const ADMIN_PHONE = '55315661';
-const APP_VERSION = "V4.3 DIAMOND+";
+const APP_VERSION = "V4.4 SUPREME";
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -33,7 +33,6 @@ const App: React.FC = () => {
   const currentSemester = localStorage.getItem('selectedSemester') || '1';
 
   useEffect(() => {
-    // التحقق من جلسة ولي الأمر أولاً
     const parentPhone = localStorage.getItem('parent_session_phone');
     if (parentPhone) {
       setIsParentSession(true);
@@ -45,7 +44,6 @@ const App: React.FC = () => {
       });
       setLoading(false);
     } else {
-      // التحقق من جلسة المعلم/المدير
       supabase.auth.getSession().then(({ data: { session: s } }) => {
         setSession(s);
         if (s) fetchProfile(s.user);
@@ -70,8 +68,10 @@ const App: React.FC = () => {
   const fetchProfile = async (user: any) => {
     try {
       let profileData = null;
-      // محاولة الجلب بحد أقصى 5 مرات (لأن الـ Trigger قد يستغرق أجزاء من الثانية)
-      for (let i = 0; i < 5; i++) {
+      // محاولات جلب البروفايل مع دعم التحقق من رقم الهاتف مباشرة
+      const userPhone = user.user_metadata?.phone || '';
+      
+      for (let i = 0; i < 3; i++) {
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
         if (data) {
           profileData = data;
@@ -80,17 +80,18 @@ const App: React.FC = () => {
         await new Promise(r => setTimeout(r, 1000));
       }
       
-      const userPhone = user.user_metadata?.phone || '';
+      // إذا لم يجد بروفايل في الجدول، نعتمد على ميتاداتا الهاتف مؤقتاً لضمان الدخول
       const isSystemAdmin = userPhone === ADMIN_PHONE || profileData?.role === 'admin';
       
       setProfile({ 
-        ...(profileData || {}), 
+        ...(profileData || { full_name: user.user_metadata?.full_name }), 
         id: user.id, 
+        phone: userPhone,
         role: isSystemAdmin ? 'admin' : (profileData?.role || 'teacher'), 
         is_approved: isSystemAdmin || profileData?.is_approved 
       });
     } catch (e) { 
-      console.error("Critical Profile Error:", e); 
+      console.error("Profile Fetch Error:", e); 
     } finally { 
       setLoading(false); 
     }
@@ -107,7 +108,7 @@ const App: React.FC = () => {
     <div className="h-screen flex items-center justify-center bg-white font-['Cairo']">
       <div className="flex flex-col items-center gap-6">
         <div className="w-20 h-20 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-black text-indigo-900 animate-pulse text-xl">تأمين الاتصال السحابي {APP_VERSION}...</p>
+        <p className="font-black text-indigo-900 animate-pulse text-xl">تفعيل الصلاحيات {APP_VERSION}...</p>
       </div>
     </div>
   );
@@ -166,12 +167,11 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* MAIN CONTENT */}
         <main className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
           <header className={`h-24 md:h-28 ${isAdmin ? 'bg-slate-900 border-white/5' : 'bg-white/80 border-slate-100'} backdrop-blur-md sticky top-0 z-40 px-6 md:px-12 flex items-center justify-between border-b`}>
              <div className="flex flex-col text-right">
                 <span className={`text-[10px] font-black uppercase tracking-widest ${isAdmin ? 'text-indigo-400' : (isParent ? 'text-emerald-500' : 'text-indigo-500')}`}>
-                  {isAdmin ? 'الإدارة المركزية' : (isParent ? 'بوابة ولي الأمر' : 'المعلم المعتمد')}
+                  {isAdmin ? 'المدير العام' : (isParent ? 'بوابة ولي الأمر' : 'المعلم المعتمد')}
                 </span>
                 <span className={`text-xl md:text-2xl font-black truncate max-w-[200px] ${isAdmin ? 'text-white' : 'text-slate-900'}`}>{profile?.full_name}</span>
              </div>
@@ -202,7 +202,6 @@ const App: React.FC = () => {
           </div>
         </main>
 
-        {/* MOBILE NAV */}
         <nav className={`lg:hidden fixed bottom-4 inset-x-4 ${isAdmin ? 'bg-slate-900/95 border-white/10' : 'bg-white/95 border-slate-100'} backdrop-blur-2xl border flex items-center px-4 py-3 z-[100] shadow-2xl rounded-[2.5rem] overflow-x-auto no-scrollbar gap-2`}>
           {navItems.map(item => (
             <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-5 py-3 rounded-[1.8rem] min-w-[75px] ${isActive ? 'text-white bg-indigo-600' : (isAdmin ? 'text-slate-500' : 'text-slate-400')}`}>

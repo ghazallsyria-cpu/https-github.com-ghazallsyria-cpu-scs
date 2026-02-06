@@ -61,24 +61,25 @@ const Login = () => {
 
     try {
       if (isSignUp) {
-        console.log("Starting SignUp for:", virtualEmail);
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        // التحقق من الاسم
+        if (!formData.fullName || formData.fullName.length < 5) {
+          throw new Error("يرجى إدخال اسمك بالكامل (ثلاثي على الأقل)");
+        }
+
+        const { error: signUpError } = await supabase.auth.signUp({
           email: virtualEmail,
           password: formData.password,
           options: { 
             data: { 
               phone: mobileClean, 
-              full_name: formData.fullName || 'معلم جديد' 
+              full_name: formData.fullName 
             } 
           }
         });
         
-        if (signUpError) {
-          console.error("SignUp Error:", signUpError);
-          throw signUpError;
-        }
+        if (signUpError) throw signUpError;
 
-        setError({ msg: "تم إنشاء الحساب! يمكنك الآن تسجيل الدخول مباشرة.", type: 'success' });
+        setError({ msg: "تم إنشاء الحساب! يمكنك الآن تسجيل الدخول.", type: 'success' });
         setIsSignUp(false);
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -86,17 +87,17 @@ const Login = () => {
           password: formData.password
         });
         
-        if (signInError) {
-          if (signInError.message.includes("Invalid login credentials")) {
-            throw new Error("رقم الهاتف أو كلمة المرور غير صحيحة.");
-          }
-          throw signInError;
-        }
+        if (signInError) throw signInError;
         window.location.reload();
       }
     } catch (err: any) {
-      setError({ msg: err.message, type: 'error' });
-      console.error("Auth process error:", err);
+      let friendlyMsg = err.message;
+      if (err.message.includes("Database error saving new user")) {
+        friendlyMsg = "خطأ في تسجيل البيانات السحابية. يرجى المحاولة مرة أخرى أو التواصل مع الدعم.";
+      } else if (err.message.includes("Invalid login credentials")) {
+        friendlyMsg = "رقم الهاتف أو كلمة المرور غير صحيحة.";
+      }
+      setError({ msg: friendlyMsg, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -104,12 +105,10 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-[#FDFDFF] flex flex-col items-center justify-center p-6 font-['Cairo'] relative overflow-hidden" dir="rtl">
-      {/* Decorative */}
       <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-500 via-indigo-600 to-amber-500"></div>
       
       <div className="bg-white w-full max-w-lg p-10 md:p-16 rounded-[4rem] shadow-2xl border border-slate-100 relative z-10">
         
-        {/* Toggle */}
         <div className="bg-slate-50 p-2 rounded-[2.5rem] mb-12 flex relative border border-slate-100 shadow-inner">
            <button 
              onClick={() => { setIsParentMode(true); setError(null); }}
@@ -131,9 +130,7 @@ const Login = () => {
               {isParentMode ? <School size={48} /> : <GraduationCap size={48} />}
            </div>
            <h2 className="text-3xl font-black text-slate-900 mb-2 tracking-tighter">نظام القمة التعليمي</h2>
-           <p className="text-slate-400 font-bold text-sm">
-             {isParentMode ? 'متابعة الطالب الدراسي' : 'إدارة المحتوى والعمليات'}
-           </p>
+           <p className="text-slate-400 font-bold text-sm">V4.4 SUPREME EDITION</p>
         </div>
 
         {error && (
@@ -183,7 +180,7 @@ const Login = () => {
           )}
         </form>
       </div>
-      <p className="mt-12 text-slate-300 font-black text-[10px] uppercase tracking-[0.4em]">ADMIN: 55315661 • V4.3 DIAMOND+</p>
+      <p className="mt-12 text-slate-300 font-black text-[10px] uppercase tracking-[0.4em]">ADMIN: 55315661 • V4.4 SUPREME</p>
     </div>
   );
 };
