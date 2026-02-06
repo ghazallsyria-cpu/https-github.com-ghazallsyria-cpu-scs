@@ -1,14 +1,13 @@
 
--- تنظيف شامل للبيئة
+-- 1. تنظيف شامل
 DROP VIEW IF EXISTS public.student_summary_view CASCADE;
 DROP TABLE IF EXISTS public.payments CASCADE;
 DROP TABLE IF EXISTS public.lessons CASCADE;
 DROP TABLE IF EXISTS public.schedules CASCADE;
 DROP TABLE IF EXISTS public.students CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
-DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
 
--- 1. جدول البروفايلات
+-- 2. جدول الملفات الشخصية
 CREATE TABLE public.profiles (
   id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name text NOT NULL,
@@ -18,7 +17,7 @@ CREATE TABLE public.profiles (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 2. جدول الطلاب
+-- 3. جدول الطلاب (العصب الرئيسي)
 CREATE TABLE public.students (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   teacher_id uuid REFERENCES auth.users ON DELETE CASCADE,
@@ -36,7 +35,7 @@ CREATE TABLE public.students (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 3. جدول الحصص
+-- 4. جداول العمليات (حصص، مدفوعات، جداول)
 CREATE TABLE public.lessons (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   student_id uuid REFERENCES public.students ON DELETE CASCADE,
@@ -47,7 +46,6 @@ CREATE TABLE public.lessons (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 4. جدول المدفوعات
 CREATE TABLE public.payments (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   student_id uuid REFERENCES public.students ON DELETE CASCADE,
@@ -61,7 +59,6 @@ CREATE TABLE public.payments (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- 5. جدول الجدولة
 CREATE TABLE public.schedules (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   teacher_id uuid REFERENCES auth.users ON DELETE CASCADE,
@@ -72,40 +69,42 @@ CREATE TABLE public.schedules (
   created_at timestamp with time zone DEFAULT now()
 );
 
--- تفعيل الـ RLS
+-- 5. تفعيل الأمن (RLS) وسياسات "اللا عودة"
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 
--- وظيفة فحص المدير الصارمة (تعتمد على JWT فقط لمنع التكرار)
-CREATE OR REPLACE FUNCTION auth.is_admin() RETURNS boolean AS $$
-  SELECT (auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661';
-$$ LANGUAGE sql STABLE;
+-- سياسات البروفايلات: التحقق من الهاتف مباشرة من التوكن لمنع Recursion
+CREATE POLICY "profiles_view_policy" ON public.profiles FOR SELECT TO authenticated 
+USING (auth.uid() = id OR (auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661');
 
--- سياسات الأمان الحديدية
--- 1. البروفايلات
-CREATE POLICY "profiles_select" ON public.profiles FOR SELECT TO authenticated USING (auth.uid() = id OR auth.is_admin());
-CREATE POLICY "profiles_update" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = id OR auth.is_admin());
+CREATE POLICY "profiles_mod_policy" ON public.profiles FOR ALL TO authenticated 
+USING ((auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661');
 
--- 2. الطلاب (المعلم يرى طلابه، المدير يرى الكل، ولي الأمر يرى ابنه فقط عبر الرقم)
-CREATE POLICY "students_all" ON public.students FOR ALL TO authenticated 
+-- سياسات الطلاب: المعلم يرى طلابه، المدير يرى الكل، ولي الأمر يرى عبر رقم هاتفه
+CREATE POLICY "students_master_policy" ON public.students FOR ALL TO authenticated 
 USING (
   teacher_id = auth.uid() 
-  OR auth.is_admin() 
+  OR (auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661'
   OR EXISTS (
     SELECT 1 FROM jsonb_array_elements(phones) AS p 
     WHERE p->>'number' = (auth.jwt() -> 'user_metadata' ->> 'phone')
   )
 );
 
--- 3. الحصص والمدفوعات والجداول (نفس المنطق)
-CREATE POLICY "lessons_all" ON public.lessons FOR ALL TO authenticated USING (teacher_id = auth.uid() OR auth.is_admin());
-CREATE POLICY "payments_all" ON public.payments FOR ALL TO authenticated USING (teacher_id = auth.uid() OR auth.is_admin());
-CREATE POLICY "schedules_all" ON public.schedules FOR ALL TO authenticated USING (teacher_id = auth.uid() OR auth.is_admin());
+-- سياسات العمليات: المعلم يرى عملياته، والمدير يرى كل شيء
+CREATE POLICY "lessons_master_policy" ON public.lessons FOR ALL TO authenticated 
+USING (teacher_id = auth.uid() OR (auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661');
 
--- مشغل إنشاء البروفايل التلقائي
+CREATE POLICY "payments_master_policy" ON public.payments FOR ALL TO authenticated 
+USING (teacher_id = auth.uid() OR (auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661');
+
+CREATE POLICY "schedules_master_policy" ON public.schedules FOR ALL TO authenticated 
+USING (teacher_id = auth.uid() OR (auth.jwt() -> 'user_metadata' ->> 'phone') = '55315661');
+
+-- 6. مشغل إنشاء البروفايل (Security Definer)
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, full_name, phone, role, is_approved)
@@ -122,7 +121,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- العرض المالي الذكي (View)
+-- 7. العرض المالي الذكي (View)
 CREATE VIEW public.student_summary_view AS
 SELECT 
     s.*,

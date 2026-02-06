@@ -3,11 +3,11 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { 
   Users, Calendar, DollarSign, Wallet, 
-  CheckCircle, ArrowUpRight, TrendingUp,
-  History, Clock, Star
+  ArrowUpRight, TrendingUp, Star, Award, 
+  Clock, Zap
 } from 'lucide-react';
 import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell 
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area 
 } from 'recharts';
 
 const Dashboard = ({ role, profile }: any) => {
@@ -18,7 +18,6 @@ const Dashboard = ({ role, profile }: any) => {
     pendingPayments: 0
   });
   const [loading, setLoading] = useState(true);
-  const isAdmin = role === 'admin';
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -35,49 +34,68 @@ const Dashboard = ({ role, profile }: any) => {
       });
       setLoading(false);
     };
-
     fetchStats();
   }, []);
 
-  if (loading) return <div className="flex justify-center p-20 animate-pulse text-indigo-600 font-black">جاري تحديث البيانات...</div>;
+  if (loading) return (
+    <div className="h-[60vh] flex flex-col items-center justify-center gap-4">
+      <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+      <p className="font-black text-slate-400 animate-pulse">جاري تحليل البيانات...</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
       
-      {/* Hero Stats */}
+      {/* Welcome Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-4xl font-black text-slate-900 leading-tight">نظرة عامة على <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">الأداء</span></h1>
+          <p className="text-slate-400 font-bold mt-2">إحصائيات حية تعكس تقدمك التعليمي والمالي.</p>
+        </div>
+        <div className="flex gap-4">
+          <button className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 text-slate-500 hover:text-indigo-600 transition-all">
+             <Clock size={24} />
+          </button>
+          <div className="bg-indigo-600 text-white px-8 py-4 rounded-2xl shadow-xl shadow-indigo-100 flex items-center gap-3 font-black cursor-pointer hover:bg-indigo-700 transition-all">
+             <Zap size={20} /> تحديث فوري
+          </div>
+        </div>
+      </div>
+
+      {/* Modern Stats Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard label="الطلاب النشطين" value={stats.studentsCount} sub="طالب هذا الشهر" icon={<Users className="text-blue-600" />} color="bg-blue-50" />
-        <StatCard label="إجمالي الحصص" value={stats.lessonsCount} sub="حصة تم إنجازها" icon={<Calendar className="text-indigo-600" />} color="bg-indigo-50" />
-        <StatCard label="المحصل المالي" value={`$${stats.totalIncome.toLocaleString()}`} sub="إجمالي الإيرادات" icon={<DollarSign className="text-emerald-600" />} color="bg-emerald-50" />
-        <StatCard label="المتبقي للتحصيل" value={`$${stats.pendingPayments.toLocaleString()}`} sub="مستحقات معلقة" icon={<Wallet className="text-rose-600" />} color="bg-rose-50" />
+        <StatCard label="الطلاب النشطين" value={stats.studentsCount} trend="+12%" icon={<Users />} color="blue" />
+        <StatCard label="الحصص المنجزة" value={stats.lessonsCount} trend="+5%" icon={<Calendar />} color="indigo" />
+        <StatCard label="التحصيل المالي" value={`$${stats.totalIncome.toLocaleString()}`} trend="+20%" icon={<DollarSign />} color="emerald" />
+        <StatCard label="مبالغ معلقة" value={`$${stats.pendingPayments.toLocaleString()}`} trend="-2%" icon={<Wallet />} color="rose" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Main Chart */}
-        <div className="lg:col-span-2 bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col">
+        {/* Revenue Chart */}
+        <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden relative group">
           <div className="flex items-center justify-between mb-10">
             <div>
-              <h3 className="text-xl font-black text-slate-900">الأداء المالي العام</h3>
-              <p className="text-sm font-bold text-slate-400 mt-1">مقارنة بين المحصل والمتبقي</p>
+              <h3 className="text-2xl font-black text-slate-900">الميزان المالي</h3>
+              <p className="text-sm font-bold text-slate-400 mt-1">المحصل vs المتبقي</p>
             </div>
-            <div className="bg-slate-50 px-4 py-2 rounded-xl text-xs font-black text-slate-500 flex items-center gap-2">
-              <TrendingUp size={14} className="text-emerald-500" />
-              نمو مستمر
+            <div className="flex gap-2">
+               <div className="w-3 h-3 rounded-full bg-indigo-600"></div>
+               <div className="w-3 h-3 rounded-full bg-rose-500"></div>
             </div>
           </div>
-          <div className="h-[300px] w-full">
+          <div className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={[
                 { name: 'المحصل', value: stats.totalIncome },
                 { name: 'المتبقي', value: stats.pendingPayments }
               ]}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 'bold'}} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 14, fontWeight: 'bold', fill: '#94a3b8'}} />
                 <Tooltip 
-                  cursor={{fill: 'transparent'}}
-                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px -5px rgba(0,0,0,0.1)', fontFamily: 'Cairo'}}
+                  cursor={{fill: '#f8fafc'}}
+                  contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.1)', fontFamily: 'Cairo'}}
                 />
-                <Bar dataKey="value" radius={[12, 12, 12, 12]} barSize={60}>
+                <Bar dataKey="value" radius={[20, 20, 20, 20]} barSize={80}>
                   <Cell fill="#4f46e5" />
                   <Cell fill="#f43f5e" />
                 </Bar>
@@ -86,64 +104,60 @@ const Dashboard = ({ role, profile }: any) => {
           </div>
         </div>
 
-        {/* Side Component: Recent Activity */}
-        <div className="bg-slate-900 p-10 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
-           <div className="relative z-10 flex flex-col h-full">
-              <div className="flex items-center gap-3 mb-8">
-                 <div className="p-3 bg-white/10 rounded-2xl text-amber-400">
-                    <Star size={24} />
-                 </div>
-                 <h3 className="text-xl font-black">نخبة الإنجاز</h3>
+        {/* Motivation Card */}
+        <div className="bg-slate-900 p-10 rounded-[3rem] text-white flex flex-col justify-between relative overflow-hidden group">
+           <div className="relative z-10">
+              <div className="bg-amber-400/20 w-16 h-16 rounded-3xl flex items-center justify-center text-amber-400 mb-8 border border-amber-400/30">
+                 <Award size={32} />
               </div>
-              
-              <div className="space-y-6 flex-1">
-                 <div className="p-5 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between hover:bg-white/10 transition-colors">
-                    <div className="flex items-center gap-4">
-                       <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center font-bold">1</div>
-                       <div>
-                          <p className="text-sm font-black">أفضل معلم تحصيلاً</p>
-                          <p className="text-[10px] text-slate-400 font-bold">بناءً على التقارير المالية</p>
-                       </div>
-                    </div>
-                    <ArrowUpRight className="text-emerald-400" />
-                 </div>
-                 <div className="p-5 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between hover:bg-white/10 transition-colors">
-                    <div className="flex items-center gap-4">
-                       <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center font-bold">2</div>
-                       <div>
-                          <p className="text-sm font-black">أكثر الطلاب التزاماً</p>
-                          <p className="text-[10px] text-slate-400 font-bold">معدل حضور 100%</p>
-                       </div>
-                    </div>
-                    <ArrowUpRight className="text-emerald-400" />
-                 </div>
-              </div>
-
-              <div className="mt-8 pt-8 border-t border-white/10 text-center">
-                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">تم التحديث منذ لحظات</p>
-              </div>
+              <h3 className="text-3xl font-black mb-4 leading-tight">أنت تحقق <br/> <span className="text-indigo-400">تقدماً مذهلاً!</span></h3>
+              <p className="text-slate-400 font-medium leading-relaxed">
+                استناداً إلى نشاطك الأخير، ارتفع معدل التحصيل العلمي بنسبة 15% مقارنة بالشهر الماضي.
+              </p>
            </div>
-           <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-600/20 blur-[80px] rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+           
+           <div className="relative z-10 mt-12">
+              <button className="w-full bg-white/10 hover:bg-white/20 border border-white/10 py-5 rounded-2xl font-black transition-all">تحميل تقرير الأداء</button>
+           </div>
+
+           {/* Decorative elements */}
+           <div className="absolute top-[-20%] right-[-20%] w-64 h-64 bg-indigo-600/20 blur-[100px] rounded-full group-hover:scale-125 transition-transform duration-700"></div>
+           <div className="absolute bottom-[-10%] left-[-10%] w-32 h-32 bg-rose-500/10 blur-[60px] rounded-full"></div>
         </div>
       </div>
     </div>
   );
 };
 
-const StatCard = ({ label, value, sub, icon, color }: any) => (
-  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-    <div className="flex justify-between items-start mb-6">
-      <div className={`${color} p-4 rounded-2xl`}>
-        {icon}
+const StatCard = ({ label, value, trend, icon, color }: any) => {
+  const colors: any = {
+    blue: 'bg-blue-50 text-blue-600',
+    indigo: 'bg-indigo-50 text-indigo-600',
+    emerald: 'bg-emerald-50 text-emerald-600',
+    rose: 'bg-rose-50 text-rose-600'
+  };
+
+  return (
+    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group">
+      <div className="flex justify-between items-start mb-6">
+        <div className={`${colors[color]} p-5 rounded-3xl transition-transform group-hover:scale-110`}>
+          {React.cloneElement(icon, { size: 28 })}
+        </div>
+        <div className="bg-slate-50 px-3 py-1.5 rounded-xl flex items-center gap-1">
+          <TrendingUp size={12} className={trend.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'} />
+          <span className={`text-[10px] font-black ${trend.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'}`}>{trend}</span>
+        </div>
       </div>
-      <div className="bg-slate-50 p-2 rounded-lg">
-        <ArrowUpRight size={14} className="text-slate-400" />
+      <div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{label}</p>
+        <h4 className="text-3xl font-black text-slate-900 tracking-tight">{value}</h4>
+      </div>
+      <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+         <span className="text-[10px] font-bold text-slate-400">مشاهدة التفاصيل</span>
+         <ArrowUpRight size={14} className="text-indigo-600" />
       </div>
     </div>
-    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-    <h4 className="text-3xl font-black text-slate-900 mb-1">{value}</h4>
-    <p className="text-[10px] font-bold text-slate-400">{sub}</p>
-  </div>
-);
+  );
+};
 
 export default Dashboard;
