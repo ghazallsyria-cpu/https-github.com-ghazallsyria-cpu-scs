@@ -1,209 +1,120 @@
 
-import React, { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
-import { supabase } from './supabase';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// Fix: Use standard v6 hook from react-router-dom
+// @ts-ignore: useNavigate might not be seen as exported in this environment
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../supabase';
 import { 
-  LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings, Bell, Star, RefreshCw, CheckCircle, Sparkles, BarChart3, Radio, School
+  Plus, CheckCircle, AlertCircle, Users, 
+  Phone, Search, RefreshCw, ChevronLeft, Save, 
+  Settings, UserCheck, Link as LinkIcon, Briefcase
 } from 'lucide-react';
 
-import Dashboard from './pages/Dashboard';
-import Students from './pages/Students';
-import Payments from './pages/Payments';
-import Lessons from './pages/Lessons';
-import Login from './pages/Login';
-import Teachers from './pages/Teachers';
-import Schedule from './pages/Schedule';
-import Reports from './pages/Reports';
-import Statistics from './pages/Statistics';
-import Messaging from './pages/Messaging';
-import ParentPortal from './pages/ParentPortal';
-
-const ADMIN_PHONE = '55315661';
-
-const App: React.FC = () => {
-  const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<any | null>(null);
+const Students = ({ isAdmin, role, uid, year, semester }: { isAdmin: boolean, role: any, uid: string, year: string, semester: string }) => {
+  const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isParentSession, setIsParentSession] = useState(false);
-  const [supervisedTeacher, setSupervisedTeacher] = useState<{id: string, name: string} | null>(null);
-  const [currentYear] = useState(localStorage.getItem('selectedYear') || '2025-2026');
-  const [currentSemester] = useState(localStorage.getItem('selectedSemester') || '1');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedGrade] = useState<string>('الكل');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
+  const navigate = useNavigate();
+  
+  const [form, setForm] = useState({ name: '', address: '', school_name: '', grade: '12', agreed_amount: '', is_hourly: false, price_per_hour: '', phones: [{ number: '', label: 'الطالب' as any }] });
+  const [existingStudentFound, setExistingStudentFound] = useState<any>(null);
 
-  useEffect(() => {
-    const parentPhone = localStorage.getItem('parent_session_phone');
-    if (parentPhone) {
-      setIsParentSession(true);
-      setProfile({
-        full_name: localStorage.getItem('parent_student_name') || 'ولي أمر',
-        phone: parentPhone,
-        role: 'parent',
-        is_approved: true
-      });
-      setLoading(false);
-      return;
-    }
+  const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
+    setFeedback({ msg, type });
+    setTimeout(() => setFeedback(null), 5000);
+  };
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      if (s) fetchProfile(s.user);
-      else setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, ns) => {
-      if (!ns && !localStorage.getItem('parent_session_phone')) {
-        setSession(null);
-        setProfile(null);
-        setLoading(false);
-      } else if (ns) {
-        setSession(ns);
-        fetchProfile(ns.user);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchProfile = async (user: any) => {
-    const userPhone = user.user_metadata?.phone || '';
+  const fetchStudents = useCallback(async () => {
+    setLoading(true);
     try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      const isSystemAdmin = userPhone === ADMIN_PHONE || data?.role === 'admin';
-      const role = isSystemAdmin ? 'admin' : (data?.role || 'teacher');
-      setProfile({ 
-        ...(data || {}), 
-        id: user.id, 
-        role: role, 
-        is_approved: isSystemAdmin || data?.is_approved 
-      });
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+      let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
+      if (role !== 'admin') query = query.eq('teacher_id', uid);
+      const { data, error } = await query.order('name');
+      if (error) throw error;
+
+      if (role === 'admin') {
+        // ذكاء المدير: تجميع الطلاب حسب رقم الهاتف الموحد (Primary Phone)
+        const consolidatedMap = new Map();
+        data?.forEach(s => {
+          const key = s.primary_phone || s.id;
+          if (consolidatedMap.has(key)) {
+            const existing = consolidatedMap.get(key);
+            existing.is_consolidated = true;
+            existing.total_paid += s.total_paid;
+            existing.remaining_balance += s.remaining_balance;
+            existing.total_lessons += s.total_lessons;
+            // دمج المعلمين
+            const teacherSet = new Set([...existing.teachers.map((t:any)=>t.id), s.teacher_id]);
+            if (teacherSet.size > existing.teachers.length) {
+                existing.teachers.push({id: s.teacher_id, name: s.teacher_name});
+            }
+          } else {
+            consolidatedMap.set(key, { ...s, teachers: [{id: s.teacher_id, name: s.teacher_name}], is_consolidated: false });
+          }
+        });
+        setStudents(Array.from(consolidatedMap.values()));
+      } else {
+        setStudents(data || []);
+      }
+    } catch (e: any) { showFeedback(`خطأ: ${e.message}`, "error"); } finally { setLoading(false); }
+  }, [uid, role, year, semester]);
+
+  useEffect(() => { fetchStudents(); }, [fetchStudents]);
+
+  const checkExistingStudent = async (phone: string) => {
+    if (phone.length < 8) return;
+    const { data } = await supabase.from('students').select('*, profiles(full_name)').contains('phones', [{ number: phone }]).limit(1);
+    if (data && data.length > 0) {
+      setExistingStudentFound(data[0]);
+      if (!isEditMode) {
+        setForm(prev => ({ ...prev, name: data[0].name, address: data[0].address || '', school_name: data[0].school_name || '', grade: data[0].grade }));
+      }
+    } else { setExistingStudentFound(null); }
   };
 
-  const handleLogout = async () => {
-    localStorage.removeItem('parent_session_phone');
-    localStorage.removeItem('parent_student_name');
-    await supabase.auth.signOut();
-    window.location.reload();
+  const handleSaveStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const studentData = { name: form.name.trim(), grade: form.grade, phones: form.phones, agreed_amount: form.is_hourly ? 0 : (parseFloat(form.agreed_amount) || 0), is_hourly: form.is_hourly, price_per_hour: form.is_hourly ? (parseFloat(form.price_per_hour) || 0) : 0, teacher_id: uid, academic_year: year, semester: semester, address: form.address, school_name: form.school_name };
+      if (isEditMode && selectedStudentId) await supabase.from('students').update(studentData).eq('id', selectedStudentId);
+      else await supabase.from('students').insert([studentData]);
+      setIsModalOpen(false); fetchStudents();
+      showFeedback("تم الحفظ والربط بنجاح");
+    } catch (err: any) { showFeedback(err.message, 'error'); } finally { setIsSubmitting(false); }
   };
 
-  if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-white">
-      <div className="flex flex-col items-center gap-6">
-        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-black text-indigo-600 animate-pulse tracking-widest">تحميل القمة التعليمية...</p>
-      </div>
-    </div>
-  );
-
-  if (!session && !isParentSession) return <Login />;
-
-  const isParent = profile?.role === 'parent' || isParentSession;
-  const isAdmin = profile?.role === 'admin';
-  const effectiveUid = supervisedTeacher ? supervisedTeacher.id : (session?.user?.id);
-  const effectiveRole = isAdmin && !supervisedTeacher ? 'admin' : (isParent ? 'parent' : 'teacher');
-
-  const teacherNav = [
-    { to: "/", icon: <LayoutDashboard size={24} />, label: "الرئيسية" },
-    { to: "/schedule", icon: <Calendar size={24} />, label: "الجدول" },
-    { to: "/students", icon: <Users size={24} />, label: "الطلاب" },
-    { to: "/lessons", icon: <BookOpen size={24} />, label: "الحصص" },
-    { to: "/payments", icon: <Wallet size={24} />, label: "المالية" },
-    { to: "/statistics", icon: <BarChart3 size={24} />, label: "الإحصائيات" },
-  ];
-
-  const parentNav = [
-    { to: "/", icon: <School size={24} />, label: "بوابة المتابعة" },
-  ];
-
-  const navItems = isParent ? parentNav : teacherNav;
+  const filteredStudents = useMemo(() => students.filter(s => (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) && (selectedGrade === 'الكل' || s.grade === selectedGrade)), [students, searchTerm, selectedGrade]);
 
   return (
-    <HashRouter>
-      <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row text-right font-['Cairo']" dir="rtl">
-        <aside className="hidden lg:flex w-80 bg-white border-l border-slate-100 flex-col sticky top-0 h-screen z-50 shadow-sm">
-          <div className="p-10 flex flex-col items-center gap-4 border-b border-slate-50">
-            <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} p-5 rounded-[2.2rem] text-white shadow-xl`}>
-              <GraduationCap size={40} />
-            </div>
-            <span className="font-black text-slate-900 text-2xl">منصة القمة</span>
+    <div className="space-y-12 animate-in fade-in duration-700 text-right font-['Cairo'] pb-32">
+      {feedback && (
+        <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-[500] px-12 py-6 rounded-[2.5rem] shadow-2xl flex items-center gap-5 font-black bg-indigo-600 text-white animate-in slide-in-from-top-4`}>
+          {feedback.type === 'success' ? <CheckCircle size={28} /> : <AlertCircle size={28} />} 
+          <span className="text-lg">{feedback.msg}</span>
+        </div>
+      )}
+
+      {/* HEADER */}
+      <div className="bg-white p-12 lg:p-16 rounded-[5rem] border border-slate-100 shadow-xl flex flex-col md:flex-row justify-between items-center gap-10 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-2 h-full bg-indigo-600"></div>
+        <div className="flex items-center gap-10 z-10">
+           <div className="bg-indigo-600 p-8 rounded-[2.8rem] text-white shadow-2xl rotate-6 transition-all duration-700"><Users size={44}/></div>
+           <div>
+              <h1 className="text-4xl font-black text-slate-900 leading-tight">سجل الطلاب {isAdmin ? '(الهوية الرقمية)' : ''}</h1>
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mt-3">إدارة {students.length} هوية طلابية فريدة</p>
+           </div>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-5 w-full md:w-auto z-10">
+          <div className="relative flex-1 md:w-80">
+            <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={24} />
+            <input placeholder="ابحث بالاسم أو الهاتف..." className="w-full pr-16 pl-8 py-5 bg-slate-50 rounded-[2rem] font-black border-2 border-transparent focus:border-indigo-100 focus:bg-white outline-none transition-all text-sm shadow-inner" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
-          
-          <nav className="flex-1 px-8 py-10 space-y-4 overflow-y-auto no-scrollbar">
-            {navItems.map(item => (
-              <NavLink key={item.to} to={item.to} className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all ${isActive ? (isParent ? 'bg-emerald-600' : 'bg-indigo-600') + ' text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
-                {item.icon} {item.label}
-              </NavLink>
-            ))}
-            
-            {isAdmin && (
-              <div className="pt-6 mt-6 border-t border-slate-50 space-y-4">
-                <span className="px-8 text-[10px] font-black text-slate-300 uppercase tracking-widest">أدوات الإدارة</span>
-                <NavLink to="/messaging" className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all ${isActive ? 'bg-amber-600 text-white shadow-xl' : 'text-amber-600 bg-amber-50 hover:bg-amber-100'}`}>
-                  <Radio size={24} /> مركز البث الفوري
-                </NavLink>
-                <NavLink to="/teachers" className={({isActive}) => `flex items-center gap-5 px-8 py-5 rounded-[2.2rem] font-black text-[14px] transition-all ${isActive ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
-                  <ShieldCheck size={24} /> إدارة المعلمين
-                </NavLink>
-              </div>
-            )}
-          </nav>
-
-          <div className="p-10 border-t border-slate-50">
-             <button onClick={handleLogout} className="w-full flex items-center justify-center gap-4 py-5 text-rose-500 font-black hover:bg-rose-50 rounded-[2rem] transition-all">
-               <LogOut size={22} /> تسجيل الخروج
-             </button>
-          </div>
-        </aside>
-
-        <nav className="lg:hidden fixed bottom-4 inset-x-4 bg-white/90 backdrop-blur-2xl border border-slate-100 flex justify-around items-center px-2 py-4 z-[100] shadow-2xl rounded-[2.5rem]">
-          {navItems.map(item => (
-            <NavLink key={item.to} to={item.to} className={({isActive}) => `flex flex-col items-center gap-1 transition-all px-4 py-2 rounded-2xl ${isActive ? (isParent ? 'text-emerald-600 bg-emerald-50' : 'text-indigo-600 bg-indigo-50') : 'text-slate-400'}`}>
-              {item.icon}
-              <span className="text-[9px] font-black">{item.label}</span>
-            </NavLink>
-          ))}
-          <button onClick={handleLogout} className="flex flex-col items-center gap-1 px-4 py-2 text-rose-500">
-            <LogOut size={24} />
-            <span className="text-[9px] font-black">خروج</span>
-          </button>
-        </nav>
-
-        <main className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
-          <header className="h-20 md:h-28 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 md:px-10 flex items-center justify-between border-b border-slate-100">
-             <div className="flex flex-col text-right">
-                <span className={`text-[9px] font-black uppercase tracking-widest ${isParent ? 'text-emerald-500' : 'text-indigo-500'}`}>
-                  {isParent ? 'بوابة ولي الأمر' : (isAdmin ? 'المدير العام' : 'المعلم المعتمد')}
-                </span>
-                <span className="text-lg md:text-xl font-black text-slate-900">{profile?.full_name}</span>
-             </div>
-             <div className={`${isParent ? 'bg-emerald-600' : 'bg-indigo-600'} w-10 h-10 md:w-14 md:h-14 rounded-xl flex items-center justify-center text-white font-black shadow-lg`}>
-                {profile?.full_name?.[0] || 'P'}
-             </div>
-          </header>
-
-          <div className="flex-1 p-4 md:p-8 lg:p-12 max-w-[1400px] mx-auto w-full">
-            <Routes>
-              {isParent ? (
-                <Route path="/" element={<ParentPortal parentPhone={profile?.phone} />} />
-              ) : (
-                <>
-                  <Route path="/" element={<Dashboard role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                  <Route path="/students" element={<Students isAdmin={isAdmin} role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                  <Route path="/payments" element={<Payments role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                  <Route path="/lessons" element={<Lessons role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                  <Route path="/statistics" element={<Statistics role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                  <Route path="/messaging" element={isAdmin ? <Messaging /> : <Navigate to="/" />} />
-                  <Route path="/schedule" element={<Schedule role={effectiveRole} uid={effectiveUid} />} />
-                  <Route path="/reports" element={<Reports role={effectiveRole} uid={effectiveUid} year={currentYear} semester={currentSemester} />} />
-                  {isAdmin && <Route path="/teachers" element={<Teachers onSupervise={setSupervisedTeacher} />} />}
-                </>
-              )}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </div>
-        </main>
-      </div>
-    </HashRouter>
-  );
-};
-
-export default App;
+          <button onClick={() => { setForm({ name: '', address: '', school_name: '', grade: '12', agreed_amount: '', is_hourly: false, price_per_hour: '', phones: [{ number: '', label: 'الطالب' }] }); setIsEditMode(false); setExistingStudentFound(null); setIsModalOpen(true); }} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black shadow-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-4">
+            <Plus size={24} /> إضافة طالب
