@@ -1,39 +1,40 @@
 
--- 1. التأكد من ربط الأكواد بجدول البروفايلات (public.profiles) لسهولة الجلب
-CREATE TABLE IF NOT EXISTS public.activation_codes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code TEXT UNIQUE NOT NULL,
-    is_used BOOLEAN DEFAULT false,
-    used_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL, -- الربط مع البروفايلات وليس Auth
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
+-- 1. وظيفة تطهير الأرقام (تستخدم في البحث والمقارنة)
+CREATE OR REPLACE FUNCTION public.normalize_phone(p_phone text)
+RETURNS text AS $$
+BEGIN
+    -- إزالة كل شيء ليس رقماً (المسافات، +، -)
+    RETURN regexp_replace(p_phone, '\D', '', 'g');
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
 
--- 2. تفعيل RLS وإعادة ضبط السياسات
-ALTER TABLE public.activation_codes ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Admins manage codes" ON public.activation_codes;
-DROP POLICY IF EXISTS "Public select unused" ON public.activation_codes;
-
--- سياسة المدير: سماح كامل (باستخدام رقم الهاتف والـ ID)
-CREATE POLICY "Admins manage codes" ON public.activation_codes 
-FOR ALL USING (
-    EXISTS (
-        SELECT 1 FROM public.profiles 
-        WHERE profiles.id = auth.uid() 
-        AND (profiles.role = 'admin' OR profiles.phone = '55315661')
+-- 2. دالة التحقق الذكي لولي الأمر (بدون Auth)
+-- تعيد بيانات الطالب إذا كان الرقم موجوداً في مصفوفة الهواتف
+CREATE OR REPLACE FUNCTION public.verify_parent_access(phone_to_check text)
+RETURNS TABLE (
+    student_id uuid,
+    student_name text,
+    teacher_name text,
+    grade text
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        s.id, 
+        s.name, 
+        p.full_name as teacher_name,
+        s.grade
+    FROM public.students s
+    JOIN public.profiles p ON s.teacher_id = p.id
+    WHERE EXISTS (
+        SELECT 1 FROM jsonb_array_elements(s.phones) AS ph
+        WHERE public.normalize_phone(ph->>'number') = public.normalize_phone(phone_to_check)
     )
-);
+    AND s.is_completed = false
+    LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- سياسة عامة: المعلمين يمكنهم رؤية الأكواد للتحقق منها فقط
-CREATE POLICY "Public select unused" ON public.activation_codes 
-FOR SELECT USING (true); -- السماح بالعرض للكل لحل مشكلة الاختفاء، التقييد سيكون برمجياً
-
--- 3. ضمان رتبة المدير
-UPDATE public.profiles SET role = 'admin', is_approved = true WHERE phone = '55315661';
-
--- 4. إصلاح جدول المتابعة
-ALTER TABLE public.academic_records DROP CONSTRAINT IF EXISTS academic_records_student_id_fkey;
-ALTER TABLE public.academic_records ADD CONSTRAINT academic_records_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
-
--- تحديث الكاش
-NOTIFY pgrst, 'reload schema';
+-- 3. تحديث صلاحيات الوصول (RLS) لتسمح لولي الأمر (عبر الرقم) بالقراءة
+-- سنسمح بالوصول للـ anon (المستخدم غير المسجل) بشرط وجود دالة تتحقق من الرقم
+-- ملحوظة: في نظام القمة، سنعتمد على دالة RPC لجلب البيانات لضمان الأمان
