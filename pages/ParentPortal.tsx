@@ -2,9 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { 
-  Heart, Wallet, BookOpen, Calendar, Clock, MessageCircle, AlertCircle, 
-  CheckCircle, RefreshCw, Send, DollarSign, Sparkles, User, GraduationCap, 
-  ChevronLeft, Briefcase, X, LogOut, LayoutGrid
+  School, Wallet, BookOpen, Calendar, Clock, MessageCircle, AlertCircle, 
+  CheckCircle, RefreshCw, Send, Sparkles, User, Briefcase, ChevronLeft, LayoutGrid
 } from 'lucide-react';
 
 const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
@@ -18,23 +17,18 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
   
   const [note, setNote] = useState('');
   const [sendingRequest, setSendingRequest] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState('');
 
   const showFeedback = (msg: string, type: 'success' | 'error' = 'success') => {
     setFeedback({ msg, type });
     setTimeout(() => setFeedback(null), 4000);
   };
 
-  // 1. جلب السجلات المتاحة لهذا الرقم
   const fetchAvailableRecords = useCallback(async () => {
     setLoading(true);
     try {
       const { data: stds, error } = await supabase.rpc('get_student_by_parent_phone', { phone_val: parentPhone });
       if (error) throw error;
       setAvailableRecords(stds || []);
-      
-      // إذا كان هناك سجل واحد فقط، نختاره فوراً
       if (stds?.length === 1) {
         setSelectedStudentId(stds[0].id);
       }
@@ -45,13 +39,11 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
     }
   }, [parentPhone]);
 
-  // 2. جلب تفاصيل السجل المختار
   const fetchRecordDetails = useCallback(async (sid: string) => {
     setLoading(true);
     try {
       const active = availableRecords.find(r => r.id === sid);
       if (!active) {
-        // إذا لم نجد السجل في المصفوفة (ربما بعد تحديث)، نحاول جلب السجلات مجدداً
         const { data: stds } = await supabase.rpc('get_student_by_parent_phone', { phone_val: parentPhone });
         const retryActive = stds?.find((r:any) => r.id === sid);
         if (retryActive) setStudent(retryActive);
@@ -97,12 +89,10 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
       if (error) throw error;
       showFeedback("تم إرسال طلبك بنجاح للأستاذ " + student.teacher_name);
       if (type === 'note') setNote('');
-      if (type === 'payment_intent') setShowPaymentModal(false);
     } catch (err: any) { showFeedback(err.message, "error"); }
     finally { setSendingRequest(false); }
   };
 
-  // Add missing handleApologize function
   const handleApologize = (day: string) => {
     if (!confirm(`هل أنت متأكد من الاعتذار عن حصة يوم ${day}؟`)) return;
     handleSendRequest('apology', `اعتذار عن حصة يوم ${day}`);
@@ -112,13 +102,12 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
     <div className="h-96 flex items-center justify-center"><RefreshCw className="animate-spin text-emerald-600" size={40} /></div>
   );
 
-  // شاشة الاختيار في حال وجود سجلات متعددة أو لم يتم اختيار سجل
   if (!selectedStudentId || (availableRecords.length > 1 && !student)) {
     return (
       <div className="max-w-5xl mx-auto py-12 px-6 animate-in fade-in duration-700 text-right">
         <div className="text-center mb-16">
            <div className="bg-emerald-600 w-24 h-24 rounded-[2.5rem] flex items-center justify-center text-white mx-auto shadow-2xl mb-8">
-              <LayoutGrid size={48} />
+              <School size={48} />
            </div>
            <h1 className="text-4xl font-black text-slate-900 mb-4">أهلاً بك في منصة القمة</h1>
            <p className="text-slate-500 font-bold text-lg">يرجى اختيار المدرس أو الطالب الذي ترغب في متابعته الآن:</p>
@@ -174,7 +163,6 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
         </div>
       )}
 
-      {/* شريط التحكم العلوي لولي الأمر */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6">
          <div className="flex gap-4">
             {availableRecords.length > 1 && (
@@ -192,13 +180,12 @@ const ParentPortal = ({ parentPhone }: { parentPhone: string }) => {
          </div>
       </div>
 
-      {/* HERO SECTION */}
       <div className="bg-gradient-to-br from-emerald-600 to-teal-800 p-8 md:p-16 rounded-[3rem] md:rounded-[5rem] text-white shadow-2xl relative overflow-hidden group border border-emerald-500/20">
          <div className="absolute top-0 right-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
          <div className="relative z-10 flex flex-col lg:flex-row justify-between items-center gap-10">
             <div className="text-center lg:text-right">
                <span className="bg-white/20 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 mb-6 w-fit mx-auto lg:mx-0">
-                 <Sparkles size={14} className="text-amber-300" /> منصة القمة الرقمية
+                 <Sparkles size={14} className="text-amber-300" /> بوابة المتابعة التعليمية
                </span>
                <h1 className="text-4xl md:text-6xl font-black leading-tight mb-4 tracking-tighter">متابعة الطالب <br/><span className="text-emerald-300">{student?.name}</span></h1>
                <p className="text-emerald-100/70 font-bold text-lg">مع الأستاذ {student?.teacher_name}</p>
