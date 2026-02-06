@@ -1,59 +1,64 @@
 
--- 1. تعطيل RLS مؤقتاً لتنظيف السياسات
+-- 1. تعطيل RLS لتنظيف الجداول
 ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
-
--- 2. حذف كافة السياسات المحتملة بأسماء مختلفة لتنظيف البيئة تماماً
-DO $$ 
-DECLARE 
-    pol record;
-BEGIN 
-    FOR pol IN (SELECT policyname FROM pg_policies WHERE tablename = 'profiles' AND schemaname = 'public') 
-    LOOP 
-        EXECUTE format('DROP POLICY %I ON public.profiles', pol.policyname); 
-    END LOOP; 
-END $$;
-
--- 3. إعادة تفعيل RLS
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
--- 4. بناء سياسات جديدة بسيطة ومباشرة (لا تسبب تكرار برمجياً)
--- الجميع (المسجلون) يمكنهم رؤية البروفايلات
-CREATE POLICY "safe_select_profiles" 
-ON public.profiles FOR SELECT 
-USING (auth.role() = 'authenticated');
-
--- المستخدم يمكنه إنشاء بروفايله الخاص
-CREATE POLICY "safe_insert_profiles" 
-ON public.profiles FOR INSERT 
-WITH CHECK (auth.uid() = id);
-
--- المستخدم يمكنه تحديث بياناته الخاصة
-CREATE POLICY "safe_update_profiles" 
-ON public.profiles FOR UPDATE 
-USING (auth.uid() = id);
-
--- 5. تحديث سياسة الطلاب لتكون مستقلة تماماً عن جدول البروفايلات (تستخدم JWT)
 ALTER TABLE public.students DISABLE ROW LEVEL SECURITY;
+
+-- 2. حذف كافة السياسات الحالية لتجنب أي تداخل قديم
 DO $$ 
 DECLARE 
     pol record;
 BEGIN 
-    FOR pol IN (SELECT policyname FROM pg_policies WHERE tablename = 'students' AND schemaname = 'public') 
+    FOR pol IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public' AND tablename IN ('profiles', 'students', 'lessons', 'payments', 'schedules')) 
     LOOP 
-        EXECUTE format('DROP POLICY %I ON public.students', pol.policyname); 
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol.policyname, pol.tablename); 
     END LOOP; 
 END $$;
+
+-- 3. تفعيل RLS من جديد
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "students_access_policy_v2" 
-ON public.students FOR ALL 
-USING (
+-- 4. سياسات جدول البروفايلات (Profiles) - الحل الجذري للـ Recursion
+-- القاعدة الذهبية: لا تستخدم (SELECT ... FROM profiles) داخل سياسة تخص جدول profiles نفسه.
+
+-- السماح بالقراءة لجميع المستخدمين المسجلين (لأغراض الربط والبحث)
+CREATE POLICY "profiles_select_policy" ON public.profiles
+FOR SELECT USING (auth.role() = 'authenticated');
+
+-- السماح للمستخدم بإدخال بياناته الخاصة فقط
+CREATE POLICY "profiles_insert_policy" ON public.profiles
+FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- السماح للمستخدم بتحديث بياناته الخاصة فقط (بناءً على UID المسجل في الجلسة)
+CREATE POLICY "profiles_update_policy" ON public.profiles
+FOR UPDATE USING (auth.uid() = id);
+
+-- 5. سياسات جدول الطلاب (Students)
+-- المعلم يرى طلابه، والمدير يرى الجميع (التحقق من الدور يتم عبر JWT Metadata لتجنب Recursion)
+CREATE POLICY "students_all_policy" ON public.students
+FOR ALL USING (
   teacher_id = auth.uid() 
   OR 
   (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
 );
 
--- 6. تحديث جدول البروفايلات لضمان القيم الافتراضية
-ALTER TABLE public.profiles 
-ALTER COLUMN role SET DEFAULT 'teacher',
-ALTER COLUMN is_approved SET DEFAULT false;
+-- 6. تطبيق نفس المنطق على الجداول المالية والتعليمية
+ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "lessons_all_policy" ON public.lessons
+FOR ALL USING (
+  teacher_id = auth.uid() 
+  OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
+
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "payments_all_policy" ON public.payments
+FOR ALL USING (
+  teacher_id = auth.uid() 
+  OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
+
+-- 7. التأكد من صلاحيات الجداول للعامة (Authenticated)
+GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;

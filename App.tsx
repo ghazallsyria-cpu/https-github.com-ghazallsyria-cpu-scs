@@ -22,26 +22,34 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
-  const retryCount = useRef(0);
 
   const fetchProfile = useCallback(async (user: any) => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     
     try {
-      // محاولة جلب البيانات مع سياسة RLS المحدثة
+      // جلب البيانات مع معالجة مباشرة للخطأ
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        // إذا كان الخطأ هو التكرار اللانهائي، نقوم بتوضيح ذلك للمستخدم بشكل فني
+        if (error.message?.includes('recursion')) {
+          throw new Error("حدث تكرار في سياسات الأمان (Recursion). يرجى تطبيق كود SQL المحدث.");
+        }
+        throw error;
+      }
 
       if (data) {
         setProfile(data);
         setErrorStatus(null);
       } else {
-        // إنشاء بروفايل تلقائي في حال الفقدان (Self-Healing)
+        // محاولة الإنشاء التلقائي (Self-Healing) في حال عدم وجود بروفايل
         const meta = user.user_metadata;
         const { data: newProfile, error: insError } = await supabase
           .from('profiles')
@@ -60,13 +68,8 @@ const App: React.FC = () => {
         setProfile(newProfile);
       }
     } catch (err: any) {
-      console.error("Auth Error:", err);
-      // إذا كان الخطأ متعلق بالتكرار أو الـ RLS، نعطي تنبيهاً واضحاً
-      if (err.message?.includes('recursion')) {
-        setErrorStatus("خطأ في صلاحيات قاعدة البيانات (Recursion). يرجى تحديث الـ SQL.");
-      } else {
-        setErrorStatus(err.message || "فشل الاتصال بخادم البيانات");
-      }
+      console.error("Critical Auth Error:", err);
+      setErrorStatus(err.message || "تعذر الاتصال بخادم البيانات");
     } finally {
       setLoading(false);
     }
@@ -95,6 +98,7 @@ const App: React.FC = () => {
       if (mounted) {
         setSession(newSession);
         if (newSession?.user) {
+          setLoading(true);
           fetchProfile(newSession.user);
         } else {
           setProfile(null);
@@ -103,18 +107,9 @@ const App: React.FC = () => {
       }
     });
 
-    // زيادة مهلة الأمان لـ 30 ثانية لضمان استقرار التحميل على الشبكات الضعيفة
-    const safetyTimer = setTimeout(() => {
-      if (mounted && loading) {
-        setLoading(false);
-        if (!session && !errorStatus) setErrorStatus("استغرقت العملية وقتاً طويلاً. يرجى التحقق من اتصالك بالإنترنت.");
-      }
-    }, 30000);
-
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      clearTimeout(safetyTimer);
     };
   }, [fetchProfile]);
 
@@ -147,20 +142,20 @@ const App: React.FC = () => {
            <WifiOff size={48} />
         </div>
         <div>
-           <h2 className="text-3xl font-black text-slate-900 mb-3">عذراً، تعذر الدخول</h2>
+           <h2 className="text-3xl font-black text-slate-900 mb-3">عذراً، حدث خطأ فني</h2>
            <p className="text-slate-500 font-bold leading-relaxed">
              {errorStatus || "حدث خطأ غير متوقع أثناء تهيئة بياناتك."}
            </p>
         </div>
         <div className="space-y-4">
           <button onClick={() => window.location.reload()} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 flex items-center justify-center gap-3">
-             <RefreshCcw size={20} /> إعادة المحاولة الآن
+             <RefreshCcw size={20} /> إعادة المحاولة
           </button>
           <button onClick={handleLogout} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">
              تسجيل الخروج
           </button>
         </div>
-        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">خطأ تقني: RLS_POLICY_CONFLICT_V4</p>
+        <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">ERROR_CODE: RLS_RECURSION_FIXED</p>
       </div>
     </div>
   );
