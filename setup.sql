@@ -1,8 +1,36 @@
 
--- حذف الـ View القديم لتجنب تعارض الأعمدة
-DROP VIEW IF EXISTS public.student_summary_view CASCADE;
+-- 1. التأكد من تفرد رقم الهاتف في جدول البروفايل لمنع التداخل
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_phone_key;
+ALTER TABLE public.profiles ADD CONSTRAINT profiles_phone_key UNIQUE (phone);
 
--- بناء الـ View الشامل بجميع الأعمدة المطلوبة للتقارير والرقابة
+-- 2. وظيفة ذكية لإنشاء بروفايل تلقائياً عند تسجيل أي مستخدم جديد في Auth
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, phone, role, subjects, is_approved)
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'full_name', 'مستخدم جديد'),
+    COALESCE(new.raw_user_meta_data->>'phone', ''),
+    COALESCE(new.raw_user_meta_data->>'role', 'teacher'),
+    COALESCE(new.raw_user_meta_data->>'subjects', ''),
+    CASE WHEN (new.raw_user_meta_data->>'role') = 'parent' THEN true ELSE false END
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    phone = EXCLUDED.phone;
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 3. تفعيل التريجر
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 4. إعادة بناء الـ View لضمان دقة البيانات
+DROP VIEW IF EXISTS public.student_summary_view CASCADE;
 CREATE VIEW public.student_summary_view AS
 SELECT 
     s.*,
@@ -18,16 +46,3 @@ SELECT
     END as remaining_balance
 FROM public.students s
 LEFT JOIN public.profiles p ON s.teacher_id = p.id;
-
--- تفعيل صلاحيات القراءة الشاملة للمدير
-DROP POLICY IF EXISTS "admin_select_all_lessons" ON public.lessons;
-CREATE POLICY "admin_select_all_lessons" ON public.lessons FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
-
-DROP POLICY IF EXISTS "admin_select_all_payments" ON public.payments;
-CREATE POLICY "admin_select_all_payments" ON public.payments FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
-
-DROP POLICY IF EXISTS "admin_select_all_students" ON public.students;
-CREATE POLICY "admin_select_all_students" ON public.students FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
-
-DROP POLICY IF EXISTS "admin_view_all_profiles" ON public.profiles;
-CREATE POLICY "admin_view_all_profiles" ON public.profiles FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR id = auth.uid());
