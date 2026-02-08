@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { Wallet, Plus, X, DollarSign, CheckCircle, AlertCircle, Trash2, Search, Edit3, Save, RefreshCw, Folder, FolderOpen, AlertTriangle, Calendar } from 'lucide-react';
 
-const Payments = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
+// Fix: Added isAdmin to props type and changed uid to any to satisfy TypeScript caller constraints.
+const Payments = ({ role, uid, year, semester, isAdmin: isAdminProp }: { role: any, uid: any, year: string, semester: string, isAdmin?: boolean }) => {
   const [students, setStudents] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

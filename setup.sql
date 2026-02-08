@@ -1,24 +1,30 @@
 
--- تفعيل سياسات الحذف الشاملة للمدير فقط على كافة الجداول
--- 1. جدول الدروس
-DROP POLICY IF EXISTS "admin_delete_lessons" ON public.lessons;
-CREATE POLICY "admin_delete_lessons" ON public.lessons FOR DELETE TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+-- تفعيل صلاحيات القراءة الشاملة للمدير على كافة الجداول
+DROP POLICY IF EXISTS "admin_select_all_lessons" ON public.lessons;
+CREATE POLICY "admin_select_all_lessons" ON public.lessons FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
 
--- 2. جدول المدفوعات
-DROP POLICY IF EXISTS "admin_delete_payments" ON public.payments;
-CREATE POLICY "admin_delete_payments" ON public.payments FOR DELETE TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+DROP POLICY IF EXISTS "admin_select_all_payments" ON public.payments;
+CREATE POLICY "admin_select_all_payments" ON public.payments FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
 
--- 3. جدول الجداول الدراسية
-DROP POLICY IF EXISTS "admin_delete_schedules" ON public.schedules;
-CREATE POLICY "admin_delete_schedules" ON public.schedules FOR DELETE TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+DROP POLICY IF EXISTS "admin_select_all_students" ON public.students;
+CREATE POLICY "admin_select_all_students" ON public.students FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
 
--- 4. تعزيز سياسة السلطة المطلقة على البروفايلات
-DROP POLICY IF EXISTS "admin_absolute_control" ON public.profiles;
-CREATE POLICY "admin_absolute_control" ON public.profiles
-FOR ALL TO authenticated
-USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin')
-WITH CHECK ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+DROP POLICY IF EXISTS "admin_select_all_schedules" ON public.schedules;
+CREATE POLICY "admin_select_all_schedules" ON public.schedules FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
 
--- 5. منح صلاحية الحذف للمدير على الطلاب (تم تحديثها للتأكيد)
-DROP POLICY IF EXISTS "admin_delete_students" ON public.students;
-CREATE POLICY "admin_delete_students" ON public.students FOR DELETE TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+-- تحديث عرض ملخص الطلاب ليشمل اسم المعلم بشكل دائم للمدير
+CREATE OR REPLACE VIEW public.student_summary_view AS
+SELECT 
+    s.*,
+    p.full_name as teacher_name,
+    p.subjects as teacher_subjects,
+    COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) as total_lessons,
+    COALESCE((SELECT SUM(pay.amount) FROM public.payments pay WHERE pay.student_id = s.id), 0) as total_paid,
+    CASE 
+        WHEN s.is_hourly THEN 
+            (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) * s.price_per_hour) - COALESCE((SELECT SUM(pay.amount) FROM public.payments pay WHERE pay.student_id = s.id), 0)
+        ELSE 
+            s.agreed_amount - COALESCE((SELECT SUM(pay.amount) FROM public.payments pay WHERE pay.student_id = s.id), 0)
+    END as remaining_balance
+FROM public.students s
+JOIN public.profiles p ON s.teacher_id = p.id;

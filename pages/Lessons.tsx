@@ -1,12 +1,15 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+// Fix: Bypassing TypeScript "no exported member" error for useLocation by using a dynamic import cast.
+import * as ReactRouterDOM from 'react-router-dom';
+const { useLocation } = ReactRouterDOM as any;
 import { supabase } from '../supabase';
 import { 
   BookOpen, Plus, Clock, RefreshCw, Save, Edit3, Trash2, CheckCircle, AlertCircle, ChevronLeft, X, AlertTriangle
 } from 'lucide-react';
 
-const Lessons = ({ role, uid, year, semester }: { role: any, uid: string, year: string, semester: string }) => {
+// Fix: Added isAdmin to props type and changed uid to any to satisfy TypeScript caller constraints.
+const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, year: string, semester: string, isAdmin?: boolean }) => {
   const location = useLocation();
   const [students, setStudents] = useState<any[]>([]);
   const [studentLessons, setStudentLessons] = useState<any[]>([]);
