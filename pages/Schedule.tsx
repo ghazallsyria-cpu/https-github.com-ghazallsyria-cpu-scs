@@ -15,6 +15,7 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
   const [form, setForm] = useState({ student_id: '', start_time: '16:00', duration: '2' });
 
   const fetchData = useCallback(async () => {
+    if (!uid) return;
     setLoading(true);
     try {
       // جلب بنود الجدول لليوم المحدد
@@ -28,7 +29,7 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
       if (schedError) throw schedError;
       setScheduleItems(sched || []);
       
-      // جلب قائمة كافة الطلاب المتاحين لهذا المعلم (ليتم اختيارهم في المودال)
+      // جلب قائمة كافة الطلاب المتاحين لهذا المعلم
       const { data: stds, error: stdsError } = await supabase
         .from('students')
         .select('id, name')
@@ -45,8 +46,8 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
   }, [selectedDay, uid]);
 
   useEffect(() => { 
-    if (uid) fetchData(); 
-  }, [fetchData, uid]);
+    fetchData(); 
+  }, [fetchData]);
 
   const handleAddSlot = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,8 +58,12 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
     
     setLoading(true);
     try {
+      // الحصول على المعرف الحالي من الجلسة للتأكد من تطابقه مع السياسة الأمنية
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("لم يتم العثور على جلسة نشطة.");
+
       const { error } = await supabase.from('schedules').insert([{
-        teacher_id: uid,
+        teacher_id: user.id, // استخدام معرف المستخدم الموثق مباشرة
         student_id: form.student_id,
         day_of_week: selectedDay,
         start_time: form.start_time,
@@ -66,20 +71,30 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
       }]);
       
       if (error) throw error;
+      
       setIsModalOpen(false);
       setForm({ ...form, student_id: '' });
-      fetchData();
+      await fetchData();
     } catch (err: any) {
-      alert("خطأ في إضافة الموعد: " + err.message);
+      console.error("Schedule Add Error:", err);
+      alert("خطأ في إضافة الموعد: " + (err.message || "تأكد من وجود صلاحيات كافية"));
     } finally {
       setLoading(false);
     }
   };
 
   const deleteSlot = async (id: string) => {
-    await supabase.from('schedules').delete().eq('id', id);
-    setConfirmDeleteId(null);
-    fetchData();
+    setLoading(true);
+    try {
+        const { error } = await supabase.from('schedules').delete().eq('id', id);
+        if (error) throw error;
+        setConfirmDeleteId(null);
+        await fetchData();
+    } catch (err: any) {
+        alert("فشل الحذف: " + err.message);
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -128,7 +143,6 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
          )}
       </div>
 
-      {/* Confirmation Delete Schedule */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-xl">
            <div className="bg-white w-full max-w-md p-12 rounded-[3.5rem] shadow-2xl space-y-8 animate-in zoom-in duration-300">
@@ -141,7 +155,7 @@ const Schedule = ({ role, uid }: { role: any, uid: string }) => {
               </div>
               <div className="flex gap-4">
                  <button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-5 bg-slate-100 text-slate-500 rounded-2xl font-black">تراجع</button>
-                 <button onClick={() => deleteSlot(confirmDeleteId)} className="flex-1 py-5 bg-rose-600 text-white rounded-2xl font-black shadow-lg">تأكيد الحذف</button>
+                 <button onClick={() => deleteSlot(confirmDeleteId)} disabled={loading} className="flex-1 py-5 bg-rose-600 text-white rounded-2xl font-black shadow-lg">تأكيد الحذف</button>
               </div>
            </div>
         </div>
