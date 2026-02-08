@@ -1,78 +1,68 @@
 
 -- ======================================================
--- سكريبت إعداد نظام القمة V5.1 - الإصدار الأمني المتكامل
+-- سكريبت إعداد نظام القمة V5.2 - حل مشكلة التكرار اللانهائي
 -- ======================================================
 
--- 1. تفعيل نظام الأمان على كافة الجداول
+-- 1. إنشاء دالة التحقق من المدير (تتجاوز RLS لمنع التكرار)
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. تفعيل نظام الأمان على كافة الجداول
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 
--- 2. تنظيف السياسات القديمة
-DROP POLICY IF EXISTS "Profiles: View All" ON public.profiles;
-DROP POLICY IF EXISTS "Profiles: Self Update" ON public.profiles;
-DROP POLICY IF EXISTS "Profiles: Admin All" ON public.profiles;
-DROP POLICY IF EXISTS "Students: Teacher/Admin Manage" ON public.students;
-DROP POLICY IF EXISTS "Students: Parent View" ON public.students;
-DROP POLICY IF EXISTS "Lessons: Teacher/Admin Manage" ON public.lessons;
-DROP POLICY IF EXISTS "Payments: Teacher/Admin Manage" ON public.payments;
-DROP POLICY IF EXISTS "Schedules: Teacher/Admin Manage" ON public.schedules;
-DROP POLICY IF EXISTS "الكل يمكنه رؤية الملفات الشخصية" ON public.profiles;
-DROP POLICY IF EXISTS "المستخدم يمكنه تحديث ملفه فقط" ON public.profiles;
-DROP POLICY IF EXISTS "المدير يملك صلاحية كاملة على الملفات" ON public.profiles;
-DROP POLICY IF EXISTS "المعلم يدير طلابه" ON public.students;
-DROP POLICY IF EXISTS "ولي الأمر يرى أبناءه" ON public.students;
-DROP POLICY IF EXISTS "المعلم يدير حصصه" ON public.lessons;
-DROP POLICY IF EXISTS "المعلم يدير مدفوعاته" ON public.payments;
-DROP POLICY IF EXISTS "المعلم يدير جدوله" ON public.schedules;
+-- 3. تنظيف السياسات القديمة (شاملة كافة المسميات السابقة)
+DROP POLICY IF EXISTS "Profiles_Policy" ON public.profiles;
+DROP POLICY IF EXISTS "Students_Teacher_Policy" ON public.students;
+DROP POLICY IF EXISTS "Students_Parent_Policy" ON public.students;
+DROP POLICY IF EXISTS "Lessons_Policy" ON public.lessons;
+DROP POLICY IF EXISTS "Payments_Policy" ON public.payments;
+DROP POLICY IF EXISTS "Schedules_Policy" ON public.schedules;
 
--- 3. سياسات جدول الملفات الشخصية (Profiles)
-CREATE POLICY "Profiles_Policy" ON public.profiles
-FOR ALL TO authenticated
-USING (true)
-WITH CHECK (auth.uid() = id OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+-- 4. سياسات جدول الملفات الشخصية (Profiles)
+CREATE POLICY "Profiles_Select" ON public.profiles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Profiles_Update_Self" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
+CREATE POLICY "Profiles_Admin_All" ON public.profiles FOR ALL TO authenticated USING (is_admin());
 
--- 4. سياسات جدول الطلاب (Students)
-CREATE POLICY "Students_Teacher_Policy" ON public.students
-FOR ALL TO authenticated
-USING (teacher_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
-WITH CHECK (teacher_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-
-CREATE POLICY "Students_Parent_Policy" ON public.students
-FOR SELECT TO authenticated
-USING (
-    EXISTS (
-        SELECT 1 FROM public.profiles p
-        WHERE p.id = auth.uid() 
-        AND p.role = 'parent'
-        AND EXISTS (
-            SELECT 1 FROM jsonb_array_elements(students.phones) AS phone_obj
-            WHERE phone_obj->>'number' = p.phone
-        )
+-- 5. سياسات جدول الطلاب (Students)
+CREATE POLICY "Students_Select" ON public.students FOR SELECT TO authenticated 
+USING (teacher_id = auth.uid() OR is_admin() OR EXISTS (
+    SELECT 1 FROM public.profiles p 
+    WHERE p.id = auth.uid() AND p.role = 'parent' AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(students.phones) AS phone_obj WHERE phone_obj->>'number' = p.phone
     )
-);
+));
 
--- 5. سياسات جدول الحصص (Lessons)
-CREATE POLICY "Lessons_Policy" ON public.lessons
-FOR ALL TO authenticated
-USING (teacher_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
-WITH CHECK (teacher_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Students_Insert" ON public.students FOR INSERT TO authenticated WITH CHECK (teacher_id = auth.uid() OR is_admin());
+CREATE POLICY "Students_Update" ON public.students FOR UPDATE TO authenticated USING (teacher_id = auth.uid() OR is_admin());
+CREATE POLICY "Students_Delete" ON public.students FOR DELETE TO authenticated USING (teacher_id = auth.uid() OR is_admin());
 
--- 6. سياسات جدول المدفوعات (Payments)
-CREATE POLICY "Payments_Policy" ON public.payments
-FOR ALL TO authenticated
-USING (teacher_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
-WITH CHECK (teacher_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+-- 6. سياسات جدول الحصص (Lessons)
+CREATE POLICY "Lessons_All" ON public.lessons FOR ALL TO authenticated 
+USING (teacher_id = auth.uid() OR is_admin()) 
+WITH CHECK (teacher_id = auth.uid() OR is_admin());
 
--- 7. سياسات جدول المواعيد (Schedules)
-CREATE POLICY "Schedules_Policy" ON public.schedules
-FOR ALL TO authenticated
-USING (teacher_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
-WITH CHECK (teacher_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+-- 7. سياسات جدول المدفوعات (Payments)
+CREATE POLICY "Payments_All" ON public.payments FOR ALL TO authenticated 
+USING (teacher_id = auth.uid() OR is_admin()) 
+WITH CHECK (teacher_id = auth.uid() OR is_admin());
 
--- 8. تحديث الـ View المالية (Student Summary View)
+-- 8. سياسات جدول المواعيد (Schedules)
+CREATE POLICY "Schedules_All" ON public.schedules FOR ALL TO authenticated 
+USING (teacher_id = auth.uid() OR is_admin()) 
+WITH CHECK (teacher_id = auth.uid() OR is_admin());
+
+-- 9. تحديث الـ View المالية (Student Summary View)
 DROP VIEW IF EXISTS public.student_summary_view CASCADE;
 CREATE VIEW public.student_summary_view AS
 SELECT 
