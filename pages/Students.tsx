@@ -5,7 +5,7 @@ import {
   Users, Plus, Search, 
   GraduationCap, Trash2, Edit3, 
   ChevronRight, X, Clock, Copy, 
-  Phone, DollarSign, BookOpen, Save, MoveHorizontal, AlertTriangle, User
+  Phone, DollarSign, BookOpen, Save, MoveHorizontal, AlertTriangle, User, RefreshCw
 } from 'lucide-react';
 
 const Students = ({ isAdmin, profile }: any) => {
@@ -14,6 +14,7 @@ const Students = ({ isAdmin, profile }: any) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeModal, setActiveModal] = useState<'edit' | 'transfer' | 'lesson' | 'payment' | 'confirm_delete' | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   const [form, setForm] = useState({
     name: '', grade: '12', address: '', academic_year: '2024-2025', semester: '1',
@@ -21,22 +22,30 @@ const Students = ({ isAdmin, profile }: any) => {
   });
 
   const [recordForm, setRecordForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], hours: '2', notes: '' });
-  const [transferForm, setTransferForm] = useState({ year: '2025-2026', semester: '1' });
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('student_summary_view').select('*');
-    if (!isAdmin) query = query.eq('teacher_id', profile.id);
-    const { data, error } = await query.order('name');
-    if (error) console.error("Error fetching students:", error);
-    setStudents(data || []);
-    setLoading(false);
+    try {
+      let query = supabase.from('student_summary_view').select('*');
+      if (!isAdmin) query = query.eq('teacher_id', profile.id);
+      const { data, error } = await query.order('name');
+      if (error) throw error;
+      setStudents(data || []);
+    } catch (err) {
+      console.error("Error fetching students:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [isAdmin, profile.id]);
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
   const handleAction = async (type: string) => {
+    setIsProcessing(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("جلسة العمل غير صالحة.");
+
       if (type === 'save_student') {
         const payload = { 
           name: form.name,
@@ -48,31 +57,48 @@ const Students = ({ isAdmin, profile }: any) => {
           is_hourly: form.is_hourly,
           price_per_hour: parseFloat(form.price_per_hour || '0'),
           phones: form.phones,
-          teacher_id: isAdmin ? selectedStudent?.teacher_id : profile.id
+          teacher_id: isAdmin && selectedStudent ? selectedStudent.teacher_id : user.id
         };
         
         if (selectedStudent) {
-          await supabase.from('students').update(payload).eq('id', selectedStudent.id);
+          const { error } = await supabase.from('students').update(payload).eq('id', selectedStudent.id);
+          if (error) throw error;
         } else {
-          await supabase.from('students').insert([payload]);
+          const { error } = await supabase.from('students').insert([payload]);
+          if (error) throw error;
         }
       } else if (type === 'record_lesson') {
-        await supabase.from('lessons').insert([{ student_id: selectedStudent.id, teacher_id: selectedStudent.teacher_id, lesson_date: recordForm.date, hours: parseFloat(recordForm.hours), notes: recordForm.notes }]);
+        const { error } = await supabase.from('lessons').insert([{ 
+          student_id: selectedStudent.id, 
+          teacher_id: selectedStudent.teacher_id, 
+          lesson_date: recordForm.date, 
+          hours: parseFloat(recordForm.hours), 
+          notes: recordForm.notes 
+        }]);
+        if (error) throw error;
       } else if (type === 'record_payment') {
-        await supabase.from('payments').insert([{ student_id: selectedStudent.id, teacher_id: selectedStudent.teacher_id, payment_date: recordForm.date, amount: parseFloat(recordForm.amount), notes: recordForm.notes }]);
+        const { error } = await supabase.from('payments').insert([{ 
+          student_id: selectedStudent.id, 
+          teacher_id: selectedStudent.teacher_id, 
+          payment_date: recordForm.date, 
+          amount: parseFloat(recordForm.amount), 
+          notes: recordForm.notes 
+        }]);
+        if (error) throw error;
       } else if (type === 'delete_student') {
-        // حذف التبعيات أولاً لضمان نجاح الحذف للمدير
         await supabase.from('lessons').delete().eq('student_id', selectedStudent.id);
         await supabase.from('payments').delete().eq('student_id', selectedStudent.id);
-        await supabase.from('students').delete().eq('id', selectedStudent.id);
+        const { error } = await supabase.from('students').delete().eq('id', selectedStudent.id);
+        if (error) throw error;
       }
       
       setActiveModal(null);
       setSelectedStudent(null);
       fetchStudents();
-    } catch (err) {
-      alert("حدث خطأ أثناء تنفيذ العملية.");
-      console.error(err);
+    } catch (err: any) {
+      alert("خطأ: " + (err.message || "لا تملك الصلاحيات الكافية للقيام بهذا الإجراء"));
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -98,11 +124,11 @@ const Students = ({ isAdmin, profile }: any) => {
     <div className="space-y-10 animate-in fade-in duration-500 pb-20">
       <div className="bg-white p-10 rounded-[3.5rem] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-8">
         <div className="flex items-center gap-6">
-          <div className="bg-indigo-600 p-5 rounded-[2rem] text-white shadow-xl"><Users size={32} /></div>
+          <div className="bg-indigo-600 p-5 rounded-[2rem] text-white shadow-xl shadow-indigo-100"><Users size={32} /></div>
           <div>
             <h2 className="text-3xl font-black">إدارة <span className="text-indigo-600">الطلاب</span></h2>
             <p className="text-slate-400 font-bold">
-               {isAdmin ? 'عرض جميع الطلاب المسجلين في النظام لدى كافة المعلمين' : `المعلم: ${profile?.full_name} | المادة: ${profile?.subjects}`}
+               {isAdmin ? 'عرض جميع الطلاب المسجلين في النظام' : `المعلم: ${profile?.full_name} | المادة: ${profile?.subjects}`}
             </p>
           </div>
         </div>
@@ -120,7 +146,9 @@ const Students = ({ isAdmin, profile }: any) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {students.filter(s => s.name.includes(searchTerm)).map(s => (
+        {loading ? (
+           <div className="col-span-full py-20 text-center"><RefreshCw className="animate-spin mx-auto text-indigo-600" size={40} /></div>
+        ) : students.filter(s => s.name.includes(searchTerm)).map(s => (
           <div key={s.id} className="bg-white p-10 rounded-[4rem] border shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
              {isAdmin && (
                 <div className="absolute top-0 right-0 left-0 bg-indigo-50 px-6 py-2 flex items-center gap-2 border-b border-indigo-100">
@@ -160,8 +188,8 @@ const Students = ({ isAdmin, profile }: any) => {
 
       {activeModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-xl">
-           <div className="bg-white w-full max-w-2xl p-12 rounded-[4rem] shadow-2xl space-y-8 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] no-scrollbar">
-              <div className="flex justify-between items-center">
+           <div className="bg-white w-full max-w-2xl p-12 rounded-[4rem] shadow-2xl space-y-8 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh] no-scrollbar text-right">
+              <div className="flex justify-between items-center flex-row-reverse">
                  <h3 className="text-3xl font-black">
                     {activeModal === 'edit' && (selectedStudent ? 'تعديل بيانات' : 'إضافة طالب جديد')}
                     {activeModal === 'lesson' && `تسجيل حصة لـ ${selectedStudent.name}`}
@@ -178,44 +206,50 @@ const Students = ({ isAdmin, profile }: any) => {
                   </div>
                   <div>
                     <h4 className="text-2xl font-black text-slate-900 mb-2">هل أنت متأكد من حذف الطالب؟</h4>
-                    <p className="text-slate-500 font-bold">بصفتك مديراً، سيتم حذف الطالب ({selectedStudent?.name}) وكافة سجلاته المرتبطة فوراً.</p>
+                    <p className="text-slate-500 font-bold">سيتم حذف الطالب وكافة سجلاته المرتبطة فوراً.</p>
                   </div>
                   <div className="flex gap-4">
                     <button onClick={() => setActiveModal(null)} className="flex-1 py-6 bg-slate-100 text-slate-500 rounded-[2rem] font-black">إلغاء</button>
-                    <button onClick={() => handleAction('delete_student')} className="flex-1 py-6 bg-rose-600 text-white rounded-[2rem] font-black shadow-lg shadow-rose-100">تأكيد الحذف النهائي</button>
+                    <button onClick={() => handleAction('delete_student')} disabled={isProcessing} className="flex-1 py-6 bg-rose-600 text-white rounded-[2rem] font-black shadow-lg">
+                       {isProcessing ? 'جاري الحذف...' : 'تأكيد الحذف النهائي'}
+                    </button>
                   </div>
                 </div>
               ) : activeModal === 'edit' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-2"><label className="text-sm font-black">الاسم</label><input className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-sm font-black">الاسم</label><input className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none border-none ring-indigo-50 focus:ring-2" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
                   <div className="space-y-2"><label className="text-sm font-black">الصف</label>
-                    <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
+                    <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none border-none ring-indigo-50 focus:ring-2" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
                       <option value="10">العاشر</option><option value="11">الحادي عشر</option><option value="12">الثاني عشر</option>
                     </select>
                   </div>
                   <div className="space-y-2 md:col-span-2"><label className="text-sm font-black">رقم هاتف ولي الأمر</label>
-                    <input className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.phones[0].number} onChange={e => {
+                    <input className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none border-none ring-indigo-50 focus:ring-2 text-left" value={form.phones[0].number} onChange={e => {
                       const n = [...form.phones]; n[0].number = e.target.value; setForm({...form, phones: n});
                     }} />
                   </div>
-                  <div className="space-y-2"><label className="text-sm font-black">المبلغ المتفق عليه</label><input type="number" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} /></div>
+                  <div className="space-y-2"><label className="text-sm font-black">المبلغ المتفق عليه</label><input type="number" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none border-none ring-indigo-50 focus:ring-2" value={form.agreed_amount} onChange={e => setForm({...form, agreed_amount: e.target.value})} /></div>
                   <div className="space-y-2"><label className="text-sm font-black">الفصل الدراسي</label>
-                    <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.semester} onChange={e => setForm({...form, semester: e.target.value})}>
+                    <select className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none border-none ring-indigo-50 focus:ring-2" value={form.semester} onChange={e => setForm({...form, semester: e.target.value})}>
                       <option value="1">كورس أول</option><option value="2">كورس ثان</option>
                     </select>
                   </div>
-                  <button onClick={() => handleAction('save_student')} className="md:col-span-2 w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-xl hover:bg-indigo-600 transition-all mt-4">حفظ التغييرات</button>
+                  <button onClick={() => handleAction('save_student')} disabled={isProcessing} className="md:col-span-2 w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-xl hover:bg-indigo-600 transition-all mt-4 flex items-center justify-center gap-3">
+                    {isProcessing ? <RefreshCw className="animate-spin" /> : <Save />} {selectedStudent ? 'حفظ التعديلات' : 'إضافة الطالب'}
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-6">
                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2"><label className="text-sm font-black">التاريخ</label><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})} /></div>
+                      <div className="space-y-2"><label className="text-sm font-black">التاريخ</label><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none border-none ring-indigo-50 focus:ring-2" value={recordForm.date} onChange={e => setRecordForm({...recordForm, date: e.target.value})} /></div>
                       <div className="space-y-2"><label className="text-sm font-black">{activeModal === 'lesson' ? 'عدد الساعات' : 'المبلغ'}</label>
-                        <input type="number" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={activeModal === 'lesson' ? recordForm.hours : recordForm.amount} onChange={e => setRecordForm({...recordForm, [activeModal === 'lesson' ? 'hours' : 'amount']: e.target.value})} />
+                        <input type="number" step="0.5" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none border-none ring-indigo-50 focus:ring-2" value={activeModal === 'lesson' ? recordForm.hours : recordForm.amount} onChange={e => setRecordForm({...recordForm, [activeModal === 'lesson' ? 'hours' : 'amount']: e.target.value})} />
                       </div>
                    </div>
-                   <div className="space-y-2"><label className="text-sm font-black">ملاحظات</label><textarea className="w-full p-5 bg-slate-50 rounded-2xl font-bold h-32 outline-none" value={recordForm.notes} onChange={e => setRecordForm({...recordForm, notes: e.target.value})} /></div>
-                   <button onClick={() => handleAction(activeModal === 'lesson' ? 'record_lesson' : 'record_payment')} className="w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-xl hover:bg-indigo-600 transition-all mt-4">حفظ العملية</button>
+                   <div className="space-y-2"><label className="text-sm font-black">ملاحظات</label><textarea className="w-full p-5 bg-slate-50 rounded-2xl font-bold h-32 outline-none border-none ring-indigo-50 focus:ring-2" value={recordForm.notes} onChange={e => setRecordForm({...recordForm, notes: e.target.value})} /></div>
+                   <button onClick={() => handleAction(activeModal === 'lesson' ? 'record_lesson' : 'record_payment')} disabled={isProcessing} className="w-full py-6 bg-slate-900 text-white rounded-3xl font-black text-xl shadow-xl hover:bg-indigo-600 transition-all mt-4 flex items-center justify-center gap-3">
+                     {isProcessing ? <RefreshCw className="animate-spin" /> : <Save />} حفظ العملية
+                   </button>
                 </div>
               )}
            </div>
