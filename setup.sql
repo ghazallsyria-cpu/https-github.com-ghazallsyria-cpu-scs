@@ -1,57 +1,49 @@
 
--- 1. التأكد من وجود كافة الأعمدة المالية في جدول الطلاب
+-- 1. تحديث جدول الطلاب بالأعمدة الماسية الجديدة
 DO $$ 
 BEGIN 
-    -- عمود المبلغ الإجمالي المتفق عليه
+    -- التأكد من وجود عمود اسم المجموعة (المجلد)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='students' AND column_name='group_name') THEN
+        ALTER TABLE public.students ADD COLUMN group_name TEXT;
+    END IF;
+
+    -- التأكد من وجود الأعمدة المالية
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='students' AND column_name='agreed_amount') THEN
         ALTER TABLE public.students ADD COLUMN agreed_amount NUMERIC DEFAULT 0;
     END IF;
 
-    -- عمود هل الحساب بالساعة؟
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='students' AND column_name='is_hourly') THEN
         ALTER TABLE public.students ADD COLUMN is_hourly BOOLEAN DEFAULT FALSE;
     END IF;
 
-    -- عمود سعر الساعة
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='students' AND column_name='price_per_hour') THEN
         ALTER TABLE public.students ADD COLUMN price_per_hour NUMERIC DEFAULT 0;
     END IF;
-
-    -- عمود اسم المجموعة للتنظيم
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='students' AND column_name='group_name') THEN
-        ALTER TABLE public.students ADD COLUMN group_name TEXT;
-    END IF;
 END $$;
 
--- 2. إسقاط الدوال والعروض القديمة لتجنب تعارض الأنواع (Out parameters error)
-DROP FUNCTION IF EXISTS public.get_parent_dashboard(text);
+-- 2. تنظيف العروض القديمة لبناء العرض الماسي
 DROP VIEW IF EXISTS public.student_summary_view CASCADE;
 
--- 3. إنشاء العرض المالي الذكي (Student Summary View)
--- هذا العرض هو قلب النظام المالي، يقوم بالحسابات تلقائياً
+-- 3. إنشاء العرض المالي الماسي (The Diamond Financial View)
 CREATE OR REPLACE VIEW public.student_summary_view AS
 SELECT 
     s.*,
     COALESCE((SELECT COUNT(*) FROM public.lessons l WHERE l.student_id = s.id), 0) AS total_lessons,
     COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) AS total_hours_taught,
     COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0) AS total_paid,
-    -- حساب المبلغ الإجمالي المستحق بناءً على نوع الدراسة (ساعة أو مقطوع)
+    -- القيمة المتوقعة (مقطوع أو بالساعة)
     CASE 
-        WHEN s.is_hourly THEN 
-            (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) * s.price_per_hour)
-        ELSE 
-            s.agreed_amount
+        WHEN s.is_hourly THEN (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) * s.price_per_hour)
+        ELSE s.agreed_amount
     END AS expected_total,
-    -- حساب الرصيد المتبقي
+    -- صافي المديونية
     CASE 
-        WHEN s.is_hourly THEN 
-            (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) * s.price_per_hour) - COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)
-        ELSE 
-            s.agreed_amount - COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)
+        WHEN s.is_hourly THEN (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) * s.price_per_hour) - COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)
+        ELSE s.agreed_amount - COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)
     END AS remaining_balance
 FROM public.students s;
 
--- 4. إعادة إنشاء دالة بوابة الطالب (Parent Portal)
+-- 4. إعادة بناء وظيفة البحث في بوابة ولي الأمر لتكون أسرع وأدق
 CREATE OR REPLACE FUNCTION public.get_parent_dashboard(parent_phone_val TEXT)
 RETURNS TABLE (
     student_id UUID,

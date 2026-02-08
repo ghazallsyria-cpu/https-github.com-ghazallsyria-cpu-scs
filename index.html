@@ -1,16 +1,33 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>نظام القمة V4.5 - إدارة المحتوى التعليمي</title>
+    <title>نظام القمة V5 - النسخة الماسية</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-      body { font-family: 'Cairo', sans-serif; background-color: #fcfdfe; margin: 0; -webkit-tap-highlight-color: transparent; }
+      body { 
+        font-family: 'Cairo', sans-serif; 
+        background-color: #f8fafc; 
+        margin: 0; 
+        -webkit-tap-highlight-color: transparent;
+        overflow-x: hidden;
+      }
+      .platinum-gradient {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      }
+      .diamond-card {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      
+      /* تحسين جماليات أزرار التبديل */
+      input:checked + .slider { background-color: #4f46e5; }
     </style>
     <script type="importmap">
 {
@@ -24,8 +41,8 @@
     "lucide-react": "https://esm.sh/lucide-react@0.468.0?external=react",
     "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
     "vite": "https://esm.sh/vite@^7.3.1",
+    "react/": "https://esm.sh/react@^19.2.4/",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3"
   }
 }
