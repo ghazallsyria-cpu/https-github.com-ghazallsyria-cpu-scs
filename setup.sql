@@ -1,68 +1,80 @@
 
 -- ======================================================
--- سكريبت إعداد نظام القمة V5.2 - حل مشكلة التكرار اللانهائي
+-- سكريبت إعداد نظام القمة V5.3 - الحل النهائي لصلاحيات المدير
 -- ======================================================
 
--- 1. إنشاء دالة التحقق من المدير (تتجاوز RLS لمنع التكرار)
+-- 1. دالة التحقق من المدير (بدون تكرار نهائياً)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
+DECLARE
+  is_adm BOOLEAN;
 BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'
-  );
+  SELECT (role = 'admin') INTO is_adm
+  FROM public.profiles
+  WHERE id = auth.uid();
+  RETURN COALESCE(is_adm, FALSE);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. تفعيل نظام الأمان على كافة الجداول
+-- 2. دالة تلقائية لإنشاء ملف شخصي عند أي عملية تسجيل جديدة في Auth
+-- هذا يضمن عدم ضياع أي مستخدم يسجل في النظام
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, phone, role, is_approved, subjects)
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'full_name', 'مستخدم جديد'),
+    COALESCE(new.raw_user_meta_data->>'phone', ''),
+    COALESCE(new.raw_user_meta_data->>'role', 'parent'),
+    CASE WHEN (new.raw_user_meta_data->>'role') = 'parent' THEN true ELSE false END,
+    COALESCE(new.raw_user_meta_data->>'subjects', '')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    phone = EXCLUDED.phone;
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- تفعيل الـ Trigger (يجب حذفه أولاً إذا كان موجوداً)
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 3. تفعيل RLS
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 
--- 3. تنظيف السياسات القديمة (شاملة كافة المسميات السابقة)
-DROP POLICY IF EXISTS "Profiles_Policy" ON public.profiles;
-DROP POLICY IF EXISTS "Students_Teacher_Policy" ON public.students;
-DROP POLICY IF EXISTS "Students_Parent_Policy" ON public.students;
-DROP POLICY IF EXISTS "Lessons_Policy" ON public.lessons;
-DROP POLICY IF EXISTS "Payments_Policy" ON public.payments;
-DROP POLICY IF EXISTS "Schedules_Policy" ON public.schedules;
+-- 4. سياسات جدول Profiles (المدير يرى كل شيء دائماً)
+DROP POLICY IF EXISTS "Profiles_Select" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles_Update_Self" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles_Admin_All" ON public.profiles;
 
--- 4. سياسات جدول الملفات الشخصية (Profiles)
-CREATE POLICY "Profiles_Select" ON public.profiles FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Profiles_Update_Self" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
-CREATE POLICY "Profiles_Admin_All" ON public.profiles FOR ALL TO authenticated USING (is_admin());
+CREATE POLICY "Profiles_Admin_Master" ON public.profiles
+FOR ALL TO authenticated USING (is_admin());
 
--- 5. سياسات جدول الطلاب (Students)
-CREATE POLICY "Students_Select" ON public.students FOR SELECT TO authenticated 
-USING (teacher_id = auth.uid() OR is_admin() OR EXISTS (
-    SELECT 1 FROM public.profiles p 
-    WHERE p.id = auth.uid() AND p.role = 'parent' AND EXISTS (
-        SELECT 1 FROM jsonb_array_elements(students.phones) AS phone_obj WHERE phone_obj->>'number' = p.phone
+CREATE POLICY "Profiles_User_Read" ON public.profiles
+FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Profiles_User_Update" ON public.profiles
+FOR UPDATE TO authenticated USING (auth.uid() = id);
+
+-- 5. سياسات جدول الطلاب (تعديل لضمان الشفافية للمدير)
+DROP POLICY IF EXISTS "Students_Select" ON public.students;
+CREATE POLICY "Students_Select_Master" ON public.students
+FOR SELECT TO authenticated 
+USING (
+    is_admin() OR 
+    teacher_id = auth.uid() OR 
+    EXISTS (
+        SELECT 1 FROM public.profiles p 
+        WHERE p.id = auth.uid() AND p.role = 'parent' AND p.phone = ANY(SELECT (phone_obj->>'number') FROM jsonb_array_elements(students.phones) AS phone_obj)
     )
-));
+);
 
-CREATE POLICY "Students_Insert" ON public.students FOR INSERT TO authenticated WITH CHECK (teacher_id = auth.uid() OR is_admin());
-CREATE POLICY "Students_Update" ON public.students FOR UPDATE TO authenticated USING (teacher_id = auth.uid() OR is_admin());
-CREATE POLICY "Students_Delete" ON public.students FOR DELETE TO authenticated USING (teacher_id = auth.uid() OR is_admin());
-
--- 6. سياسات جدول الحصص (Lessons)
-CREATE POLICY "Lessons_All" ON public.lessons FOR ALL TO authenticated 
-USING (teacher_id = auth.uid() OR is_admin()) 
-WITH CHECK (teacher_id = auth.uid() OR is_admin());
-
--- 7. سياسات جدول المدفوعات (Payments)
-CREATE POLICY "Payments_All" ON public.payments FOR ALL TO authenticated 
-USING (teacher_id = auth.uid() OR is_admin()) 
-WITH CHECK (teacher_id = auth.uid() OR is_admin());
-
--- 8. سياسات جدول المواعيد (Schedules)
-CREATE POLICY "Schedules_All" ON public.schedules FOR ALL TO authenticated 
-USING (teacher_id = auth.uid() OR is_admin()) 
-WITH CHECK (teacher_id = auth.uid() OR is_admin());
-
--- 9. تحديث الـ View المالية (Student Summary View)
+-- 6. تحديث الـ View (لضمان الدقة المالية)
 DROP VIEW IF EXISTS public.student_summary_view CASCADE;
 CREATE VIEW public.student_summary_view AS
 SELECT 
@@ -80,6 +92,4 @@ SELECT
 FROM public.students s
 LEFT JOIN public.profiles p ON s.teacher_id = p.id;
 
--- منح الصلاحيات
 GRANT SELECT ON public.student_summary_view TO authenticated;
-GRANT SELECT ON public.student_summary_view TO anon;
