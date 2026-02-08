@@ -1,4 +1,5 @@
-export type UserRole = 'admin' | 'teacher' | 'parent';
+
+export type UserRole = 'admin' | 'teacher' | 'parent' | 'student';
 
 export interface Profile {
   id: string;
@@ -12,7 +13,7 @@ export interface Profile {
 
 export interface StudentPhone {
   number: string;
-  label: 'الطالب' | 'الأب' | 'الأم';
+  label: string;
 }
 
 export interface Student {
@@ -23,6 +24,7 @@ export interface Student {
   phones: StudentPhone[];
   school_name?: string;
   grade: string;
+  group_name?: string; // مجلد المجموعة
   agreed_amount: number;
   is_hourly: boolean;
   price_per_hour: number;
@@ -39,29 +41,13 @@ export interface Lesson {
   lesson_date: string;
   hours: number;
   notes?: string;
-  created_at: string;
 }
 
-export interface Payment {
+export interface ScheduleItem {
   id: string;
   teacher_id: string;
   student_id: string;
-  amount: number;
-  payment_date: string;
-  payment_method: 'كاش' | 'كي نت' | 'ومض';
-  payment_number: string;
-  is_final: boolean;
-  notes?: string;
-  created_at: string;
-}
-
-export interface ParentRequest {
-  id: string;
-  student_id: string;
-  parent_phone: string;
-  type: 'apology' | 'payment_intent' | 'note';
-  content: string;
-  amount?: number;
-  status: 'pending' | 'accepted' | 'rejected';
-  created_at: string;
+  day_of_week: string;
+  start_time: string;
+  duration_hours: number;
 }
