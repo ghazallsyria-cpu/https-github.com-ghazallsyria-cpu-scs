@@ -1,14 +1,12 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// Fix: Bypassing TypeScript "no exported member" error for useLocation by using a dynamic import cast.
+import React, { useState, useEffect, useCallback } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 const { useLocation } = ReactRouterDOM as any;
 import { supabase } from '../supabase';
 import { 
-  BookOpen, Plus, Clock, RefreshCw, Save, Edit3, Trash2, CheckCircle, AlertCircle, ChevronLeft, X, AlertTriangle
+  BookOpen, Plus, Clock, RefreshCw, Save, Edit3, Trash2, CheckCircle, AlertCircle, ChevronLeft, X, AlertTriangle, Users
 } from 'lucide-react';
 
-// Fix: Added isAdmin to props type and changed uid to any to satisfy TypeScript caller constraints.
 const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, year: string, semester: string, isAdmin?: boolean }) => {
   const location = useLocation();
   const [students, setStudents] = useState<any[]>([]);
@@ -20,43 +18,83 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
   const [form, setForm] = useState({ lesson_date: new Date().toISOString().split('T')[0], hours: '2', notes: '' });
 
   const fetchStudents = useCallback(async () => {
-    let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
-    if (role !== 'admin') query = query.eq('teacher_id', uid);
-    const { data } = await query.order('name');
-    setStudents(data || []);
+    setLoading(true);
+    try {
+      let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
+      if (role !== 'admin') {
+        query = query.eq('teacher_id', uid);
+      }
+      const { data, error } = await query.order('name');
+      if (error) throw error;
+      setStudents(data || []);
+    } catch (err) {
+      console.error("Error fetching students for lessons:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [uid, role, year, semester]);
 
   const fetchRecords = async (sid: string) => {
     setLoading(true);
-    const { data } = await supabase.from('lessons').select('*').eq('student_id', sid).order('lesson_date', { ascending: false });
-    setStudentLessons(data || []);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from('lessons').select('*').eq('student_id', sid).order('lesson_date', { ascending: false });
+      if (error) throw error;
+      setStudentLessons(data || []);
+    } catch (err) {
+      console.error("Error fetching lesson records:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchStudents(); }, [fetchStudents]);
-  useEffect(() => { if (selectedStudent) fetchRecords(selectedStudent.id); }, [selectedStudent]);
+  useEffect(() => { 
+    fetchStudents(); 
+  }, [fetchStudents]);
+
+  useEffect(() => { 
+    if (selectedStudent) fetchRecords(selectedStudent.id); 
+  }, [selectedStudent]);
 
   const handleSaveLesson = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.from('lessons').insert([{
-      student_id: selectedStudent.id,
-      teacher_id: uid,
-      lesson_date: form.lesson_date,
-      hours: parseFloat(form.hours),
-      notes: form.notes
-    }]);
-    setIsLessonModalOpen(false); fetchRecords(selectedStudent.id);
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('lessons').insert([{
+        student_id: selectedStudent.id,
+        teacher_id: uid,
+        lesson_date: form.lesson_date,
+        hours: parseFloat(form.hours),
+        notes: form.notes
+      }]);
+      if (error) throw error;
+      setIsLessonModalOpen(false); 
+      fetchRecords(selectedStudent.id);
+      fetchStudents(); // للتأكد من تحديث عداد الحصص في القائمة الرئيسية
+    } catch (err: any) {
+      alert("خطأ في حفظ الحصة: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteLesson = async (id: string) => {
     await supabase.from('lessons').delete().eq('id', id);
     setConfirmDeleteId(null);
     fetchRecords(selectedStudent.id);
-    fetchStudents(); // Refresh general count
+    fetchStudents();
   };
 
+  if (loading && students.length === 0 && !selectedStudent) {
+    return (
+      <div className="h-[60vh] flex flex-col items-center justify-center gap-4">
+        <RefreshCw className="animate-spin text-indigo-600" size={40} />
+        <p className="font-black text-slate-400">جاري جلب قائمة الطلاب والسجلات...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-10 pb-32">
+    <div className="space-y-10 pb-32 animate-in fade-in duration-500">
       <div className="bg-white p-10 rounded-[3.5rem] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-8">
         <div className="flex items-center gap-6">
           <div className="bg-indigo-600 p-5 rounded-[2rem] text-white shadow-xl"><BookOpen size={32} /></div>
@@ -65,22 +103,35 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
             <p className="text-slate-400 font-bold">{selectedStudent ? `إدارة حصص الطالب: ${selectedStudent.name}` : 'اختر طالباً لإدارة سجلاته الدراسية'}</p>
           </div>
         </div>
+        {!selectedStudent && (
+          <button onClick={fetchStudents} className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-indigo-50 hover:text-indigo-600 transition-all">
+            <RefreshCw size={20} />
+          </button>
+        )}
       </div>
 
       {!selectedStudent ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-           {students.map(s => (
-             <button key={s.id} onClick={() => setSelectedStudent(s)} className="p-10 bg-white rounded-[4rem] border hover:shadow-xl hover:border-indigo-100 transition-all group text-right relative">
-                <h3 className="text-2xl font-black group-hover:text-indigo-600 transition-colors">{s.name}</h3>
-                <div className="flex items-center gap-2 mt-4 text-indigo-600 font-black text-sm bg-indigo-50 w-fit px-4 py-2 rounded-full">
-                   <Clock size={16} /> {s.total_lessons} حصة منجزة
-                </div>
-                <ChevronLeft className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-200 group-hover:text-indigo-600 group-hover:-translate-x-2 transition-all" size={32} />
-             </button>
-           ))}
-        </div>
+        students.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+             {students.map(s => (
+               <button key={s.id} onClick={() => setSelectedStudent(s)} className="p-10 bg-white rounded-[4rem] border hover:shadow-xl hover:border-indigo-100 transition-all group text-right relative">
+                  <h3 className="text-2xl font-black group-hover:text-indigo-600 transition-colors">{s.name}</h3>
+                  <div className="flex items-center gap-2 mt-4 text-indigo-600 font-black text-sm bg-indigo-50 w-fit px-4 py-2 rounded-full">
+                     <Clock size={16} /> {s.total_lessons || 0} حصة منجزة
+                  </div>
+                  <ChevronLeft className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-200 group-hover:text-indigo-600 group-hover:-translate-x-2 transition-all" size={32} />
+               </button>
+             ))}
+          </div>
+        ) : (
+          <div className="py-24 text-center bg-white rounded-[4rem] border-2 border-dashed border-slate-100">
+             <Users size={60} className="mx-auto text-slate-100 mb-6" />
+             <h3 className="text-2xl font-black text-slate-400">لا يوجد طلاب مسجلون لهذا الفصل</h3>
+             <p className="text-slate-300 font-bold mt-2">يرجى إضافة طلاب أولاً من صفحة "طلابي" ليظهروا هنا.</p>
+          </div>
+        )
       ) : (
-        <div className="space-y-10 animate-in fade-in slide-in-from-left-8 duration-500">
+        <div className="space-y-10 animate-in slide-in-from-left-8 duration-500">
            <div className="flex justify-between items-center">
               <button onClick={() => setSelectedStudent(null)} className="flex items-center gap-2 text-slate-400 font-black hover:text-indigo-600 transition-all">
                 <ChevronLeft className="rotate-180" size={20} /> العودة لقائمة الطلاب
@@ -94,11 +145,11 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
               {studentLessons.length > 0 ? studentLessons.map(l => (
                 <div key={l.id} className="p-8 bg-white rounded-[2.5rem] border hover:shadow-md transition-all flex flex-col md:flex-row justify-between items-center gap-6">
                    <div className="flex items-center gap-6 w-full">
-                      <div className="bg-slate-50 p-5 rounded-3xl text-indigo-600 font-black text-center min-w-[100px]">
+                      <div className="bg-slate-50 p-5 rounded-3xl text-indigo-600 font-black text-center min-w-[120px]">
                          <span className="block text-[10px] text-slate-400 uppercase">التاريخ</span>
-                         {l.lesson_date}
+                         <span className="text-sm">{l.lesson_date}</span>
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 text-right">
                          <div className="flex items-center gap-4">
                             <h4 className="font-black text-xl text-slate-900">{l.hours} ساعة دراسية</h4>
                          </div>
@@ -140,17 +191,19 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
 
       {isLessonModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-xl">
-           <form onSubmit={handleSaveLesson} className="bg-white w-full max-w-md p-12 rounded-[3.5rem] space-y-8 animate-in zoom-in duration-300">
+           <form onSubmit={handleSaveLesson} className="bg-white w-full max-w-md p-12 rounded-[3.5rem] space-y-8 animate-in zoom-in duration-300 overflow-y-auto max-h-[90vh]">
               <div className="flex justify-between items-center">
                  <h2 className="text-2xl font-black">تسجيل حصة جديدة</h2>
                  <button type="button" onClick={() => setIsLessonModalOpen(false)} className="p-3 bg-slate-50 rounded-full hover:bg-rose-50 transition-colors"><X size={20} /></button>
               </div>
               <div className="space-y-4">
-                 <div className="space-y-2"><label className="text-sm font-black">تاريخ الحصة</label><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" value={form.lesson_date} onChange={e => setForm({...form, lesson_date: e.target.value})} /></div>
-                 <div className="space-y-2"><label className="text-sm font-black">عدد الساعات</label><input type="number" step="0.5" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none" placeholder="مثال: 2" value={form.hours} onChange={e => setForm({...form, hours: e.target.value})} /></div>
-                 <div className="space-y-2"><label className="text-sm font-black">ملاحظات إضافية</label><textarea className="w-full p-5 bg-slate-50 rounded-2xl font-bold h-32 outline-none" placeholder="موضوع الحصة..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} /></div>
+                 <div className="space-y-2"><label className="text-sm font-black text-slate-500">تاريخ الحصة</label><input type="date" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none border-none ring-indigo-100 focus:ring-2" value={form.lesson_date} onChange={e => setForm({...form, lesson_date: e.target.value})} /></div>
+                 <div className="space-y-2"><label className="text-sm font-black text-slate-500">عدد الساعات</label><input type="number" step="0.5" className="w-full p-5 bg-slate-50 rounded-2xl font-bold outline-none border-none ring-indigo-100 focus:ring-2" placeholder="مثال: 2" value={form.hours} onChange={e => setForm({...form, hours: e.target.value})} /></div>
+                 <div className="space-y-2"><label className="text-sm font-black text-slate-500">ملاحظات إضافية</label><textarea className="w-full p-5 bg-slate-50 rounded-2xl font-bold h-32 outline-none border-none ring-indigo-100 focus:ring-2" placeholder="موضوع الحصة..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} /></div>
               </div>
-              <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">حفظ البيانات</button>
+              <button type="submit" disabled={loading} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-3">
+                {loading ? <RefreshCw className="animate-spin" /> : null} حفظ البيانات
+              </button>
            </form>
         </div>
       )}
