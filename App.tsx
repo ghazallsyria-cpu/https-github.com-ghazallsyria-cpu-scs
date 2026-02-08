@@ -45,9 +45,15 @@ const App: React.FC = () => {
         setErrorStatus(null);
         setLoading(false);
       } else if (retry < 1) {
-        setTimeout(() => fetchProfile(user, retry + 1), 1000);
+        // محاولة ثانية بعد ثانية واحدة لإعطاء فرصة للـ Trigger لإنشاء الحساب
+        setTimeout(() => fetchProfile(user, retry + 1), 1500);
       } else {
-        setErrorStatus("لم يتم العثور على صلاحيات مرتبطة بهذا الحساب بعد.");
+        // إذا لم يتم العثور على حساب بعد المحاولة الثانية، نقوم بتسجيل الخروج فوراً
+        console.warn("User authenticated but no profile found. Force logging out...");
+        await supabase.auth.signOut();
+        setProfile(null);
+        setSession(null);
+        setErrorStatus("حسابك غير مسجل في سجلات النظام أو تم حذفه. تم تسجيل الخروج.");
         setLoading(false);
       }
     } catch (err: any) {
@@ -102,7 +108,7 @@ const App: React.FC = () => {
         <ShieldX size={80} className="mx-auto text-rose-500" />
         <h2 className="text-3xl font-black text-slate-900">تنبيه أمني</h2>
         <p className="text-slate-500 font-bold leading-relaxed">{errorStatus}</p>
-        <button onClick={() => window.location.reload()} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">إعادة المحاولة</button>
+        <button onClick={() => window.location.reload()} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">العودة للرئيسية</button>
       </div>
     </div>
   );
@@ -236,7 +242,6 @@ const App: React.FC = () => {
         {/* Mobile Bottom Navigation */}
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-2xl border-t border-slate-100 px-4 py-3 flex items-center justify-around z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
            {menuItems.slice(0, 5).map((item: any) => (
-             /* Corrected child element and access to isActive by using NavLink's function children pattern to fix className error on inner div */
              <NavLink 
                key={item.to} 
                to={item.to} 
@@ -253,11 +258,8 @@ const App: React.FC = () => {
              </NavLink>
            ))}
            <button 
-             /* Fix: Merged duplicate onClick attributes into a single handler */
              onClick={() => {
-                // توجيه تلقائي للإعدادات إذا كان ولي أمر أو إذا كان العنصر الخامس ليس الإعدادات
-                const settingsItem = menuItems.find((m:any) => m.to === '/settings');
-                if(settingsItem) window.location.hash = '#/settings';
+                window.location.hash = '#/settings';
              }}
              className="flex flex-col items-center gap-1.5 text-slate-400"
            >
