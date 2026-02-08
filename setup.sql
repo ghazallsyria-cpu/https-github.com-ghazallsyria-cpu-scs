@@ -1,5 +1,5 @@
 
--- تفعيل صلاحيات القراءة الشاملة للمدير على كافة الجداول
+-- تفعيل الرؤية الشاملة للمدير على كافة الجداول
 DROP POLICY IF EXISTS "admin_select_all_lessons" ON public.lessons;
 CREATE POLICY "admin_select_all_lessons" ON public.lessons FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
 
@@ -12,7 +12,7 @@ CREATE POLICY "admin_select_all_students" ON public.students FOR SELECT TO authe
 DROP POLICY IF EXISTS "admin_select_all_schedules" ON public.schedules;
 CREATE POLICY "admin_select_all_schedules" ON public.schedules FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
 
--- تحديث عرض ملخص الطلاب ليشمل اسم المعلم بشكل دائم للمدير
+-- ضمان تحديث عرض الملخص ليدعم الرؤية الإدارية
 CREATE OR REPLACE VIEW public.student_summary_view AS
 SELECT 
     s.*,
