@@ -1,19 +1,9 @@
 
--- تفعيل الرؤية الشاملة للمدير على كافة الجداول
-DROP POLICY IF EXISTS "admin_select_all_lessons" ON public.lessons;
-CREATE POLICY "admin_select_all_lessons" ON public.lessons FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
+-- حذف الـ View القديم لتجنب تعارض الأعمدة
+DROP VIEW IF EXISTS public.student_summary_view CASCADE;
 
-DROP POLICY IF EXISTS "admin_select_all_payments" ON public.payments;
-CREATE POLICY "admin_select_all_payments" ON public.payments FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
-
-DROP POLICY IF EXISTS "admin_select_all_students" ON public.students;
-CREATE POLICY "admin_select_all_students" ON public.students FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
-
-DROP POLICY IF EXISTS "admin_select_all_schedules" ON public.schedules;
-CREATE POLICY "admin_select_all_schedules" ON public.schedules FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
-
--- ضمان تحديث عرض الملخص ليدعم الرؤية الإدارية
-CREATE OR REPLACE VIEW public.student_summary_view AS
+-- بناء الـ View الشامل بجميع الأعمدة المطلوبة للتقارير والرقابة
+CREATE VIEW public.student_summary_view AS
 SELECT 
     s.*,
     p.full_name as teacher_name,
@@ -27,4 +17,17 @@ SELECT
             s.agreed_amount - COALESCE((SELECT SUM(pay.amount) FROM public.payments pay WHERE pay.student_id = s.id), 0)
     END as remaining_balance
 FROM public.students s
-JOIN public.profiles p ON s.teacher_id = p.id;
+LEFT JOIN public.profiles p ON s.teacher_id = p.id;
+
+-- تفعيل صلاحيات القراءة الشاملة للمدير
+DROP POLICY IF EXISTS "admin_select_all_lessons" ON public.lessons;
+CREATE POLICY "admin_select_all_lessons" ON public.lessons FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
+
+DROP POLICY IF EXISTS "admin_select_all_payments" ON public.payments;
+CREATE POLICY "admin_select_all_payments" ON public.payments FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
+
+DROP POLICY IF EXISTS "admin_select_all_students" ON public.students;
+CREATE POLICY "admin_select_all_students" ON public.students FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR teacher_id = auth.uid());
+
+DROP POLICY IF EXISTS "admin_view_all_profiles" ON public.profiles;
+CREATE POLICY "admin_view_all_profiles" ON public.profiles FOR SELECT TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR id = auth.uid());

@@ -5,7 +5,7 @@ const { HashRouter, Routes, Route, Navigate, NavLink } = ReactRouterDOM as any;
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings as SettingsIcon, ShieldAlert, Clock, ShieldX, Eye, EyeOff
+  BookOpen, Calendar, Settings as SettingsIcon, ShieldAlert, Clock, ShieldX, Eye
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -25,7 +25,7 @@ const App: React.FC = () => {
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [monitoredTeacher, setMonitoredTeacher] = useState<any | null>(null);
 
-  const fetchProfile = useCallback(async (user: any) => {
+  const fetchProfile = useCallback(async (user: any, retry = 0) => {
     if (!user) {
       setLoading(false);
       return;
@@ -43,14 +43,17 @@ const App: React.FC = () => {
       if (data) {
         setProfile(data);
         setErrorStatus(null);
+        setLoading(false);
+      } else if (retry < 1) {
+        // محاولة ثانية بعد ثانية واحدة (لحل مشكلة تأخر تريجر إنشاء البروفايل)
+        setTimeout(() => fetchProfile(user, retry + 1), 1000);
       } else {
-        // إذا لم يجد بروفايل، ننتظر قليلاً فقد يكون هناك تأخير في المزامنة
-        setErrorStatus("لم يتم العثور على صلاحيات مرتبطة بهذا الحساب.");
+        setErrorStatus("لم يتم العثور على صلاحيات مرتبطة بهذا الحساب بعد.");
+        setLoading(false);
       }
     } catch (err: any) {
       console.error("Profile Fetch Error:", err);
       setErrorStatus(err.message || "فشل الاتصال بنظام الصلاحيات");
-    } finally {
       setLoading(false);
     }
   }, []);
@@ -94,7 +97,6 @@ const App: React.FC = () => {
 
   if (!session) return <Login />;
 
-  // إظهار الخطأ فقط إذا انتهى التحميل ولم نجد بروفايل
   if (errorStatus && !profile) return (
     <div className="h-screen flex items-center justify-center bg-slate-50 p-6 text-center">
       <div className="max-w-md bg-white p-12 rounded-[4rem] shadow-2xl space-y-8">
@@ -143,7 +145,6 @@ const App: React.FC = () => {
     { to: "/settings", icon: <SettingsIcon />, label: "الإعدادات" },
   ]);
 
-  // استخدام بروفايل المعلم المراقب إذا كان مفعلاً، وإلا استخدام البروفايل الأصلي
   const activeProfileForData = (isAdmin && monitoredTeacher) ? monitoredTeacher : profile;
 
   return (
