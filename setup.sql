@@ -1,35 +1,24 @@
 
--- 1. التأكد من تفرد رقم الهاتف في جدول البروفايل لمنع التداخل
-ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_phone_key;
-ALTER TABLE public.profiles ADD CONSTRAINT profiles_phone_key UNIQUE (phone);
+-- ==========================================
+-- سكريبت تصفير النظام (Factory Reset)
+-- يرجى استخدامه بحذر في SQL Editor
+-- ==========================================
 
--- 2. وظيفة ذكية لإنشاء بروفايل تلقائياً عند تسجيل أي مستخدم جديد في Auth
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name, phone, role, subjects, is_approved)
-  VALUES (
-    new.id,
-    COALESCE(new.raw_user_meta_data->>'full_name', 'مستخدم جديد'),
-    COALESCE(new.raw_user_meta_data->>'phone', ''),
-    COALESCE(new.raw_user_meta_data->>'role', 'teacher'),
-    COALESCE(new.raw_user_meta_data->>'subjects', ''),
-    CASE WHEN (new.raw_user_meta_data->>'role') = 'parent' THEN true ELSE false END
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    full_name = EXCLUDED.full_name,
-    phone = EXCLUDED.phone;
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+/* 
+-- لتمكين التصفير اليدوي، قم بتحديد الأسطر التالية وتشغيلها:
 
--- 3. تفعيل التريجر
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+-- 1. مسح الحصص والدفعات والجداول
+TRUNCATE public.payments, public.lessons, public.schedules CASCADE;
 
--- 4. إعادة بناء الـ View لضمان دقة البيانات
+-- 2. مسح الطلاب
+TRUNCATE public.students CASCADE;
+
+-- 3. مسح كافة الحسابات ما عدا المدير
+DELETE FROM public.profiles WHERE role != 'admin';
+
+*/
+
+-- تحسين الـ View ليكون أسرع بعد التصفير
 DROP VIEW IF EXISTS public.student_summary_view CASCADE;
 CREATE VIEW public.student_summary_view AS
 SELECT 

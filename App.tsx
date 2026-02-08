@@ -5,7 +5,7 @@ const { HashRouter, Routes, Route, Navigate, NavLink } = ReactRouterDOM as any;
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings as SettingsIcon, ShieldAlert, Clock, ShieldX, Eye
+  BookOpen, Calendar, Settings as SettingsIcon, ShieldAlert, Clock, ShieldX, Eye, Menu
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -45,7 +45,6 @@ const App: React.FC = () => {
         setErrorStatus(null);
         setLoading(false);
       } else if (retry < 1) {
-        // محاولة ثانية بعد ثانية واحدة (لحل مشكلة تأخر تريجر إنشاء البروفايل)
         setTimeout(() => fetchProfile(user, retry + 1), 1000);
       } else {
         setErrorStatus("لم يتم العثور على صلاحيات مرتبطة بهذا الحساب بعد.");
@@ -127,22 +126,22 @@ const App: React.FC = () => {
   }
 
   const menuItems = isAdmin ? [
-    { to: "/", icon: <LayoutDashboard />, label: "الرئيسية" },
-    { to: "/teachers", icon: <ShieldCheck />, label: "المعلمون" },
-    { to: "/students", icon: <Users />, label: "الطلاب" },
-    { to: "/payments", icon: <Wallet />, label: "المالية" },
-    { to: "/lessons", icon: <BookOpen />, label: "الحصص" },
-    { to: "/settings", icon: <SettingsIcon />, label: "الإعدادات" },
+    { to: "/", icon: <LayoutDashboard size={20} />, label: "الرئيسية" },
+    { to: "/teachers", icon: <ShieldCheck size={20} />, label: "المعلمون" },
+    { to: "/students", icon: <Users size={20} />, label: "الطلاب" },
+    { to: "/payments", icon: <Wallet size={20} />, label: "المالية" },
+    { to: "/lessons", icon: <BookOpen size={20} />, label: "الحصص" },
+    { to: "/settings", icon: <SettingsIcon size={20} />, label: "الإعدادات" },
   ] : (isParent ? [
-    { to: "/", icon: <GraduationCap />, label: "بوابة الأبناء" },
-    { to: "/settings", icon: <SettingsIcon />, label: "الإعدادات" },
+    { to: "/", icon: <GraduationCap size={20} />, label: "بوابة الأبناء" },
+    { to: "/settings", icon: <SettingsIcon size={20} />, label: "الإعدادات" },
   ] : [
-    { to: "/", icon: <LayoutDashboard />, label: "الرئيسية" },
-    { to: "/students", icon: <Users />, label: "طلابي" },
-    { to: "/lessons", icon: <BookOpen />, label: "الحصص" },
-    { to: "/payments", icon: <Wallet />, label: "الحسابات" },
-    { to: "/schedule", icon: <Calendar />, label: "الجدول" },
-    { to: "/settings", icon: <SettingsIcon />, label: "الإعدادات" },
+    { to: "/", icon: <LayoutDashboard size={20} />, label: "الرئيسية" },
+    { to: "/students", icon: <Users size={20} />, label: "طلابي" },
+    { to: "/lessons", icon: <BookOpen size={20} />, label: "الحصص" },
+    { to: "/payments", icon: <Wallet size={20} />, label: "الحسابات" },
+    { to: "/schedule", icon: <Calendar size={20} />, label: "الجدول" },
+    { to: "/settings", icon: <SettingsIcon size={20} />, label: "الإعدادات" },
   ]);
 
   const activeProfileForData = (isAdmin && monitoredTeacher) ? monitoredTeacher : profile;
@@ -150,6 +149,8 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col lg:flex-row font-['Cairo'] text-right" dir="rtl">
+        
+        {/* Desktop Sidebar */}
         <aside className="hidden lg:flex flex-col w-72 bg-white border-l border-slate-200 h-screen sticky top-0 z-50">
           <div className="p-8 border-b border-slate-100 flex items-center gap-4">
             <div className={`p-3 rounded-2xl text-white shadow-lg ${isAdmin ? 'bg-indigo-600' : 'bg-emerald-600'}`}><ShieldAlert size={28} /></div>
@@ -169,7 +170,21 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col min-w-0">
+        {/* Mobile Header */}
+        <header className="lg:hidden flex items-center justify-between px-6 h-20 bg-white/80 backdrop-blur-xl sticky top-0 z-50 border-b border-slate-100">
+           <div className="flex items-center gap-3">
+              <div className="bg-indigo-600 p-2 rounded-xl text-white"><ShieldAlert size={20} /></div>
+              <h1 className="font-black text-lg text-slate-900">نظام القمة</h1>
+           </div>
+           <div className="flex items-center gap-3">
+              <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">{profile.full_name}</span>
+              <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white text-xs font-black">{profile.full_name[0]}</div>
+           </div>
+        </header>
+
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col min-w-0 pb-24 lg:pb-0">
+          {/* Desktop Top Header */}
           <header className="hidden lg:flex items-center justify-between px-12 h-24 bg-white/50 backdrop-blur-xl sticky top-0 z-40 border-b border-slate-200">
              <div className="flex items-center gap-6">
                 <div>
@@ -190,6 +205,15 @@ const App: React.FC = () => {
           </header>
 
           <div className="p-4 md:p-10 lg:p-12 w-full max-w-[1600px] mx-auto">
+            {isAdmin && monitoredTeacher && (
+               <div className="lg:hidden mb-6 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                     <Eye size={16} className="text-amber-600" />
+                     <span className="text-xs font-black text-amber-700">مراقبة: {monitoredTeacher.full_name}</span>
+                  </div>
+                  <button onClick={() => setMonitoredTeacher(null)} className="text-rose-600 text-xs font-black px-3 py-1 bg-white rounded-lg border border-rose-100">إنهاء</button>
+               </div>
+            )}
             <Routes>
                {isParent ? (
                  <Route path="/" element={<ParentPortal parentPhone={profile.phone || ''} />} />
@@ -208,6 +232,41 @@ const App: React.FC = () => {
             </Routes>
           </div>
         </main>
+
+        {/* Mobile Bottom Navigation */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-2xl border-t border-slate-100 px-4 py-3 flex items-center justify-around z-[100] shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+           {menuItems.slice(0, 5).map((item: any) => (
+             /* Corrected child element and access to isActive by using NavLink's function children pattern to fix className error on inner div */
+             <NavLink 
+               key={item.to} 
+               to={item.to} 
+               className={({isActive}: any) => `flex flex-col items-center gap-1.5 transition-all ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}
+             >
+                {({isActive}: any) => (
+                  <>
+                    <div className={`p-2 rounded-xl transition-all ${isActive ? 'bg-indigo-50 shadow-inner' : ''}`}>
+                       {item.icon}
+                    </div>
+                    <span className="text-[10px] font-black">{item.label}</span>
+                  </>
+                )}
+             </NavLink>
+           ))}
+           <button 
+             /* Fix: Merged duplicate onClick attributes into a single handler */
+             onClick={() => {
+                // توجيه تلقائي للإعدادات إذا كان ولي أمر أو إذا كان العنصر الخامس ليس الإعدادات
+                const settingsItem = menuItems.find((m:any) => m.to === '/settings');
+                if(settingsItem) window.location.hash = '#/settings';
+             }}
+             className="flex flex-col items-center gap-1.5 text-slate-400"
+           >
+              <div className="p-2 rounded-xl">
+                 <SettingsIcon size={20} />
+              </div>
+              <span className="text-[10px] font-black">الإعدادات</span>
+           </button>
+        </nav>
       </div>
     </HashRouter>
   );
