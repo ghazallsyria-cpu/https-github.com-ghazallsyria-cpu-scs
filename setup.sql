@@ -1,38 +1,24 @@
 
--- 1. تنظيف السياسات القديمة للحذف
-DROP POLICY IF EXISTS "profiles_admin_delete" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_admin_all_actions" ON public.profiles;
+-- تفعيل سياسات الحذف الشاملة للمدير فقط على كافة الجداول
+-- 1. جدول الدروس
+DROP POLICY IF EXISTS "admin_delete_lessons" ON public.lessons;
+CREATE POLICY "admin_delete_lessons" ON public.lessons FOR DELETE TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
 
--- 2. إنشاء سياسة "السلطة المطلقة" (Superpower Policy)
--- هذه السياسة تسمح لأي مستخدم يحمل دور admin بتنفيذ أي عملية (إدخال، تحديث، حذف) على أي سجل
+-- 2. جدول المدفوعات
+DROP POLICY IF EXISTS "admin_delete_payments" ON public.payments;
+CREATE POLICY "admin_delete_payments" ON public.payments FOR DELETE TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+
+-- 3. جدول الجداول الدراسية
+DROP POLICY IF EXISTS "admin_delete_schedules" ON public.schedules;
+CREATE POLICY "admin_delete_schedules" ON public.schedules FOR DELETE TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+
+-- 4. تعزيز سياسة السلطة المطلقة على البروفايلات
+DROP POLICY IF EXISTS "admin_absolute_control" ON public.profiles;
 CREATE POLICY "admin_absolute_control" ON public.profiles
-FOR ALL 
-TO authenticated
-USING (
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-)
-WITH CHECK (
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-);
+FOR ALL TO authenticated
+USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin')
+WITH CHECK ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
 
--- 3. ضمان أن المدير يمكنه حذف الطلاب المرتبطين بالمعلم أو ولي الأمر لتسهيل عملية الحذف الكامل
-ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+-- 5. منح صلاحية الحذف للمدير على الطلاب (تم تحديثها للتأكيد)
 DROP POLICY IF EXISTS "admin_delete_students" ON public.students;
-CREATE POLICY "admin_delete_students" ON public.students
-FOR DELETE TO authenticated
-USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
-
--- 4. تحديث وظيفة التحقق من المدير لتكون أكثر أماناً
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean AS $$
-BEGIN
-  RETURN (
-    SELECT (raw_user_meta_data ->> 'role') = 'admin'
-    FROM auth.users
-    WHERE id = auth.uid()
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 5. إعادة منح الصلاحيات الأساسية للمخطط العام
-GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+CREATE POLICY "admin_delete_students" ON public.students FOR DELETE TO authenticated USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
