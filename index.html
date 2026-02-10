@@ -8,26 +8,45 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --diamond-primary: #4f46e5;
+        --diamond-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        --platinum-bg: #f8fafc;
+      }
       body { 
         font-family: 'Cairo', sans-serif; 
-        background-color: #f8fafc; 
+        background-color: var(--platinum-bg);
         margin: 0; 
         -webkit-tap-highlight-color: transparent;
         overflow-x: hidden;
+        color: #1e293b;
       }
-      .platinum-gradient {
-        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      .diamond-glass {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
       }
-      .diamond-card {
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
+      .diamond-shadow {
+        box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.05);
+      }
+      .platinum-card {
+        background: white;
+        border-radius: 3rem;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      .platinum-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 30px 60px -15px rgba(79, 70, 229, 0.1);
       }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       
-      /* تحسين جماليات أزرار التبديل */
-      input:checked + .slider { background-color: #4f46e5; }
+      /* انيميشن للدخول */
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-diamond { animation: slideUp 0.6s ease-out forwards; }
     </style>
     <script type="importmap">
 {
@@ -40,10 +59,10 @@
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
     "lucide-react": "https://esm.sh/lucide-react@0.468.0?external=react",
     "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "vite": "https://esm.sh/vite@^7.3.1",
     "react/": "https://esm.sh/react@^19.2.4/",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3"
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4"
   }
 }
 </script>
