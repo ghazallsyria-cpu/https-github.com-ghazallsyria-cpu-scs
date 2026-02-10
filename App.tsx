@@ -6,7 +6,7 @@ import { supabase } from './supabase';
 // Fix: Added RefreshCw to imports from lucide-react
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings as SettingsIcon, Star, CalendarDays, ShieldAlert, Clock, RefreshCw
+  BookOpen, Calendar, Settings as SettingsIcon, Star, CalendarDays, ShieldAlert, Clock, RefreshCw, ChevronDown
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -56,7 +56,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-24 h-24 border-8 border-indigo-100 border-t-indigo-600 rounded-[2.5rem] animate-spin mb-8"></div>
-      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">تأمين نظام القمة V5.3</p>
+      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">تأمين نظام القمة V5.4</p>
     </div>
   );
 
@@ -106,7 +106,7 @@ const App: React.FC = () => {
               </button>
            </div>
            
-           <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Summit System Diamond Protection V5.3</p>
+           <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Summit System Diamond Protection V5.4</p>
         </div>
       </div>
     );
@@ -141,7 +141,7 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-xl shadow-indigo-200 rotate-3"><Star size={24} fill="white" /></div>
             <div>
               <h1 className="font-black text-2xl text-slate-900 leading-none">نظام القمة</h1>
-              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">DIAMOND CORE V5.3</p>
+              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">DIAMOND CORE V5.4</p>
             </div>
           </div>
 
@@ -207,6 +207,46 @@ const App: React.FC = () => {
              </div>
           </header>
 
+          {/* Mobile Context Switcher (FIX: Added for Mobile Users) */}
+          {!isParent && (
+            <div className="lg:hidden sticky top-24 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-6 py-4 flex items-center gap-4 overflow-x-auto no-scrollbar shadow-sm">
+               <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100 shrink-0">
+                  <CalendarDays size={14} className="text-indigo-600" />
+                  <div className="relative">
+                    <select 
+                      value={activeYear} 
+                      onChange={e => setActiveYear(e.target.value)} 
+                      className="bg-transparent font-black text-[11px] text-slate-900 outline-none border-none appearance-none pr-4"
+                    >
+                      <option value="2024-2025">24-25</option>
+                      <option value="2025-2026">25-26</option>
+                      <option value="2026-2027">26-27</option>
+                    </select>
+                    <ChevronDown size={10} className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                  </div>
+               </div>
+               
+               <div className="flex bg-slate-50 p-1 rounded-2xl border border-slate-100 shrink-0">
+                  <button 
+                    onClick={() => setActiveSemester('1')} 
+                    className={`px-5 py-2 rounded-xl font-black text-[10px] transition-all ${activeSemester === '1' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}
+                  >
+                    فصل 1
+                  </button>
+                  <button 
+                    onClick={() => setActiveSemester('2')} 
+                    className={`px-5 py-2 rounded-xl font-black text-[10px] transition-all ${activeSemester === '2' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}
+                  >
+                    فصل 2
+                  </button>
+               </div>
+               
+               <div className="bg-indigo-50 text-indigo-600 px-4 py-2.5 rounded-2xl text-[10px] font-black border border-indigo-100 shrink-0 flex items-center gap-2">
+                  <Star size={12} fill="currentColor" /> {activeYear.split('-')[0]}
+               </div>
+            </div>
+          )}
+
           <div className="flex-1 p-6 md:p-12 max-w-[1700px] mx-auto w-full pb-32 lg:pb-12">
             <Routes>
                {isParent ? (
@@ -227,7 +267,7 @@ const App: React.FC = () => {
           </div>
 
           <footer className="px-10 py-8 border-t border-slate-50 flex flex-col md:flex-row justify-between items-center text-slate-400 font-bold text-[10px] bg-white gap-4">
-             <span>نظام القمة V5.3 - النسخة الماسية المطلقة</span>
+             <span>نظام القمة V5.4 - النسخة الماسية المطلقة</span>
              <span>برمجة : <span className="text-slate-900 font-black">ايهاب جمال غزال</span> &copy; 2025</span>
           </footer>
         </main>
