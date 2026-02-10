@@ -3,9 +3,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 const { HashRouter, Routes, Route, Navigate, NavLink } = ReactRouterDOM as any;
 import { supabase } from './supabase';
+// Fix: Added RefreshCw to imports from lucide-react
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings as SettingsIcon, Star, CalendarDays, BarChart3
+  BookOpen, Calendar, Settings as SettingsIcon, Star, CalendarDays, ShieldAlert, Clock, RefreshCw
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -55,7 +56,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-24 h-24 border-8 border-indigo-100 border-t-indigo-600 rounded-[2.5rem] animate-spin mb-8"></div>
-      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">نظام القمة V5.2 الماسي</p>
+      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">تأمين نظام القمة V5.3</p>
     </div>
   );
 
@@ -63,6 +64,53 @@ const App: React.FC = () => {
 
   const isAdmin = profile?.role === 'admin';
   const isParent = profile?.role === 'parent';
+  const isApproved = profile?.is_approved === true;
+
+  // --- واجهة الحجب للمعلم غير المفعل ---
+  if (!isApproved && !isAdmin && !isParent) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-['Cairo'] text-right" dir="rtl">
+        <div className="bg-white w-full max-w-2xl p-12 md:p-20 rounded-[5rem] shadow-2xl border border-slate-100 text-center space-y-10 animate-diamond">
+           <div className="relative mx-auto w-40 h-40">
+              <div className="absolute inset-0 bg-indigo-600 rounded-[3rem] rotate-12 opacity-10 animate-pulse"></div>
+              <div className="relative bg-white border-4 border-indigo-50 text-indigo-600 w-full h-full rounded-[3rem] flex items-center justify-center shadow-2xl">
+                 <ShieldAlert size={80} strokeWidth={1.5} />
+              </div>
+              <div className="absolute -bottom-4 -right-4 bg-amber-400 p-4 rounded-2xl text-white shadow-xl animate-bounce">
+                 <Clock size={24} />
+              </div>
+           </div>
+
+           <div className="space-y-4">
+              <h1 className="text-4xl font-black text-slate-900 tracking-tighter">حسابك قيد المراجعة</h1>
+              <p className="text-slate-400 font-bold text-lg leading-relaxed">
+                 مرحباً أ/ <span className="text-indigo-600">{profile.full_name}</span>، لقد تم استلام طلب انضمامك للنظام بنجاح.
+                 <br />
+                 يتم الآن مراجعة بياناتك من قبل الإدارة العامة لتفعيل صلاحيات التدريس الخاصة بك.
+              </p>
+           </div>
+
+           <div className="bg-indigo-50/50 p-8 rounded-[3rem] border border-indigo-50">
+              <p className="text-indigo-600 font-black text-sm mb-2 flex items-center justify-center gap-3">
+                 <Star size={18} fill="currentColor" /> ملاحظة أمنية
+              </p>
+              <p className="text-slate-500 font-bold text-xs">ستصلك رسالة أو إشعار فور تفعيل الحساب، يمكنك بعدها الوصول لكافة الأدوات المالية والتعليمية الماسية.</p>
+           </div>
+
+           <div className="flex flex-col gap-4">
+              <button onClick={() => window.location.reload()} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-2xl shadow-indigo-100 flex items-center justify-center gap-4 hover:bg-indigo-700 transition-all">
+                 <RefreshCw size={24} /> تحديث حالة الطلب
+              </button>
+              <button onClick={() => supabase.auth.signOut()} className="w-full py-5 text-rose-500 font-black text-sm hover:bg-rose-50 rounded-2xl transition-all flex items-center justify-center gap-2">
+                 <LogOut size={20} /> تسجيل الخروج والانتظار
+              </button>
+           </div>
+           
+           <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Summit System Diamond Protection V5.3</p>
+        </div>
+      </div>
+    );
+  }
 
   const menuItems = isAdmin ? [
     { to: "/", icon: <LayoutDashboard size={20} />, label: "الرئيسية" },
@@ -93,7 +141,7 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-xl shadow-indigo-200 rotate-3"><Star size={24} fill="white" /></div>
             <div>
               <h1 className="font-black text-2xl text-slate-900 leading-none">نظام القمة</h1>
-              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">DIAMOND CORE V5.2</p>
+              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">DIAMOND CORE V5.3</p>
             </div>
           </div>
 
@@ -126,7 +174,7 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* Mobile Navigation (FIXED: Supports more items with scrolling) */}
+        {/* Mobile Navigation */}
         <nav className="lg:hidden fixed bottom-6 left-4 right-4 capsule-nav px-4 py-4 flex items-center justify-around z-[1000] rounded-[3rem] shadow-2xl overflow-x-auto no-scrollbar">
            {menuItems.map((item: any) => (
              <NavLink key={item.to} to={item.to} className={({isActive}: any) => `relative flex flex-col items-center min-w-[60px] transition-all ${isActive ? 'text-indigo-400 -translate-y-2 scale-110' : 'text-slate-500'}`}>
@@ -179,7 +227,7 @@ const App: React.FC = () => {
           </div>
 
           <footer className="px-10 py-8 border-t border-slate-50 flex flex-col md:flex-row justify-between items-center text-slate-400 font-bold text-[10px] bg-white gap-4">
-             <span>نظام القمة V5.2 - النسخة الماسية المطلقة</span>
+             <span>نظام القمة V5.3 - النسخة الماسية المطلقة</span>
              <span>برمجة : <span className="text-slate-900 font-black">ايهاب جمال غزال</span> &copy; 2025</span>
           </footer>
         </main>
