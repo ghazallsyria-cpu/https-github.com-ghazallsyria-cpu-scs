@@ -8,6 +8,22 @@ export interface Profile {
   phone: string;
   gender?: 'male' | 'female';
   is_approved: boolean;
+  is_available: boolean; // ميزة جديدة: هل المعلم متاح لاستقبال طلاب جدد
+  subjects?: string;
+  created_at: string;
+}
+
+export interface TutorRequest {
+  id: string;
+  student_name: string;
+  student_phone: string;
+  grade: string;
+  subject: string;
+  modality: 'home' | 'online';
+  type: 'course' | 'single';
+  status: 'pending' | 'assigned' | 'rejected';
+  teacher_id?: string;
+  notes?: string;
   created_at: string;
 }
 
@@ -24,7 +40,7 @@ export interface Student {
   phones: StudentPhone[];
   school_name?: string;
   grade: string;
-  group_name?: string; // مجلد المجموعة
+  group_name?: string;
   agreed_amount: number;
   is_hourly: boolean;
   price_per_hour: number;

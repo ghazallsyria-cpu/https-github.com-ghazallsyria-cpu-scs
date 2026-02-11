@@ -1,58 +1,28 @@
 
--- 1. إضافة وظيفة ترحيل الطلاب الذكية
-CREATE OR REPLACE FUNCTION public.migrate_students(
-    student_ids UUID[],
-    target_year TEXT,
-    target_semester TEXT,
-    copy_financials BOOLEAN,
-    copy_lessons BOOLEAN
-) RETURNS VOID AS $$
-DECLARE
-    s_id UUID;
-    new_student_id UUID;
-BEGIN
-    FOREACH s_id IN ARRAY student_ids LOOP
-        -- إنشاء نسخة من الطالب في السنة/الفصل الجديد
-        INSERT INTO public.students (
-            teacher_id, name, address, phones, grade, group_name, 
-            academic_year, semester, agreed_amount, is_hourly, price_per_hour
-        )
-        SELECT 
-            teacher_id, name, address, phones, grade, group_name, 
-            target_year, target_semester, agreed_amount, is_hourly, price_per_hour
-        FROM public.students WHERE id = s_id
-        RETURNING id INTO new_student_id;
+-- إضافة عمود حالة التوفر للملف الشخصي
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_available BOOLEAN DEFAULT true;
 
-        -- إذا تم اختيار نسخ البيانات المالية (المدفوعات)
-        IF copy_financials THEN
-            INSERT INTO public.payments (student_id, teacher_id, amount, payment_date, payment_method, notes)
-            SELECT new_student_id, teacher_id, amount, payment_date, payment_method, 'ترحيل من سنة سابقة: ' || notes
-            FROM public.payments WHERE student_id = s_id;
-        END IF;
+-- إنشاء جدول طلبات الدروس الخصوصية
+CREATE TABLE IF NOT EXISTS public.tutor_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_name TEXT NOT NULL,
+    student_phone TEXT NOT NULL,
+    grade TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    modality TEXT CHECK (modality IN ('home', 'online')),
+    type TEXT CHECK (type IN ('course', 'single')),
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'assigned', 'rejected')),
+    teacher_id UUID REFERENCES public.profiles(id),
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
 
-        -- إذا تم اختيار نسخ سجل الحصص
-        IF copy_lessons THEN
-            INSERT INTO public.lessons (student_id, teacher_id, lesson_date, hours, notes)
-            SELECT new_student_id, teacher_id, lesson_date, hours, 'ترحيل: ' || notes
-            FROM public.lessons WHERE student_id = s_id;
-        END IF;
-    END LOOP;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 2. تحديث العرض المالي ليشمل فلترة السنة والفصل بشكل أكثر دقة
-CREATE OR REPLACE VIEW public.student_summary_view AS
-SELECT 
-    s.*,
-    COALESCE((SELECT COUNT(*) FROM public.lessons l WHERE l.student_id = s.id), 0) AS total_lessons,
-    COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) AS total_hours_taught,
-    COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0) AS total_paid,
-    CASE 
-        WHEN s.is_hourly THEN (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) * s.price_per_hour)
-        ELSE s.agreed_amount
-    END AS expected_total,
-    CASE 
-        WHEN s.is_hourly THEN (COALESCE((SELECT SUM(l.hours) FROM public.lessons l WHERE l.student_id = s.id), 0) * s.price_per_hour) - COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)
-        ELSE s.agreed_amount - COALESCE((SELECT SUM(p.amount) FROM public.payments p WHERE p.student_id = s.id), 0)
-    END AS remaining_balance
-FROM public.students s;
+-- منح الصلاحيات
+ALTER TABLE public.tutor_requests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow anyone to create requests" ON public.tutor_requests FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow admin to manage requests" ON public.tutor_requests FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+CREATE POLICY "Allow students to view their own" ON public.tutor_requests FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND phone = student_phone)
+);

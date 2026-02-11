@@ -3,10 +3,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 const { HashRouter, Routes, Route, Navigate, NavLink } = ReactRouterDOM as any;
 import { supabase } from './supabase';
-// Fix: Added RefreshCw to imports from lucide-react
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
-  BookOpen, Calendar, Settings as SettingsIcon, Star, CalendarDays, ShieldAlert, Clock, RefreshCw, ChevronDown
+  BookOpen, Calendar, Settings as SettingsIcon, Star, CalendarDays, ShieldAlert, Clock, RefreshCw, ChevronDown, 
+  Briefcase, SearchCheck, UserPlus
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -18,6 +18,8 @@ import Teachers from './pages/Teachers';
 import Schedule from './pages/Schedule';
 import ParentPortal from './pages/ParentPortal';
 import Settings from './pages/Settings';
+import TutorRequests from './pages/TutorRequests';
+import RequestTutor from './pages/RequestTutor';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -56,7 +58,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-24 h-24 border-8 border-indigo-100 border-t-indigo-600 rounded-[2.5rem] animate-spin mb-8"></div>
-      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">تأمين نظام القمة V5.4</p>
+      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">تأمين نظام القمة V5.5</p>
     </div>
   );
 
@@ -64,49 +66,26 @@ const App: React.FC = () => {
 
   const isAdmin = profile?.role === 'admin';
   const isParent = profile?.role === 'parent';
+  const isStudent = profile?.role === 'student';
   const isApproved = profile?.is_approved === true;
 
-  // --- واجهة الحجب للمعلم غير المفعل ---
-  if (!isApproved && !isAdmin && !isParent) {
+  if (!isApproved && !isAdmin && !isParent && !isStudent) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-['Cairo'] text-right" dir="rtl">
-        <div className="bg-white w-full max-w-2xl p-12 md:p-20 rounded-[5rem] shadow-2xl border border-slate-100 text-center space-y-10 animate-diamond">
+        <div className="bg-white w-full max-w-2xl p-12 md:p-20 rounded-[5rem] shadow-2xl border border-slate-100 text-center space-y-10">
            <div className="relative mx-auto w-40 h-40">
               <div className="absolute inset-0 bg-indigo-600 rounded-[3rem] rotate-12 opacity-10 animate-pulse"></div>
               <div className="relative bg-white border-4 border-indigo-50 text-indigo-600 w-full h-full rounded-[3rem] flex items-center justify-center shadow-2xl">
                  <ShieldAlert size={80} strokeWidth={1.5} />
               </div>
-              <div className="absolute -bottom-4 -right-4 bg-amber-400 p-4 rounded-2xl text-white shadow-xl animate-bounce">
-                 <Clock size={24} />
-              </div>
            </div>
-
            <div className="space-y-4">
               <h1 className="text-4xl font-black text-slate-900 tracking-tighter">حسابك قيد المراجعة</h1>
-              <p className="text-slate-400 font-bold text-lg leading-relaxed">
-                 مرحباً أ/ <span className="text-indigo-600">{profile.full_name}</span>، لقد تم استلام طلب انضمامك للنظام بنجاح.
-                 <br />
-                 يتم الآن مراجعة بياناتك من قبل الإدارة العامة لتفعيل صلاحيات التدريس الخاصة بك.
-              </p>
+              <p className="text-slate-400 font-bold text-lg leading-relaxed">أهلاً بك أ/ <span className="text-indigo-600">{profile.full_name}</span>. جاري تفعيل صلاحيات التدريس الخاصة بك من قبل الإدارة.</p>
            </div>
-
-           <div className="bg-indigo-50/50 p-8 rounded-[3rem] border border-indigo-50">
-              <p className="text-indigo-600 font-black text-sm mb-2 flex items-center justify-center gap-3">
-                 <Star size={18} fill="currentColor" /> ملاحظة أمنية
-              </p>
-              <p className="text-slate-500 font-bold text-xs">ستصلك رسالة أو إشعار فور تفعيل الحساب، يمكنك بعدها الوصول لكافة الأدوات المالية والتعليمية الماسية.</p>
-           </div>
-
-           <div className="flex flex-col gap-4">
-              <button onClick={() => window.location.reload()} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-2xl shadow-indigo-100 flex items-center justify-center gap-4 hover:bg-indigo-700 transition-all">
-                 <RefreshCw size={24} /> تحديث حالة الطلب
-              </button>
-              <button onClick={() => supabase.auth.signOut()} className="w-full py-5 text-rose-500 font-black text-sm hover:bg-rose-50 rounded-2xl transition-all flex items-center justify-center gap-2">
-                 <LogOut size={20} /> تسجيل الخروج والانتظار
-              </button>
-           </div>
-           
-           <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Summit System Diamond Protection V5.4</p>
+           <button onClick={() => supabase.auth.signOut()} className="w-full py-5 text-rose-500 font-black text-sm hover:bg-rose-50 rounded-2xl transition-all flex items-center justify-center gap-2">
+              <LogOut size={20} /> تسجيل الخروج والانتظار
+           </button>
         </div>
       </div>
     );
@@ -114,12 +93,17 @@ const App: React.FC = () => {
 
   const menuItems = isAdmin ? [
     { to: "/", icon: <LayoutDashboard size={20} />, label: "الرئيسية" },
+    { to: "/requests", icon: <SearchCheck size={20} />, label: "طلبات البحث" },
     { to: "/teachers", icon: <ShieldCheck size={20} />, label: "المعلمون" },
     { to: "/students", icon: <Users size={20} />, label: "الطلاب" },
     { to: "/payments", icon: <Wallet size={20} />, label: "المالية" },
     { to: "/lessons", icon: <BookOpen size={20} />, label: "الحصص" },
   ] : (isParent ? [
     { to: "/", icon: <GraduationCap size={20} />, label: "الأبناء" },
+    { to: "/request-tutor", icon: <UserPlus size={20} />, label: "طلب معلم" },
+    { to: "/settings", icon: <SettingsIcon size={20} />, label: "الإعدادات" },
+  ] : (isStudent ? [
+    { to: "/", icon: <UserPlus size={20} />, label: "طلب معلم" },
     { to: "/settings", icon: <SettingsIcon size={20} />, label: "الإعدادات" },
   ] : [
     { to: "/", icon: <LayoutDashboard size={20} />, label: "الرئيسية" },
@@ -127,38 +111,56 @@ const App: React.FC = () => {
     { to: "/payments", icon: <Wallet size={20} />, label: "المالية" },
     { to: "/lessons", icon: <BookOpen size={20} />, label: "الحصص" },
     { to: "/schedule", icon: <Calendar size={20} />, label: "الجدول" },
-  ]);
+  ]));
 
   const activeProfileForData = (isAdmin && monitoredTeacher) ? monitoredTeacher : profile;
 
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#f8fafc] flex flex-col lg:flex-row font-['Cairo'] text-right overflow-hidden" dir="rtl">
-        
-        {/* Sidebar - Desktop */}
         <aside className="hidden lg:flex flex-col w-80 bg-white border-l border-slate-100 h-screen sticky top-0 z-50 shadow-2xl">
           <div className="p-12 border-b border-slate-50 flex items-center gap-4">
             <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-xl shadow-indigo-200 rotate-3"><Star size={24} fill="white" /></div>
             <div>
               <h1 className="font-black text-2xl text-slate-900 leading-none">نظام القمة</h1>
-              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">DIAMOND CORE V5.4</p>
+              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">DIAMOND CONNECT V5.5</p>
             </div>
           </div>
+          
+          {/* Availability Toggle for Teachers */}
+          {profile.role === 'teacher' && !monitoredTeacher && (
+             <div className="m-6 p-6 bg-indigo-50 rounded-[2.5rem] border border-indigo-100 flex items-center justify-between">
+                <div>
+                   <p className="text-[10px] font-black text-indigo-600 uppercase mb-1">حالة الاستعداد</p>
+                   <p className={`text-xs font-black ${profile.is_available ? 'text-emerald-600' : 'text-rose-500'}`}>
+                      {profile.is_available ? 'متاح لطلاب جدد' : 'مشغول حالياً'}
+                   </p>
+                </div>
+                <button 
+                  onClick={async () => {
+                    const newStatus = !profile.is_available;
+                    const { error } = await supabase.from('profiles').update({ is_available: newStatus }).eq('id', profile.id);
+                    if (!error) setProfile({...profile, is_available: newStatus});
+                  }}
+                  className={`w-14 h-8 rounded-full relative transition-all ${profile.is_available ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                >
+                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${profile.is_available ? 'left-1' : 'left-7'}`}></div>
+                </button>
+             </div>
+          )}
 
-          <div className="p-8 bg-slate-50 mx-4 my-6 rounded-[2.5rem] space-y-3 border border-slate-100">
-             <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                <CalendarDays size={14} className="text-indigo-400" /> السنة الدراسية والفصل
-             </div>
-             <select value={activeYear} onChange={e => setActiveYear(e.target.value)} className="w-full p-4 bg-white rounded-2xl font-black text-xs border-none shadow-sm outline-none text-slate-700 cursor-pointer">
-                <option value="2024-2025">2024-2025</option>
-                <option value="2025-2026">2025-2026</option>
-                <option value="2026-2027">2026-2027</option>
-             </select>
-             <div className="flex bg-white p-1.5 rounded-2xl shadow-sm">
-                <button onClick={() => setActiveSemester('1')} className={`flex-1 py-3 rounded-xl font-black text-[10px] transition-all duration-300 ${activeSemester === '1' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}>فصل 1</button>
-                <button onClick={() => setActiveSemester('2')} className={`flex-1 py-3 rounded-xl font-black text-[10px] transition-all duration-300 ${activeSemester === '2' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}>فصل 2</button>
-             </div>
-          </div>
+          {!isStudent && !isParent && (
+            <div className="p-8 bg-slate-50 mx-4 my-6 rounded-[2.5rem] space-y-3 border border-slate-100">
+               <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1"><CalendarDays size={14} /> السنة والفصل</div>
+               <select value={activeYear} onChange={e => setActiveYear(e.target.value)} className="w-full p-4 bg-white rounded-2xl font-black text-xs border-none shadow-sm outline-none cursor-pointer">
+                  <option value="2024-2025">2024-2025</option><option value="2025-2026">2025-2026</option>
+               </select>
+               <div className="flex bg-white p-1 rounded-2xl">
+                  <button onClick={() => setActiveSemester('1')} className={`flex-1 py-3 rounded-xl font-black text-[10px] transition-all ${activeSemester === '1' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}>فصل 1</button>
+                  <button onClick={() => setActiveSemester('2')} className={`flex-1 py-3 rounded-xl font-black text-[10px] transition-all ${activeSemester === '2' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}>فصل 2</button>
+               </div>
+            </div>
+          )}
 
           <nav className="flex-1 px-6 space-y-2 overflow-y-auto no-scrollbar">
             {menuItems.map((item: any) => (
@@ -167,90 +169,32 @@ const App: React.FC = () => {
               </NavLink>
             ))}
           </nav>
-
-          <div className="p-8 border-t border-slate-50 space-y-4">
-             <NavLink to="/settings" className="flex items-center gap-4 text-slate-400 font-black px-8 py-4 hover:bg-slate-50 rounded-[1.5rem] transition-all duration-300"><SettingsIcon size={20} /> الإعدادات</NavLink>
-             <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-4 text-rose-500 font-black w-full px-8 py-4 hover:bg-rose-50 rounded-[1.5rem] transition-all duration-300"><LogOut size={20} /> خروج</button>
+          <div className="p-8 border-t border-slate-50">
+             <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-4 text-rose-500 font-black w-full px-8 py-4 hover:bg-rose-50 rounded-[1.5rem] transition-all"><LogOut size={20} /> خروج</button>
           </div>
         </aside>
 
-        {/* Mobile Navigation */}
-        <nav className="lg:hidden fixed bottom-6 left-4 right-4 capsule-nav px-4 py-4 flex items-center justify-around z-[1000] rounded-[3rem] shadow-2xl overflow-x-auto no-scrollbar">
-           {menuItems.map((item: any) => (
-             <NavLink key={item.to} to={item.to} className={({isActive}: any) => `relative flex flex-col items-center min-w-[60px] transition-all ${isActive ? 'text-indigo-400 -translate-y-2 scale-110' : 'text-slate-500'}`}>
-                {({ isActive }: any) => (
-                  <>
-                    {item.icon}
-                    <span className="text-[8px] font-black mt-1">{item.label}</span>
-                    {isActive && <div className="absolute -bottom-1 w-1 h-1 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.8)]"></div>}
-                  </>
-                )}
-             </NavLink>
-           ))}
-        </nav>
-
-        {/* Content Area */}
         <main className="flex-1 min-w-0 flex flex-col">
           <header className="px-8 md:px-14 h-24 flex items-center justify-between bg-white/60 backdrop-blur-2xl border-b border-slate-50 sticky top-0 z-40">
              <div className="flex items-center gap-6">
                 <div className="lg:hidden bg-indigo-600 p-3 rounded-2xl text-white shadow-lg"><Star size={20} fill="white" /></div>
                 <div>
-                   <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1">{isAdmin ? 'المدير العام' : 'المعلم المعتمد'}</p>
-                   <h2 className="text-lg font-black text-slate-900 truncate max-w-[150px] md:max-w-none">{profile.full_name}</h2>
+                   <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1">{isAdmin ? 'المدير العام' : (isStudent ? 'الطالب' : 'بوابة القمة')}</p>
+                   <h2 className="text-lg font-black text-slate-900 truncate max-w-[200px]">{profile.full_name}</h2>
                 </div>
              </div>
              <div className="flex items-center gap-4">
-                <div className="bg-emerald-50 text-emerald-600 px-4 py-1.5 rounded-full text-[10px] font-black border border-emerald-100 hidden md:flex items-center gap-2 animate-pulse">
-                   آمن وبحالة ممتازة
-                </div>
-                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-xl border-4 border-white">{profile.full_name[0]}</div>
+                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-lg border-4 border-white shadow-xl">{profile.full_name[0]}</div>
              </div>
           </header>
 
-          {/* Mobile Context Switcher (FIX: Added for Mobile Users) */}
-          {!isParent && (
-            <div className="lg:hidden sticky top-24 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-6 py-4 flex items-center gap-4 overflow-x-auto no-scrollbar shadow-sm">
-               <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100 shrink-0">
-                  <CalendarDays size={14} className="text-indigo-600" />
-                  <div className="relative">
-                    <select 
-                      value={activeYear} 
-                      onChange={e => setActiveYear(e.target.value)} 
-                      className="bg-transparent font-black text-[11px] text-slate-900 outline-none border-none appearance-none pr-4"
-                    >
-                      <option value="2024-2025">24-25</option>
-                      <option value="2025-2026">25-26</option>
-                      <option value="2026-2027">26-27</option>
-                    </select>
-                    <ChevronDown size={10} className="absolute left-0 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
-                  </div>
-               </div>
-               
-               <div className="flex bg-slate-50 p-1 rounded-2xl border border-slate-100 shrink-0">
-                  <button 
-                    onClick={() => setActiveSemester('1')} 
-                    className={`px-5 py-2 rounded-xl font-black text-[10px] transition-all ${activeSemester === '1' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}
-                  >
-                    فصل 1
-                  </button>
-                  <button 
-                    onClick={() => setActiveSemester('2')} 
-                    className={`px-5 py-2 rounded-xl font-black text-[10px] transition-all ${activeSemester === '2' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}
-                  >
-                    فصل 2
-                  </button>
-               </div>
-               
-               <div className="bg-indigo-50 text-indigo-600 px-4 py-2.5 rounded-2xl text-[10px] font-black border border-indigo-100 shrink-0 flex items-center gap-2">
-                  <Star size={12} fill="currentColor" /> {activeYear.split('-')[0]}
-               </div>
-            </div>
-          )}
-
-          <div className="flex-1 p-6 md:p-12 max-w-[1700px] mx-auto w-full pb-32 lg:pb-12">
+          <div className="flex-1 p-6 md:p-12 max-w-[1700px] mx-auto w-full pb-32">
             <Routes>
-               {isParent ? (
-                 <Route path="/" element={<ParentPortal parentPhone={profile.phone || ''} />} />
+               {isStudent || isParent ? (
+                 <>
+                   <Route path="/" element={isParent ? <ParentPortal parentPhone={profile.phone || ''} /> : <Navigate to="/request-tutor" />} />
+                   <Route path="/request-tutor" element={<RequestTutor userPhone={profile.phone} />} />
+                 </>
                ) : (
                  <>
                    <Route path="/" element={<Dashboard role={profile.role} profile={activeProfileForData} isAdminActual={isAdmin} monitoredTeacher={monitoredTeacher} year={activeYear} semester={activeSemester} />} />
@@ -259,17 +203,13 @@ const App: React.FC = () => {
                    <Route path="/payments" element={<Payments role={profile.role} uid={activeProfileForData.id} isAdmin={isAdmin} year={activeYear} semester={activeSemester} />} />
                    <Route path="/schedule" element={<Schedule role={profile.role} uid={activeProfileForData.id} />} />
                    {isAdmin && <Route path="/teachers" element={<Teachers onMonitor={(t: any) => setMonitoredTeacher(t)} currentMonitoredId={monitoredTeacher?.id} />} />}
+                   {isAdmin && <Route path="/requests" element={<TutorRequests />} />}
                  </>
                )}
                <Route path="/settings" element={<Settings />} />
                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
-
-          <footer className="px-10 py-8 border-t border-slate-50 flex flex-col md:flex-row justify-between items-center text-slate-400 font-bold text-[10px] bg-white gap-4">
-             <span>نظام القمة V5.4 - النسخة الماسية المطلقة</span>
-             <span>برمجة : <span className="text-slate-900 font-black">ايهاب جمال غزال</span> &copy; 2025</span>
-          </footer>
         </main>
       </div>
     </HashRouter>
