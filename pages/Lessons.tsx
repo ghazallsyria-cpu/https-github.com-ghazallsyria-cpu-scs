@@ -37,7 +37,8 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
       
       // توسيع كافة المجلدات تلقائياً عند وجود نتائج بحث
       if (searchTerm) {
-        const grades = Array.from(new Set(filtered.map(s => String(s.grade))));
+        // Fix: Explicitly type the grades array as string[] to avoid 'unknown[]' type error
+        const grades: string[] = Array.from(new Set(filtered.map((s: any) => String(s.grade))));
         setExpandedGrades(grades);
       }
     } catch (err) {

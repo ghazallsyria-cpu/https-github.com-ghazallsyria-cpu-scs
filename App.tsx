@@ -6,7 +6,7 @@ import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
   BookOpen, Calendar, Settings as SettingsIcon, Star, CalendarDays, ShieldAlert, Clock, RefreshCw, ChevronDown, 
-  Briefcase, SearchCheck, UserPlus
+  Briefcase, SearchCheck, UserPlus, SlidersHorizontal, Copyright
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -21,7 +21,6 @@ import Settings from './pages/Settings';
 import TutorRequests from './pages/TutorRequests';
 import RequestTutor from './pages/RequestTutor';
 
-// مكون شريط الملاحة السفلي للجوال
 const MobileBottomNav = ({ items }: { items: any[] }) => {
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-2xl border-t border-slate-100 px-4 py-3 z-[100] flex justify-around items-center shadow-[0_-10px_40px_rgba(0,0,0,0.05)] rounded-t-[2.5rem]">
@@ -31,7 +30,6 @@ const MobileBottomNav = ({ items }: { items: any[] }) => {
           to={item.to} 
           className={({isActive}: any) => `flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${isActive ? 'text-indigo-600 scale-110' : 'text-slate-400'}`}
         >
-          {/* Use render props for NavLink children to access isActive scope locally and fix undefined error */}
           {({ isActive }: any) => (
             <>
               {React.cloneElement(item.icon, { size: 22, strokeWidth: isActive ? 2.5 : 2 })}
@@ -49,6 +47,7 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [monitoredTeacher, setMonitoredTeacher] = useState<any | null>(null);
+  const [showYearMenu, setShowYearMenu] = useState(false);
   
   const [activeYear, setActiveYear] = useState('2025-2026');
   const [activeSemester, setActiveSemester] = useState('1');
@@ -81,7 +80,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-24 h-24 border-8 border-indigo-100 border-t-indigo-600 rounded-[2.5rem] animate-spin mb-8"></div>
-      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">تأمين نظام القمة V5.5</p>
+      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">نظام القمة الماسي V5.5</p>
     </div>
   );
 
@@ -104,7 +103,7 @@ const App: React.FC = () => {
            </div>
            <div className="space-y-4">
               <h1 className="text-4xl font-black text-slate-900 tracking-tighter">حسابك قيد المراجعة</h1>
-              <p className="text-slate-400 font-bold text-lg leading-relaxed">أهلاً بك أ/ <span className="text-indigo-600">{profile.full_name}</span>. جاري تفعيل صلاحيات التدريس الخاصة بك من قبل الإدارة.</p>
+              <p className="text-slate-400 font-bold text-lg leading-relaxed">أهلاً بك أ/ <span className="text-indigo-600">{profile.full_name}</span>. جاري تفعيل صلاحياتك من قبل الإدارة.</p>
            </div>
            <button onClick={() => supabase.auth.signOut()} className="w-full py-5 text-rose-500 font-black text-sm hover:bg-rose-50 rounded-2xl transition-all flex items-center justify-center gap-2">
               <LogOut size={20} /> تسجيل الخروج والانتظار
@@ -151,27 +150,6 @@ const App: React.FC = () => {
             </div>
           </div>
           
-          {profile.role === 'teacher' && !monitoredTeacher && (
-             <div className="m-6 p-6 bg-indigo-50 rounded-[2.5rem] border border-indigo-100 flex items-center justify-between">
-                <div>
-                   <p className="text-[10px] font-black text-indigo-600 uppercase mb-1">حالة الاستعداد</p>
-                   <p className={`text-xs font-black ${profile.is_available ? 'text-emerald-600' : 'text-rose-500'}`}>
-                      {profile.is_available ? 'متاح لطلاب جدد' : 'مشغول حالياً'}
-                   </p>
-                </div>
-                <button 
-                  onClick={async () => {
-                    const newStatus = !profile.is_available;
-                    const { error } = await supabase.from('profiles').update({ is_available: newStatus }).eq('id', profile.id);
-                    if (!error) setProfile({...profile, is_available: newStatus});
-                  }}
-                  className={`w-14 h-8 rounded-full relative transition-all ${profile.is_available ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                >
-                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${profile.is_available ? 'left-1' : 'left-7'}`}></div>
-                </button>
-             </div>
-          )}
-
           {!isStudent && !isParent && (
             <div className="p-8 bg-slate-50 mx-4 my-6 rounded-[2.5rem] space-y-3 border border-slate-100">
                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1"><CalendarDays size={14} /> السنة والفصل</div>
@@ -192,41 +170,60 @@ const App: React.FC = () => {
               </NavLink>
             ))}
           </nav>
+          
           <div className="p-8 border-t border-slate-50">
              <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-4 text-rose-500 font-black w-full px-8 py-4 hover:bg-rose-50 rounded-[1.5rem] transition-all"><LogOut size={20} /> خروج</button>
           </div>
         </aside>
 
-        {/* Mobile Navigation */}
         <MobileBottomNav items={menuItems} />
 
-        <main className="flex-1 min-w-0 flex flex-col">
+        <main className="flex-1 min-w-0 flex flex-col relative">
           <header className="px-6 md:px-14 h-20 md:h-24 flex items-center justify-between bg-white/80 backdrop-blur-2xl border-b border-slate-50 sticky top-0 z-[60]">
              <div className="flex items-center gap-4 md:gap-6">
                 <div className="lg:hidden bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg"><Star size={18} fill="white" /></div>
                 <div className="min-w-0">
-                   <p className="text-[9px] md:text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1">{isAdmin ? 'المدير العام' : (isStudent ? 'الطالب' : 'بوابة القمة')}</p>
+                   <p className="text-[9px] md:text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1">{profile.role === 'admin' ? 'المدير العام' : profile.role === 'student' ? 'الطالب' : 'بوابة القمة'}</p>
                    <h2 className="text-sm md:text-lg font-black text-slate-900 truncate max-w-[150px] md:max-w-[300px]">{profile.full_name}</h2>
                 </div>
              </div>
              
              <div className="flex items-center gap-3 md:gap-4">
-                {/* Logout Button for Mobile Only */}
-                <button 
-                  onClick={() => { if(confirm("هل تود تسجيل الخروج؟")) supabase.auth.signOut(); }}
-                  className="lg:hidden p-3 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm"
-                  title="تسجيل الخروج"
-                >
-                  <LogOut size={20} />
-                </button>
+                {!isStudent && !isParent && (
+                  <button 
+                    onClick={() => setShowYearMenu(!showYearMenu)}
+                    className="lg:hidden p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                  >
+                    <SlidersHorizontal size={20} />
+                  </button>
+                )}
 
                 <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-900 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-black text-sm md:text-lg border-2 md:border-4 border-white shadow-xl">
                   {profile.full_name[0]}
                 </div>
              </div>
+
+             {showYearMenu && (
+                <div className="absolute top-24 left-6 right-6 bg-white p-8 rounded-[2.5rem] shadow-2xl border border-indigo-50 lg:hidden z-[100] animate-in slide-in-from-top-4">
+                   <div className="space-y-6">
+                      <div className="space-y-2 text-right">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">السنة الدراسية</label>
+                         <select value={activeYear} onChange={e => setActiveYear(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl font-black text-sm border-none">
+                            <option value="2024-2025">2024-2025</option><option value="2025-2026">2025-2026</option>
+                         </select>
+                      </div>
+                      <div className="space-y-2 text-right">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الفصل الدراسي</label>
+                         <div className="flex bg-slate-50 p-1.5 rounded-2xl">
+                            <button onClick={() => {setActiveSemester('1'); setShowYearMenu(false);}} className={`flex-1 py-4 rounded-xl font-black text-xs transition-all ${activeSemester === '1' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}>الفصل 1</button>
+                            <button onClick={() => {setActiveSemester('2'); setShowYearMenu(false);}} className={`flex-1 py-4 rounded-xl font-black text-xs transition-all ${activeSemester === '2' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400'}`}>الفصل 2</button>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+             )}
           </header>
 
-          {/* Main Content Area - Added padding for bottom nav */}
           <div className="flex-1 p-4 md:p-12 max-w-[1700px] mx-auto w-full pb-32 lg:pb-12 overflow-y-auto">
             <Routes>
                {isStudent || isParent ? (
@@ -248,6 +245,14 @@ const App: React.FC = () => {
                <Route path="/settings" element={<Settings />} />
                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+
+            {/* الفوتر الثابت بحقوق المبرمج */}
+            <footer className="mt-20 py-10 border-t border-slate-100 text-center space-y-2">
+               <div className="flex items-center justify-center gap-2 text-indigo-600 font-black text-sm">
+                  <Copyright size={16} /> برمجة وتطوير : أ / ايهاب جمال غزال
+               </div>
+               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">كافة الحقوق محفوظة © 2025 - نظام القمة V5.5</p>
+            </footer>
           </div>
         </main>
       </div>
