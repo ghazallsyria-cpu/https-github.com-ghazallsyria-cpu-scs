@@ -55,9 +55,21 @@ const App: React.FC = () => {
   const fetchProfile = useCallback(async (user: any) => {
     if (!user) { setLoading(false); return; }
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      // محاولة جلب الملف الشخصي بانتظار بسيط للتأكد من عمل الـ Trigger في الخلفية
+      let { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      
+      // إذا لم يجد الملف فوراً (بسبب تأخر السيرفر)، نعيد المحاولة مرة واحدة
+      if (!data && !error) {
+        await new Promise(r => setTimeout(r, 1500));
+        const retry = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+        data = retry.data;
+      }
+
       if (data) setProfile(data);
-      else await supabase.auth.signOut();
+      else if (user) {
+         // إذا سجل الدخول ولم يجد ملفاً برغم الانتظار، قد تكون هناك مشكلة في الـ Trigger
+         console.error("Profile not found for user:", user.id);
+      }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, []);
@@ -80,7 +92,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-24 h-24 border-8 border-indigo-100 border-t-indigo-600 rounded-[2.5rem] animate-spin mb-8"></div>
-      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">نظام القمة الماسي V5.5</p>
+      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">نظام القمة V5.5</p>
     </div>
   );
 
@@ -146,7 +158,7 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-xl shadow-indigo-200 rotate-3"><Star size={24} fill="white" /></div>
             <div>
               <h1 className="font-black text-2xl text-slate-900 leading-none">نظام القمة</h1>
-              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">DIAMOND CONNECT V5.5</p>
+              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">CONNECT V5.5</p>
             </div>
           </div>
           
@@ -189,7 +201,6 @@ const App: React.FC = () => {
              </div>
              
              <div className="flex items-center gap-3 md:gap-4">
-                {/* استعادة تبويب الفترات للجوال */}
                 {!isStudent && !isParent && (
                   <button 
                     onClick={() => setShowYearMenu(!showYearMenu)}
@@ -248,12 +259,12 @@ const App: React.FC = () => {
                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
 
-            {/* الفوتر الثابت بحقوق المبرمج ايهاب جمال غزال */}
+            {/* الفوتر الماسي الثابت */}
             <footer className="mt-20 py-10 border-t border-slate-100 text-center space-y-2">
                <div className="flex items-center justify-center gap-2 text-indigo-600 font-black text-sm">
                   <Copyright size={16} /> برمجة وتطوير : أ / ايهاب جمال غزال
                </div>
-               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">كافة الحقوق محفوظة © 2025 - نظام القمة الماسي</p>
+               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">كافة الحقوق محفوظة © 2025 - نظام القمة V5.5</p>
             </footer>
           </div>
         </main>
