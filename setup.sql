@@ -1,5 +1,5 @@
 
--- 1. التأكد من هيكلة جدول الملفات الشخصية
+-- 1. التأكد من هيكلة جدول الملفات الشخصية مع السماح للكل برؤية رتبهم
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     full_name TEXT,
@@ -13,70 +13,48 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 );
 
 -- 2. وظيفة معالجة المستخدم الجديد (تُستدعى تلقائياً عند التسجيل)
--- تم إضافة SECURITY DEFINER لضمان امتلاك الوظيفة صلاحيات كافية لتجاوز RLS أثناء الإنشاء
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, full_name, phone, role, is_approved, subjects)
   VALUES (
     new.id,
-    COALESCE(new.raw_user_meta_data->>'full_name', 'مستخدم جديد'),
+    COALESCE(new.raw_user_meta_data->>'full_name', 'مستخدم'),
     COALESCE(new.raw_user_meta_data->>'phone', ''),
     COALESCE(new.raw_user_meta_data->>'role', 'student'),
     CASE 
+      WHEN (new.raw_user_meta_data->>'role') = 'admin' THEN true -- المدير مفعل دائماً
       WHEN (new.raw_user_meta_data->>'role') = 'teacher' THEN false 
       ELSE true 
     END,
     COALESCE(new.raw_user_meta_data->>'subjects', 'عام')
   )
-  ON CONFLICT (id) DO NOTHING; -- تجنب الأخطاء في حال وجود الملف مسبقاً
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    role = EXCLUDED.role,
+    phone = EXCLUDED.phone;
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 3. إنشاء المُشغل (Trigger)
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- 4. تفعيل RLS وتحديث السياسات بشكل قاطع
+-- 3. تفعيل RLS وتحديث السياسات بشكل "ماسي"
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- السماح للمستخدمين برؤية ملفاتهم الشخصية (للكل)
-DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
-CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (true); -- مسموح للكل للقراءة لضمان عرض الأسماء
+-- السماح للجميع بقراءة الملفات الشخصية (ضروري لعرض أسماء المعلمين والطلاب)
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.profiles;
+CREATE POLICY "Enable read access for all users" ON public.profiles FOR SELECT USING (true);
 
 -- السماح للمستخدمين بتحديث بياناتهم الخاصة
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
--- صلاحيات المدير المطلقة (شاملة كل شيء)
-DROP POLICY IF EXISTS "Admin full access" ON public.profiles;
-CREATE POLICY "Admin full access" ON public.profiles FOR ALL USING (
-    EXISTS (SELECT 1 FROM auth.users WHERE auth.users.id = auth.uid() AND (auth.users.raw_user_meta_data->>'role') = 'admin')
-    OR 
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+-- السماح بإضافة ملفات شخصية (للوظائف البرمجية)
+DROP POLICY IF EXISTS "Enable insert for system" ON public.profiles;
+CREATE POLICY "Enable insert for system" ON public.profiles FOR INSERT WITH CHECK (true);
 
--- سياسات الجداول الأخرى (Students, Lessons, Payments)
-ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Teacher/Admin access to students" ON public.students;
-CREATE POLICY "Teacher/Admin access to students" ON public.students FOR ALL USING (
-    teacher_id = auth.uid() OR 
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Teacher/Admin access to payments" ON public.payments;
-CREATE POLICY "Teacher/Admin access to payments" ON public.payments FOR ALL USING (
-    teacher_id = auth.uid() OR 
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-
-ALTER TABLE public.tutor_requests ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Global Requests Policy" ON public.tutor_requests;
-CREATE POLICY "Global Requests Policy" ON public.tutor_requests FOR ALL USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin' OR
-    student_phone = (SELECT phone FROM public.profiles WHERE id = auth.uid())
+-- صلاحيات المدير الشاملة
+DROP POLICY IF EXISTS "Admins have full control" ON public.profiles;
+CREATE POLICY "Admins have full control" ON public.profiles FOR ALL USING (
+    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+    OR role = 'admin'
 );
