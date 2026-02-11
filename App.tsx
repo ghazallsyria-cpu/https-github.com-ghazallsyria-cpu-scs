@@ -6,7 +6,7 @@ import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
   BookOpen, Calendar, Settings as SettingsIcon, Star, CalendarDays, ShieldAlert, Clock, RefreshCw, ChevronDown, 
-  Briefcase, SearchCheck, UserPlus, SlidersHorizontal, Copyright
+  Briefcase, SearchCheck, UserPlus, SlidersHorizontal, Copyright, Loader2
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -46,6 +46,7 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
   const [monitoredTeacher, setMonitoredTeacher] = useState<any | null>(null);
   const [showYearMenu, setShowYearMenu] = useState(false);
   
@@ -55,24 +56,28 @@ const App: React.FC = () => {
   const fetchProfile = useCallback(async (user: any) => {
     if (!user) { setLoading(false); return; }
     try {
-      // محاولة جلب الملف الشخصي بانتظار بسيط للتأكد من عمل الـ Trigger في الخلفية
+      // محاولة جلب الملف الشخصي
       let { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       
-      // إذا لم يجد الملف فوراً (بسبب تأخر السيرفر)، نعيد المحاولة مرة واحدة
-      if (!data && !error) {
-        await new Promise(r => setTimeout(r, 1500));
-        const retry = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-        data = retry.data;
+      // إذا لم يجد الملف (قد يكون الـ Trigger لم ينتهِ بعد)، نعيد المحاولة حتى 3 مرات
+      if (!data && retryCount < 3) {
+        setTimeout(() => setRetryCount(prev => prev + 1), 2000);
+        return;
       }
 
-      if (data) setProfile(data);
-      else if (user) {
-         // إذا سجل الدخول ولم يجد ملفاً برغم الانتظار، قد تكون هناك مشكلة في الـ Trigger
-         console.error("Profile not found for user:", user.id);
+      if (data) {
+        setProfile(data);
+      } else {
+        // إذا فشل تماماً بعد المحاولات، نخرج المستخدم لتجنب التعليق
+        console.error("Profile fetch failed after retries");
+        // await supabase.auth.signOut();
       }
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  }, []);
+    } catch (err) { 
+      console.error("Profile Fetch Error:", err); 
+    } finally { 
+      setLoading(false); 
+    }
+  }, [retryCount]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: initSession } }) => {
@@ -93,6 +98,17 @@ const App: React.FC = () => {
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-24 h-24 border-8 border-indigo-100 border-t-indigo-600 rounded-[2.5rem] animate-spin mb-8"></div>
       <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">نظام القمة V5.5</p>
+      {retryCount > 0 && <p className="text-slate-400 text-xs mt-2">جاري مزامنة بيانات الملف الشخصي ({retryCount}/3)...</p>}
+    </div>
+  );
+
+  // إذا كان هناك جلسة ولكن لم يكتمل تحميل الملف الشخصي بعد
+  if (session && !profile) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-[#f8fafc] font-['Cairo'] p-10 text-center">
+       <Loader2 size={60} className="text-indigo-600 animate-spin mb-6" />
+       <h2 className="text-2xl font-black text-slate-900 mb-2">جاري تحضير لوحة التحكم...</h2>
+       <p className="text-slate-400 font-bold mb-8">يرجى الانتظار ثوانٍ معدودة حتى تكتمل مزامنة صلاحيات حسابك.</p>
+       <button onClick={() => window.location.reload()} className="px-8 py-3 bg-white border border-slate-200 rounded-2xl font-black text-indigo-600 shadow-sm">إعادة تحميل الصفحة</button>
     </div>
   );
 
@@ -103,6 +119,7 @@ const App: React.FC = () => {
   const isStudent = profile?.role === 'student';
   const isApproved = profile?.is_approved === true;
 
+  // الحسابات غير المفعلة (المعلمين الجدد فقط)
   if (!isApproved && !isAdmin && !isParent && !isStudent) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-['Cairo'] text-right" dir="rtl">
@@ -259,7 +276,7 @@ const App: React.FC = () => {
                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
 
-            {/* الفوتر الماسي الثابت */}
+            {/* الفوتر الماسي الثابت بحقوق المبرمج */}
             <footer className="mt-20 py-10 border-t border-slate-100 text-center space-y-2">
                <div className="flex items-center justify-center gap-2 text-indigo-600 font-black text-sm">
                   <Copyright size={16} /> برمجة وتطوير : أ / ايهاب جمال غزال

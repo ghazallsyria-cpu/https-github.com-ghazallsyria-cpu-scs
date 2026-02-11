@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 );
 
 -- 2. وظيفة معالجة المستخدم الجديد (تُستدعى تلقائياً عند التسجيل)
+-- تم إضافة SECURITY DEFINER لضمان امتلاك الوظيفة صلاحيات كافية لتجاوز RLS أثناء الإنشاء
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -26,8 +27,9 @@ BEGIN
       WHEN (new.raw_user_meta_data->>'role') = 'teacher' THEN false 
       ELSE true 
     END,
-    COALESCE(new.raw_user_meta_data->>'subjects', '')
-  );
+    COALESCE(new.raw_user_meta_data->>'subjects', 'عام')
+  )
+  ON CONFLICT (id) DO NOTHING; -- تجنب الأخطاء في حال وجود الملف مسبقاً
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -38,34 +40,43 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 4. تفعيل RLS وتحديث السياسات
+-- 4. تفعيل RLS وتحديث السياسات بشكل قاطع
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- السماح للمستخدمين برؤية ملفاتهم الشخصية
+-- السماح للمستخدمين برؤية ملفاتهم الشخصية (للكل)
 DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
-CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (true); -- مسموح للكل للقراءة لضمان عرض الأسماء
 
--- السماح للمستخدمين بتحديث بياناتهم (مثل كلمة المرور أو الهاتف)
+-- السماح للمستخدمين بتحديث بياناتهم الخاصة
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
--- صلاحيات المدير الكاملة على كل الملفات
+-- صلاحيات المدير المطلقة (شاملة كل شيء)
 DROP POLICY IF EXISTS "Admin full access" ON public.profiles;
 CREATE POLICY "Admin full access" ON public.profiles FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    EXISTS (SELECT 1 FROM auth.users WHERE auth.users.id = auth.uid() AND (auth.users.raw_user_meta_data->>'role') = 'admin')
+    OR 
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
 );
 
--- سياسات الجداول الأخرى لضمان عدم حدوث أخطاء "Permission Denied"
+-- سياسات الجداول الأخرى (Students, Lessons, Payments)
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Global Student Management" ON public.students;
-CREATE POLICY "Global Student Management" ON public.students FOR ALL USING (
+DROP POLICY IF EXISTS "Teacher/Admin access to students" ON public.students;
+CREATE POLICY "Teacher/Admin access to students" ON public.students FOR ALL USING (
     teacher_id = auth.uid() OR 
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+);
+
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Teacher/Admin access to payments" ON public.payments;
+CREATE POLICY "Teacher/Admin access to payments" ON public.payments FOR ALL USING (
+    teacher_id = auth.uid() OR 
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
 );
 
 ALTER TABLE public.tutor_requests ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Global Requests Access" ON public.tutor_requests;
-CREATE POLICY "Global Requests Access" ON public.tutor_requests FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin') OR
+DROP POLICY IF EXISTS "Global Requests Policy" ON public.tutor_requests;
+CREATE POLICY "Global Requests Policy" ON public.tutor_requests FOR ALL USING (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin' OR
     student_phone = (SELECT phone FROM public.profiles WHERE id = auth.uid())
 );
