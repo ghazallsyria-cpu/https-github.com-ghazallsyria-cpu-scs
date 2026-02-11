@@ -45,10 +45,6 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
   const toggleGrade = (grade: string) => {
     setExpandedGrades(prev => 
       prev.includes(grade) ? prev.filter(g => g !== grade) : [...prev, grade]
@@ -103,12 +99,13 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
     return acc;
   }, {} as any);
 
+  // تحديث خيارات المراحل الدراسية من 1 إلى 12
   const gradeOptions = [...Array(12)].map((_, i) => ({ value: `${i + 1}`, label: `الصف ${i + 1}` }));
 
   return (
     <div className="space-y-12 animate-diamond">
       <div className="bg-white p-12 rounded-[4rem] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-8">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-6 text-right">
           <div className="bg-indigo-600 p-5 rounded-[2rem] text-white shadow-xl shadow-indigo-100"><Users size={32} /></div>
           <div>
             <h2 className="text-3xl font-black text-slate-900 tracking-tighter">إدارة الطلاب</h2>
@@ -119,7 +116,7 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
         <div className="flex items-center gap-4 w-full md:w-auto">
           <div className="relative flex-1 md:w-80">
              <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-             <input placeholder="بحث في هذه الفترة..." className="w-full pr-14 pl-6 py-5 bg-slate-50 border-none rounded-[2rem] font-bold focus:ring-4 ring-indigo-50 transition-all outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+             <input placeholder="بحث في هذه الفترة..." className="w-full pr-14 pl-6 py-5 bg-slate-50 border-none rounded-[2rem] font-bold focus:ring-4 ring-indigo-50 outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <button onClick={() => openModal('edit')} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black flex items-center gap-3 hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200">
              <Plus size={20} /> إضافة طالب جديد
@@ -131,7 +128,7 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
         {loading ? (
           <div className="py-24 text-center">
              <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto mb-6"></div>
-             <p className="font-black text-slate-400 text-sm tracking-widest uppercase text-center">جاري جلب ملفات الطلاب من سيرفر القمة...</p>
+             <p className="font-black text-slate-400 text-sm tracking-widest uppercase">جاري جلب ملفات الطلاب...</p>
           </div>
         ) : Object.keys(groupedStudents).sort((a,b) => Number(b)-Number(a)).map(grade => {
             const gradeStudents = groupedStudents[grade].filter((s: any) => s.name.includes(searchTerm));
@@ -154,9 +151,9 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
                     {expandedGrades.includes(grade) && (
                         <div className="p-10 pt-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in slide-in-from-top-4 duration-500">
                             {gradeStudents.map((s: any) => (
-                                <div key={s.id} className={`p-8 rounded-[3.5rem] border transition-all group shadow-sm hover:shadow-2xl relative ${selectedIds.includes(s.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-transparent hover:bg-white'}`}>
+                                <div key={s.id} className="p-8 rounded-[3.5rem] border bg-slate-50 border-transparent hover:bg-white hover:shadow-2xl transition-all relative group text-right">
                                     <div className="flex items-center gap-5 mb-10">
-                                        <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center font-black text-2xl text-indigo-600 shadow-sm transition-all group-hover:bg-indigo-600 group-hover:text-white border-2 border-transparent group-hover:border-white">
+                                        <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center font-black text-2xl text-indigo-600 shadow-sm transition-all group-hover:bg-indigo-600 group-hover:text-white">
                                            {s.name[0]}
                                         </div>
                                         <div className="flex-1 min-w-0 pr-8">
@@ -164,15 +161,14 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter bg-white px-3 py-1 rounded-full border border-slate-100">{s.group_name || 'طلاب فردي'}</span>
                                         </div>
                                     </div>
-                                    
                                     <div className="flex gap-2">
-                                       <button onClick={() => openModal('edit', s)} className="flex-1 py-4 bg-white text-slate-400 rounded-2xl font-black text-[10px] hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 border border-slate-100 shadow-sm active:scale-95"><Edit3 size={16} /> تعديل</button>
+                                       <button onClick={() => openModal('edit', s)} className="flex-1 py-4 bg-white text-slate-400 rounded-2xl font-black text-[10px] hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 border border-slate-100 shadow-sm"><Edit3 size={16} /> تعديل</button>
                                        <button onClick={async () => {
                                           if (confirm("هل أنت متأكد من حذف الطالب؟")) {
                                              await supabase.from('students').delete().eq('id', s.id);
                                              fetchStudents();
                                           }
-                                       }} className="flex-1 py-4 bg-white text-rose-300 rounded-2xl font-black text-[10px] hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center justify-center gap-2 border border-slate-100 shadow-sm active:scale-95"><Trash2 size={16} /> حذف</button>
+                                       }} className="flex-1 py-4 bg-white text-rose-300 rounded-2xl font-black text-[10px] hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center justify-center gap-2 border border-slate-100 shadow-sm"><Trash2 size={16} /> حذف</button>
                                     </div>
                                 </div>
                             ))}
@@ -194,13 +190,13 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
                        <p className="text-slate-400 font-bold text-sm">الفترة المستهدفة: <span className="text-indigo-600 font-black">{year} - فصل {semester}</span></p>
                     </div>
                  </div>
-                 <button onClick={() => setActiveModal(null)} className="p-4 bg-slate-50 rounded-full text-slate-400 hover:text-rose-500 transition-all active:scale-90"><X size={28}/></button>
+                 <button onClick={() => setActiveModal(null)} className="p-4 bg-slate-50 rounded-full text-slate-400 hover:text-rose-500 transition-all"><X size={28}/></button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div className="space-y-3">
                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest px-2">الاسم الكامل</label>
-                   <input required className="w-full px-8 py-6 bg-slate-50 rounded-[2.5rem] font-bold border-none shadow-inner focus:ring-4 ring-indigo-50 outline-none transition-all text-lg" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                   <input required className="w-full px-8 py-6 bg-slate-50 rounded-[2.5rem] font-bold border-none shadow-inner outline-none focus:ring-4 ring-indigo-50 transition-all text-lg" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                 </div>
                 
                 <div className="space-y-3">
@@ -220,8 +216,8 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
 
               <div className="flex gap-4 pb-4">
                  <button onClick={() => setActiveModal(null)} className="flex-1 py-7 bg-slate-100 text-slate-500 rounded-[2.5rem] font-black text-xl hover:bg-slate-200 transition-all">تراجع</button>
-                 <button onClick={handleAction} disabled={isProcessing} className="flex-[2] py-7 bg-slate-900 text-white rounded-[2.5rem] font-black text-2xl shadow-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-5 active:scale-95">
-                   {isProcessing ? <RefreshCw className="animate-spin" /> : <Save size={32} />} حفظ ملف الطالب البلاتيني
+                 <button onClick={handleAction} disabled={isProcessing} className="flex-[2] py-7 bg-slate-900 text-white rounded-[2.5rem] font-black text-2xl shadow-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-5">
+                   {isProcessing ? <RefreshCw className="animate-spin" /> : <Save size={32} />} حفظ السجل الماسي
                  </button>
               </div>
            </div>

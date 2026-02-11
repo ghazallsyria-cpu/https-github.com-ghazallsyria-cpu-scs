@@ -189,12 +189,14 @@ const App: React.FC = () => {
              </div>
              
              <div className="flex items-center gap-3 md:gap-4">
+                {/* استعادة تبويب الفترات للجوال */}
                 {!isStudent && !isParent && (
                   <button 
                     onClick={() => setShowYearMenu(!showYearMenu)}
-                    className="lg:hidden p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                    className="lg:hidden p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm flex items-center gap-2"
                   >
                     <SlidersHorizontal size={20} />
+                    <span className="text-[10px] font-black uppercase">{activeSemester === '1' ? 'فصل 1' : 'فصل 2'}</span>
                   </button>
                 )}
 
@@ -246,12 +248,12 @@ const App: React.FC = () => {
                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
 
-            {/* الفوتر الثابت بحقوق المبرمج */}
+            {/* الفوتر الثابت بحقوق المبرمج ايهاب جمال غزال */}
             <footer className="mt-20 py-10 border-t border-slate-100 text-center space-y-2">
                <div className="flex items-center justify-center gap-2 text-indigo-600 font-black text-sm">
                   <Copyright size={16} /> برمجة وتطوير : أ / ايهاب جمال غزال
                </div>
-               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">كافة الحقوق محفوظة © 2025 - نظام القمة V5.5</p>
+               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">كافة الحقوق محفوظة © 2025 - نظام القمة الماسي</p>
             </footer>
           </div>
         </main>
