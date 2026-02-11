@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 const { useLocation } = ReactRouterDOM as any;
 import { supabase } from '../supabase';
 import { 
-  BookOpen, Plus, Clock, RefreshCw, Save, Edit3, Trash2, CheckCircle, AlertCircle, ChevronLeft, X, AlertTriangle, Users, Search
+  BookOpen, Plus, Clock, RefreshCw, Save, Edit3, Trash2, CheckCircle, AlertCircle, 
+  ChevronLeft, X, AlertTriangle, Users, Search, Folder, ChevronDown
 } from 'lucide-react';
 
 const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, year: string, semester: string, isAdmin?: boolean }) => {
@@ -13,15 +14,14 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
   const [studentLessons, setStudentLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedGrades, setExpandedGrades] = useState<string[]>([]);
   const [selectedStudent, setSelectedStudent] = useState(location.state?.studentToOpen || null);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ lesson_date: new Date().toISOString().split('T')[0], hours: '2', notes: '' });
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      // جلب كافة الطلاب المرتبطين بالمعلم أولاً
       let query = supabase.from('student_summary_view').select('*');
       if (role !== 'admin') {
         query = query.eq('teacher_id', uid);
@@ -29,20 +29,23 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
       const { data, error } = await query.order('name');
       if (error) throw error;
 
-      // تصفية ذكية لمنع التكرار:
-      // جلب الطلاب الذين ينتمون للفترة الحالية (السنة + الفصل) 
-      // أو الطلاب الذين لم يتم تصنيفهم بعد (البيانات القديمة/الأساسية)
       const filtered = (data || []).filter(s => 
         (s.academic_year === year && s.semester === semester) || (!s.academic_year)
       );
 
       setStudents(filtered);
+      
+      // توسيع كافة المجلدات تلقائياً عند وجود نتائج بحث
+      if (searchTerm) {
+        const grades = Array.from(new Set(filtered.map(s => String(s.grade))));
+        setExpandedGrades(grades);
+      }
     } catch (err) {
       console.error("Fetch Students Error:", err);
     } finally {
       setLoading(false);
     }
-  }, [uid, role, year, semester]); // أضفنا year و semester هنا لضمان تحديث القائمة عند تغييرهم
+  }, [uid, role, year, semester, searchTerm]);
 
   const fetchRecords = async (sid: string) => {
     setLoading(true);
@@ -58,6 +61,12 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
   useEffect(() => { if (selectedStudent) fetchRecords(selectedStudent.id); }, [selectedStudent]);
+
+  const toggleGrade = (grade: string) => {
+    setExpandedGrades(prev => 
+      prev.includes(grade) ? prev.filter(g => g !== grade) : [...prev, grade]
+    );
+  };
 
   const handleSaveLesson = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +89,23 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
     }
   };
 
-  const filteredStudents = students.filter(s => s.name.includes(searchTerm));
+  // تجميع الطلاب حسب الصف الدراسي
+  const groupedByGrade = useMemo(() => {
+    const filtered = students.filter(s => s.name.includes(searchTerm));
+    return filtered.reduce((acc, s) => {
+      const grade = String(s.grade || 'غير محدد');
+      if (!acc[grade]) acc[grade] = [];
+      acc[grade].push(s);
+      return acc;
+    }, {} as any);
+  }, [students, searchTerm]);
+
+  const sortedGrades = useMemo(() => {
+    return Object.keys(groupedByGrade).sort((a, b) => {
+      if (isNaN(Number(a)) || isNaN(Number(b))) return a.localeCompare(b);
+      return Number(b) - Number(a);
+    });
+  }, [groupedByGrade]);
 
   return (
     <div className="space-y-10 pb-32">
@@ -95,39 +120,68 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
           </div>
         </div>
         {!selectedStudent && (
-          <div className="relative w-full md:w-64">
-             <Search className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-             <input placeholder="بحث باسم الطالب..." className="w-full pr-12 pl-6 py-5 bg-slate-50 border-none rounded-[2rem] font-bold outline-none focus:ring-2 ring-indigo-50" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          <div className="relative w-full md:w-80">
+             <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={22} />
+             <input placeholder="البحث عن طالب..." className="w-full pr-14 pl-6 py-5 bg-slate-50 border-none rounded-[2rem] font-bold outline-none focus:ring-4 ring-indigo-50 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
         )}
       </div>
 
       {!selectedStudent ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in fade-in duration-500">
-           {filteredStudents.length > 0 ? filteredStudents.map(s => (
-             <button key={s.id} onClick={() => setSelectedStudent(s)} className="p-10 bg-white rounded-[4rem] border hover:shadow-xl transition-all group text-right relative overflow-hidden">
-                <div className="flex items-center gap-4 mb-4">
-                   <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                      {s.name[0]}
-                   </div>
-                   <h3 className="text-2xl font-black group-hover:text-indigo-600 transition-colors truncate flex-1">{s.name}</h3>
-                </div>
-                <div className="flex items-center gap-2 text-slate-400 font-bold text-sm">
-                   الصف {s.grade} | <Clock size={14} className="text-indigo-600" /> {s.total_lessons} حصة منجزة
-                </div>
-                <div className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-100 group-hover:text-indigo-600 transition-all">
-                   <ChevronLeft size={48} className="rotate-180 opacity-20 group-hover:opacity-100" />
-                </div>
-                {/* وسم السنة الدراسية الصغير للتأكيد */}
-                <div className="mt-4 text-[9px] font-black text-slate-300 uppercase tracking-widest">
-                   {s.academic_year || 'بيانات أساسية'} - الفصل {s.semester || '1'}
-                </div>
-             </button>
+        <div className="space-y-6 animate-in fade-in duration-500">
+           {loading ? (
+             <div className="py-24 text-center">
+                <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto mb-6"></div>
+                <p className="font-black text-slate-400 text-sm tracking-widest uppercase">جاري فرز المجلدات الدراسية...</p>
+             </div>
+           ) : sortedGrades.length > 0 ? sortedGrades.map(grade => (
+             <div key={grade} className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden">
+                <button 
+                  onClick={() => toggleGrade(grade)}
+                  className="w-full p-8 flex items-center justify-between hover:bg-slate-50 transition-all group"
+                >
+                  <div className="flex items-center gap-6">
+                    <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
+                      <Folder size={24} fill="currentColor" />
+                    </div>
+                    <div className="text-right">
+                       <h3 className="text-xl font-black text-slate-900">طلاب الصف {grade}</h3>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">إجمالي المجلد: {groupedByGrade[grade].length} طلاب</p>
+                    </div>
+                  </div>
+                  <ChevronDown className={`text-slate-300 transition-transform duration-500 ${expandedGrades.includes(grade) ? 'rotate-180 text-indigo-600' : ''}`} size={28} />
+                </button>
+
+                {expandedGrades.includes(grade) && (
+                  <div className="p-8 pt-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-4 duration-500">
+                    {groupedByGrade[grade].map((s: any) => (
+                      <button 
+                        key={s.id} 
+                        onClick={() => setSelectedStudent(s)} 
+                        className="p-8 bg-slate-50 rounded-[2.5rem] border border-transparent hover:border-indigo-100 hover:bg-white hover:shadow-xl transition-all group text-right relative overflow-hidden"
+                      >
+                        <div className="flex items-center gap-4">
+                           <div className="w-12 h-12 bg-white text-indigo-600 rounded-xl flex items-center justify-center font-black group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
+                              {s.name[0]}
+                           </div>
+                           <div className="flex-1 min-w-0">
+                              <h4 className="text-lg font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors">{s.name}</h4>
+                              <p className="text-[10px] font-bold text-slate-400 flex items-center gap-2"><Clock size={12} /> {s.total_lessons} حصة منجزة</p>
+                           </div>
+                        </div>
+                        <div className="absolute left-6 top-1/2 -translate-y-1/2 text-indigo-100 opacity-0 group-hover:opacity-100 transition-all">
+                           <ChevronLeft size={32} className="rotate-180" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+             </div>
            )) : (
-             <div className="col-span-full py-24 text-center bg-white rounded-[4rem] border-2 border-dashed border-slate-100">
-                <Users size={48} className="mx-auto text-slate-100 mb-4" />
-                <p className="text-slate-400 font-black">لا يوجد طلاب مسجلين في هذه الفترة ({year} - فصل {semester})</p>
-                <p className="text-slate-300 text-xs mt-2">يرجى التأكد من فلترة السنة الدراسية أو ترحيل الطلاب لهذه الفترة.</p>
+             <div className="py-32 text-center bg-white rounded-[4rem] border-2 border-dashed border-slate-100">
+                <Users size={64} className="mx-auto text-slate-100 mb-6" />
+                <p className="text-slate-400 font-black text-xl">لا توجد سجلات مطابقة في هذه الفترة.</p>
+                <button onClick={() => setSearchTerm('')} className="mt-6 text-indigo-600 font-black text-sm hover:underline">إعادة عرض كافة المجلدات</button>
              </div>
            )}
         </div>
@@ -135,7 +189,7 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
         <div className="space-y-8 animate-in slide-in-from-left-8">
            <div className="flex justify-between items-center">
               <button onClick={() => setSelectedStudent(null)} className="flex items-center gap-2 text-slate-400 font-black hover:text-indigo-600 transition-all group">
-                <ChevronLeft className="rotate-180 group-hover:-translate-x-1 transition-transform" size={20} /> تراجع للقائمة
+                <ChevronLeft className="rotate-180 group-hover:-translate-x-1 transition-transform" size={20} /> تراجع للمجلدات
               </button>
               <button onClick={() => setIsLessonModalOpen(true)} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black flex items-center gap-3 hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200">
                 <Plus size={20} /> تسجيل حصة جديدة
@@ -146,6 +200,7 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
               <div>
                  <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">الطالب الحالي</p>
                  <h4 className="text-3xl font-black">{selectedStudent.name}</h4>
+                 <p className="text-xs font-bold text-indigo-200 mt-1">الصف {selectedStudent.grade} | {selectedStudent.group_name || 'طلاب فردي'}</p>
               </div>
               <div className="text-center bg-white/10 px-8 py-4 rounded-3xl border border-white/10">
                  <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">إجمالي الحصص</p>

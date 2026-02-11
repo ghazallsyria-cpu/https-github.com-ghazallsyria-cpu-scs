@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
-const { HashRouter, Routes, Route, Navigate, NavLink } = ReactRouterDOM as any;
+const { HashRouter, Routes, Route, Navigate, NavLink, useLocation } = ReactRouterDOM as any;
 import { supabase } from './supabase';
 import { 
   LayoutDashboard, Users, Wallet, GraduationCap, LogOut, ShieldCheck, 
@@ -20,6 +20,29 @@ import ParentPortal from './pages/ParentPortal';
 import Settings from './pages/Settings';
 import TutorRequests from './pages/TutorRequests';
 import RequestTutor from './pages/RequestTutor';
+
+// مكون شريط الملاحة السفلي للجوال
+const MobileBottomNav = ({ items }: { items: any[] }) => {
+  return (
+    <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-2xl border-t border-slate-100 px-4 py-3 z-[100] flex justify-around items-center shadow-[0_-10px_40px_rgba(0,0,0,0.05)] rounded-t-[2.5rem]">
+      {items.map((item) => (
+        <NavLink 
+          key={item.to} 
+          to={item.to} 
+          className={({isActive}: any) => `flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${isActive ? 'text-indigo-600 scale-110' : 'text-slate-400'}`}
+        >
+          {/* Use render props for NavLink children to access isActive scope locally and fix undefined error */}
+          {({ isActive }: any) => (
+            <>
+              {React.cloneElement(item.icon, { size: 22, strokeWidth: isActive ? 2.5 : 2 })}
+              <span className="text-[10px] font-bold">{item.label}</span>
+            </>
+          )}
+        </NavLink>
+      ))}
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -118,6 +141,7 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#f8fafc] flex flex-col lg:flex-row font-['Cairo'] text-right overflow-hidden" dir="rtl">
+        {/* Sidebar for Desktop */}
         <aside className="hidden lg:flex flex-col w-80 bg-white border-l border-slate-100 h-screen sticky top-0 z-50 shadow-2xl">
           <div className="p-12 border-b border-slate-50 flex items-center gap-4">
             <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-xl shadow-indigo-200 rotate-3"><Star size={24} fill="white" /></div>
@@ -127,7 +151,6 @@ const App: React.FC = () => {
             </div>
           </div>
           
-          {/* Availability Toggle for Teachers */}
           {profile.role === 'teacher' && !monitoredTeacher && (
              <div className="m-6 p-6 bg-indigo-50 rounded-[2.5rem] border border-indigo-100 flex items-center justify-between">
                 <div>
@@ -174,21 +197,37 @@ const App: React.FC = () => {
           </div>
         </aside>
 
+        {/* Mobile Navigation */}
+        <MobileBottomNav items={menuItems} />
+
         <main className="flex-1 min-w-0 flex flex-col">
-          <header className="px-8 md:px-14 h-24 flex items-center justify-between bg-white/60 backdrop-blur-2xl border-b border-slate-50 sticky top-0 z-40">
-             <div className="flex items-center gap-6">
-                <div className="lg:hidden bg-indigo-600 p-3 rounded-2xl text-white shadow-lg"><Star size={20} fill="white" /></div>
-                <div>
-                   <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1">{isAdmin ? 'المدير العام' : (isStudent ? 'الطالب' : 'بوابة القمة')}</p>
-                   <h2 className="text-lg font-black text-slate-900 truncate max-w-[200px]">{profile.full_name}</h2>
+          <header className="px-6 md:px-14 h-20 md:h-24 flex items-center justify-between bg-white/80 backdrop-blur-2xl border-b border-slate-50 sticky top-0 z-[60]">
+             <div className="flex items-center gap-4 md:gap-6">
+                <div className="lg:hidden bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg"><Star size={18} fill="white" /></div>
+                <div className="min-w-0">
+                   <p className="text-[9px] md:text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1">{isAdmin ? 'المدير العام' : (isStudent ? 'الطالب' : 'بوابة القمة')}</p>
+                   <h2 className="text-sm md:text-lg font-black text-slate-900 truncate max-w-[150px] md:max-w-[300px]">{profile.full_name}</h2>
                 </div>
              </div>
-             <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-lg border-4 border-white shadow-xl">{profile.full_name[0]}</div>
+             
+             <div className="flex items-center gap-3 md:gap-4">
+                {/* Logout Button for Mobile Only */}
+                <button 
+                  onClick={() => { if(confirm("هل تود تسجيل الخروج؟")) supabase.auth.signOut(); }}
+                  className="lg:hidden p-3 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                  title="تسجيل الخروج"
+                >
+                  <LogOut size={20} />
+                </button>
+
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-900 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-black text-sm md:text-lg border-2 md:border-4 border-white shadow-xl">
+                  {profile.full_name[0]}
+                </div>
              </div>
           </header>
 
-          <div className="flex-1 p-6 md:p-12 max-w-[1700px] mx-auto w-full pb-32">
+          {/* Main Content Area - Added padding for bottom nav */}
+          <div className="flex-1 p-4 md:p-12 max-w-[1700px] mx-auto w-full pb-32 lg:pb-12 overflow-y-auto">
             <Routes>
                {isStudent || isParent ? (
                  <>
