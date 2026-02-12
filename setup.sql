@@ -1,5 +1,5 @@
 
--- 1. التأكد من جدول الملفات الشخصية
+-- 1. التأكد من هيكلة الجدول
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     full_name TEXT,
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 2. تفعيل RLS على كافة الجداول الحساسة
+-- 2. تفعيل RLS
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
@@ -20,48 +20,76 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tutor_requests ENABLE ROW LEVEL SECURITY;
 
--- 3. سياسات جدول الملفات الشخصية (Profiles)
-DROP POLICY IF EXISTS "Profiles Access" ON public.profiles;
-CREATE POLICY "Profiles Access" ON public.profiles FOR ALL USING (
-    auth.uid() = id OR 
-    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+-- 3. سياسات جدول الملفات الشخصية (تجنب الـ Recursion باستخدام JWT)
+DROP POLICY IF EXISTS "Profiles Self Access" ON public.profiles;
+CREATE POLICY "Profiles Self Access" ON public.profiles FOR ALL USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Admin Global Access Profiles" ON public.profiles;
+CREATE POLICY "Admin Global Access Profiles" ON public.profiles FOR ALL USING (
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
 );
 
--- 4. سياسات جدول الطلاب (Students) - الصلاحيات الكاملة للمالك والمدير
-DROP POLICY IF EXISTS "Students Management" ON public.students;
-CREATE POLICY "Students Management" ON public.students FOR ALL USING (
-    teacher_id = auth.uid() OR 
-    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+-- 4. سياسات جدول الطلاب (Students) - فتح الصلاحيات الكاملة
+DROP POLICY IF EXISTS "Teacher Student Management" ON public.students;
+CREATE POLICY "Teacher Student Management" ON public.students 
+FOR ALL TO authenticated 
+USING (
+  teacher_id = auth.uid() OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+)
+WITH CHECK (
+  teacher_id = auth.uid() OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
 );
 
 -- 5. سياسات جدول الحصص (Lessons)
-DROP POLICY IF EXISTS "Lessons Management" ON public.lessons;
-CREATE POLICY "Lessons Management" ON public.lessons FOR ALL USING (
-    teacher_id = auth.uid() OR 
-    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+DROP POLICY IF EXISTS "Teacher Lesson Management" ON public.lessons;
+CREATE POLICY "Teacher Lesson Management" ON public.lessons 
+FOR ALL TO authenticated 
+USING (
+  teacher_id = auth.uid() OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+)
+WITH CHECK (
+  teacher_id = auth.uid() OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
 );
 
 -- 6. سياسات جدول الدفعات (Payments)
-DROP POLICY IF EXISTS "Payments Management" ON public.payments;
-CREATE POLICY "Payments Management" ON public.payments FOR ALL USING (
-    teacher_id = auth.uid() OR 
-    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+DROP POLICY IF EXISTS "Teacher Payment Management" ON public.payments;
+CREATE POLICY "Teacher Payment Management" ON public.payments 
+FOR ALL TO authenticated 
+USING (
+  teacher_id = auth.uid() OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+)
+WITH CHECK (
+  teacher_id = auth.uid() OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
 );
 
--- 7. سياسات الجداول الأسبوعية (Schedules)
-DROP POLICY IF EXISTS "Schedules Management" ON public.schedules;
-CREATE POLICY "Schedules Management" ON public.schedules FOR ALL USING (
-    teacher_id = auth.uid() OR 
-    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+-- 7. سياسات جدول الجدول الأسبوعي (Schedules)
+DROP POLICY IF EXISTS "Teacher Schedule Management" ON public.schedules;
+CREATE POLICY "Teacher Schedule Management" ON public.schedules 
+FOR ALL TO authenticated 
+USING (
+  teacher_id = auth.uid() OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+)
+WITH CHECK (
+  teacher_id = auth.uid() OR 
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
 );
 
--- 8. سياسات طلبات البحث (Tutor Requests)
-DROP POLICY IF EXISTS "Requests Management" ON public.tutor_requests;
-CREATE POLICY "Requests Management" ON public.tutor_requests FOR ALL USING (
-    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin' OR
-    student_phone = (SELECT phone FROM public.profiles WHERE id = auth.uid())
+-- 8. سياسات طلبات البحث
+DROP POLICY IF EXISTS "Admin Request Management" ON public.tutor_requests;
+CREATE POLICY "Admin Request Management" ON public.tutor_requests 
+FOR ALL USING (
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin' OR
+  student_phone = (auth.jwt() -> 'user_metadata' ->> 'phone')
 );
 
--- 9. منح صلاحيات الاستخدام المباشر لـ Authenticated User لضمان عمل CRUD
+-- 9. منح الصلاحيات العامة (المنقذ النهائي لعمليات CRUD)
 GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO authenticated;

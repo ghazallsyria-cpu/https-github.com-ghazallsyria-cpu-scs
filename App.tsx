@@ -56,34 +56,40 @@ const App: React.FC = () => {
   const fetchProfile = useCallback(async (user: any) => {
     if (!user) { setLoading(false); return; }
     try {
-      // 1. محاولة جلب الملف الشخصي من جدول البيانات
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      
+      // الأولوية 1: جلب البيانات من Metadata مباشرة لضمان عدم التعليق أو الـ Recursion
+      const meta = user.user_metadata;
+      if (meta && meta.role) {
+         const tempProfile = {
+           id: user.id,
+           full_name: meta.full_name || 'مستخدم النظام',
+           role: meta.role,
+           phone: meta.phone || '',
+           is_approved: meta.role === 'admin' || meta.role === 'student' || meta.role === 'parent' ? true : (meta.is_approved || false),
+           created_at: new Date().toISOString()
+         };
+         setProfile(tempProfile);
+         
+         // محاولة تحديث البيانات من الجدول في الخلفية (اختياري)
+         supabase.from('profiles').select('*').eq('id', user.id).maybeSingle().then(({data}) => {
+           if (data) setProfile(data);
+         });
+         
+         setLoading(false);
+         return;
+      }
+
+      // الأولوية 2: في حال غياب الـ Metadata (مستخدم قديم مثلاً)
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (data) {
         setProfile(data);
-        setLoading(false);
-      } else {
-        // 2. الحل البديل الفوري: استخراج البيانات من بيانات الجلسة (JWT)
-        const meta = user.user_metadata;
-        if (meta && meta.role) {
-           setProfile({
-             id: user.id,
-             full_name: meta.full_name || 'مستخدم النظام',
-             role: meta.role,
-             phone: meta.phone || '',
-             is_approved: meta.role === 'admin' || meta.role === 'student' || meta.role === 'parent' ? true : (meta.is_approved || false),
-             created_at: new Date().toISOString()
-           });
-           setLoading(false);
-        } else if (retryCount < 3) {
-           setTimeout(() => setRetryCount(prev => prev + 1), 1500);
-        } else {
-           setLoading(false);
-        }
+      } else if (retryCount < 3) {
+        setTimeout(() => setRetryCount(prev => prev + 1), 1000);
+        return;
       }
     } catch (err) { 
       console.error("Profile Fetch Error:", err); 
-      setLoading(false);
+    } finally { 
+      setLoading(false); 
     }
   }, [retryCount]);
 
@@ -99,10 +105,7 @@ const App: React.FC = () => {
       if (newSession?.user) {
         setLoading(true);
         fetchProfile(newSession.user);
-      } else { 
-        setProfile(null); 
-        setLoading(false); 
-      }
+      } else { setProfile(null); setLoading(false); }
     });
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
@@ -110,8 +113,8 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-24 h-24 border-8 border-indigo-100 border-t-indigo-600 rounded-[2.5rem] animate-spin mb-8"></div>
-      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">نظام القمة V5.6</p>
-      {retryCount > 0 && <p className="text-slate-400 text-xs mt-2 italic">جاري فك تشفير صلاحيات الوصول الماسية...</p>}
+      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">نظام القمة V5.7</p>
+      {retryCount > 0 && <p className="text-slate-400 text-xs mt-2 italic text-center">جاري فتح قنوات البيانات الماسية ({retryCount}/3)...</p>}
     </div>
   );
 
@@ -176,7 +179,7 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-xl shadow-indigo-200 rotate-3"><Star size={24} fill="white" /></div>
             <div>
               <h1 className="font-black text-2xl text-slate-900 leading-none">نظام القمة</h1>
-              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">CONNECT V5.6</p>
+              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">CONNECT V5.7</p>
             </div>
           </div>
           
@@ -281,7 +284,7 @@ const App: React.FC = () => {
                <div className="flex items-center justify-center gap-2 text-indigo-600 font-black text-sm">
                   <Copyright size={16} /> برمجة وتطوير : أ / ايهاب جمال غزال
                </div>
-               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">كافة الحقوق محفوظة © 2025 - نظام القمة V5.6</p>
+               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">كافة الحقوق محفوظة © 2025 - نظام القمة V5.7</p>
             </footer>
           </div>
         </main>
