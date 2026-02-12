@@ -1,5 +1,5 @@
 
--- 1. التأكد من هيكلة جدول الملفات الشخصية مع السماح للكل برؤية رتبهم
+-- 1. التأكد من جدول الملفات الشخصية
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     full_name TEXT,
@@ -12,49 +12,56 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 2. وظيفة معالجة المستخدم الجديد (تُستدعى تلقائياً عند التسجيل)
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name, phone, role, is_approved, subjects)
-  VALUES (
-    new.id,
-    COALESCE(new.raw_user_meta_data->>'full_name', 'مستخدم'),
-    COALESCE(new.raw_user_meta_data->>'phone', ''),
-    COALESCE(new.raw_user_meta_data->>'role', 'student'),
-    CASE 
-      WHEN (new.raw_user_meta_data->>'role') = 'admin' THEN true -- المدير مفعل دائماً
-      WHEN (new.raw_user_meta_data->>'role') = 'teacher' THEN false 
-      ELSE true 
-    END,
-    COALESCE(new.raw_user_meta_data->>'subjects', 'عام')
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    full_name = EXCLUDED.full_name,
-    role = EXCLUDED.role,
-    phone = EXCLUDED.phone;
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 3. تفعيل RLS وتحديث السياسات بشكل "ماسي"
+-- 2. تفعيل RLS على كافة الجداول الحساسة
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tutor_requests ENABLE ROW LEVEL SECURITY;
 
--- السماح للجميع بقراءة الملفات الشخصية (ضروري لعرض أسماء المعلمين والطلاب)
-DROP POLICY IF EXISTS "Enable read access for all users" ON public.profiles;
-CREATE POLICY "Enable read access for all users" ON public.profiles FOR SELECT USING (true);
-
--- السماح للمستخدمين بتحديث بياناتهم الخاصة
-DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
-CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-
--- السماح بإضافة ملفات شخصية (للوظائف البرمجية)
-DROP POLICY IF EXISTS "Enable insert for system" ON public.profiles;
-CREATE POLICY "Enable insert for system" ON public.profiles FOR INSERT WITH CHECK (true);
-
--- صلاحيات المدير الشاملة
-DROP POLICY IF EXISTS "Admins have full control" ON public.profiles;
-CREATE POLICY "Admins have full control" ON public.profiles FOR ALL USING (
+-- 3. سياسات جدول الملفات الشخصية (Profiles)
+DROP POLICY IF EXISTS "Profiles Access" ON public.profiles;
+CREATE POLICY "Profiles Access" ON public.profiles FOR ALL USING (
+    auth.uid() = id OR 
     (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
-    OR role = 'admin'
 );
+
+-- 4. سياسات جدول الطلاب (Students) - الصلاحيات الكاملة للمالك والمدير
+DROP POLICY IF EXISTS "Students Management" ON public.students;
+CREATE POLICY "Students Management" ON public.students FOR ALL USING (
+    teacher_id = auth.uid() OR 
+    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+);
+
+-- 5. سياسات جدول الحصص (Lessons)
+DROP POLICY IF EXISTS "Lessons Management" ON public.lessons;
+CREATE POLICY "Lessons Management" ON public.lessons FOR ALL USING (
+    teacher_id = auth.uid() OR 
+    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+);
+
+-- 6. سياسات جدول الدفعات (Payments)
+DROP POLICY IF EXISTS "Payments Management" ON public.payments;
+CREATE POLICY "Payments Management" ON public.payments FOR ALL USING (
+    teacher_id = auth.uid() OR 
+    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+);
+
+-- 7. سياسات الجداول الأسبوعية (Schedules)
+DROP POLICY IF EXISTS "Schedules Management" ON public.schedules;
+CREATE POLICY "Schedules Management" ON public.schedules FOR ALL USING (
+    teacher_id = auth.uid() OR 
+    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin'
+);
+
+-- 8. سياسات طلبات البحث (Tutor Requests)
+DROP POLICY IF EXISTS "Requests Management" ON public.tutor_requests;
+CREATE POLICY "Requests Management" ON public.tutor_requests FOR ALL USING (
+    (SELECT (auth.jwt() -> 'user_metadata' ->> 'role')) = 'admin' OR
+    student_phone = (SELECT phone FROM public.profiles WHERE id = auth.uid())
+);
+
+-- 9. منح صلاحيات الاستخدام المباشر لـ Authenticated User لضمان عمل CRUD
+GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;

@@ -63,21 +63,19 @@ const App: React.FC = () => {
         setProfile(data);
         setLoading(false);
       } else {
-        // 2. الحل البديل الفوري: استخراج البيانات من بيانات الجلسة (JWT) إذا لم يتوفر ملف الشخصي بعد
+        // 2. الحل البديل الفوري: استخراج البيانات من بيانات الجلسة (JWT)
         const meta = user.user_metadata;
         if (meta && meta.role) {
-           console.log("Using JWT Metadata fallback...");
            setProfile({
              id: user.id,
              full_name: meta.full_name || 'مستخدم النظام',
              role: meta.role,
              phone: meta.phone || '',
-             is_approved: meta.role === 'admin' || meta.role === 'student' || meta.role === 'parent' ? true : false,
+             is_approved: meta.role === 'admin' || meta.role === 'student' || meta.role === 'parent' ? true : (meta.is_approved || false),
              created_at: new Date().toISOString()
            });
            setLoading(false);
         } else if (retryCount < 3) {
-           // إعادة المحاولة إذا فشل الكل
            setTimeout(() => setRetryCount(prev => prev + 1), 1500);
         } else {
            setLoading(false);
@@ -99,7 +97,7 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       if (newSession?.user) {
-        setLoading(true); // إعادة التعيين لضمان التحميل الصحيح
+        setLoading(true);
         fetchProfile(newSession.user);
       } else { 
         setProfile(null); 
@@ -112,12 +110,11 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white font-['Cairo']">
       <div className="w-24 h-24 border-8 border-indigo-100 border-t-indigo-600 rounded-[2.5rem] animate-spin mb-8"></div>
-      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">نظام القمة V5.5</p>
-      {retryCount > 0 && <p className="text-slate-400 text-xs mt-2 italic">جاري تهيئة صلاحيات الدخول الماسية...</p>}
+      <p className="font-black text-indigo-600 animate-pulse text-lg tracking-widest uppercase">نظام القمة V5.6</p>
+      {retryCount > 0 && <p className="text-slate-400 text-xs mt-2 italic">جاري فك تشفير صلاحيات الوصول الماسية...</p>}
     </div>
   );
 
-  // إذا لم ينجح تحميل الجلسة أو الملف الشخصي، نذهب لصفحة الدخول
   if (!session || !profile) return <Login />;
 
   const isAdmin = profile?.role === 'admin';
@@ -125,7 +122,6 @@ const App: React.FC = () => {
   const isStudent = profile?.role === 'student';
   const isApproved = profile?.is_approved === true;
 
-  // الحسابات غير المفعلة (المعلمين بانتظار المدير)
   if (!isApproved && !isAdmin && !isParent && !isStudent) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-['Cairo'] text-right" dir="rtl">
@@ -175,13 +171,12 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-[#f8fafc] flex flex-col lg:flex-row font-['Cairo'] text-right overflow-hidden" dir="rtl">
-        {/* Sidebar for Desktop */}
         <aside className="hidden lg:flex flex-col w-80 bg-white border-l border-slate-100 h-screen sticky top-0 z-50 shadow-2xl">
           <div className="p-12 border-b border-slate-50 flex items-center gap-4">
             <div className="bg-indigo-600 p-4 rounded-2xl text-white shadow-xl shadow-indigo-200 rotate-3"><Star size={24} fill="white" /></div>
             <div>
               <h1 className="font-black text-2xl text-slate-900 leading-none">نظام القمة</h1>
-              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">CONNECT V5.5</p>
+              <p className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-widest">CONNECT V5.6</p>
             </div>
           </div>
           
@@ -282,12 +277,11 @@ const App: React.FC = () => {
                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
 
-            {/* الفوتر الماسي الثابت بحقوق المبرمج */}
             <footer className="mt-20 py-10 border-t border-slate-100 text-center space-y-2">
                <div className="flex items-center justify-center gap-2 text-indigo-600 font-black text-sm">
                   <Copyright size={16} /> برمجة وتطوير : أ / ايهاب جمال غزال
                </div>
-               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">كافة الحقوق محفوظة © 2025 - نظام القمة V5.5</p>
+               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">كافة الحقوق محفوظة © 2025 - نظام القمة V5.6</p>
             </footer>
           </div>
         </main>
