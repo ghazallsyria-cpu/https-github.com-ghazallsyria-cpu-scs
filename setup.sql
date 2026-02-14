@@ -1,5 +1,5 @@
 
--- 1. التأكد من هيكلة الجداول
+-- 1. التأكد من وجود الجداول الأساسية
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     full_name TEXT,
@@ -12,60 +12,45 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 2. تفعيل الحماية RLS
+CREATE TABLE IF NOT EXISTS public.students (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    teacher_id UUID REFERENCES auth.users ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    grade TEXT,
+    group_name TEXT,
+    address TEXT,
+    academic_year TEXT,
+    semester TEXT,
+    agreed_amount NUMERIC DEFAULT 0,
+    price_per_hour NUMERIC DEFAULT 0,
+    is_hourly BOOLEAN DEFAULT false,
+    phones JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 2. تحسين الـ View المالي ليكون أسرع وأكثر دقة
+CREATE OR REPLACE VIEW public.student_summary_view AS
+SELECT 
+    s.*,
+    (SELECT COALESCE(SUM(amount), 0) FROM public.payments WHERE student_id = s.id) as total_paid,
+    (SELECT COUNT(*) FROM public.lessons WHERE student_id = s.id) as total_lessons,
+    (s.agreed_amount - (SELECT COALESCE(SUM(amount), 0) FROM public.payments WHERE student_id = s.id)) as remaining_balance
+FROM public.students s;
+
+-- 3. سياسات RLS المحسنة (تعتمد على JWT لسرعة الأداء)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 
--- 3. سياسة Profiles (بدون استعلام داخلي لمنع Recursion)
-DROP POLICY IF EXISTS "Profiles Access Policy" ON public.profiles;
-CREATE POLICY "Profiles Access Policy" ON public.profiles 
-FOR ALL TO authenticated 
-USING (
-  id = auth.uid() OR 
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-);
+DROP POLICY IF EXISTS "Global Profiles Access" ON public.profiles;
+CREATE POLICY "Global Profiles Access" ON public.profiles FOR ALL TO authenticated 
+USING (id = auth.uid() OR (auth.jwt() -> 'user_metadata' ->> role) = 'admin');
 
--- 4. سياسة Students (صلاحيات كاملة للمالك والمدير)
-DROP POLICY IF EXISTS "Students Full Management" ON public.students;
-CREATE POLICY "Students Full Management" ON public.students 
-FOR ALL TO authenticated 
-USING (
-  teacher_id = auth.uid() OR 
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-)
-WITH CHECK (
-  teacher_id = auth.uid() OR 
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-);
+DROP POLICY IF EXISTS "Teacher Students Policy" ON public.students;
+CREATE POLICY "Teacher Students Policy" ON public.students FOR ALL TO authenticated 
+USING (teacher_id = auth.uid() OR (auth.jwt() -> 'user_metadata' ->> role) = 'admin');
 
--- 5. سياسة Lessons
-DROP POLICY IF EXISTS "Lessons Full Management" ON public.lessons;
-CREATE POLICY "Lessons Full Management" ON public.lessons 
-FOR ALL TO authenticated 
-USING (
-  teacher_id = auth.uid() OR 
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-)
-WITH CHECK (
-  teacher_id = auth.uid() OR 
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-);
-
--- 6. سياسة Payments
-DROP POLICY IF EXISTS "Payments Full Management" ON public.payments;
-CREATE POLICY "Payments Full Management" ON public.payments 
-FOR ALL TO authenticated 
-USING (
-  teacher_id = auth.uid() OR 
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-)
-WITH CHECK (
-  teacher_id = auth.uid() OR 
-  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
-);
-
--- 7. منح كافة الصلاحيات للمستخدمين لضمان تنفيذ العمليات الجماعية
+-- 4. منح الصلاحيات
 GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;

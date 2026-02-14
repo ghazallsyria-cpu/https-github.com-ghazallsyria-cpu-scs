@@ -4,45 +4,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>نظام القمة V5 - النسخة الماسية</title>
+    <title>نظام القمة V6.2 - النسخة الماسية</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
       :root {
         --diamond-primary: #4f46e5;
         --diamond-secondary: #0ea5e9;
-        --platinum-silver: #f1f5f9;
       }
       body { 
         font-family: 'Cairo', sans-serif; 
         background-color: #f8fafc;
         margin: 0; 
         -webkit-tap-highlight-color: transparent;
-        overflow-x: hidden;
         color: #1e293b;
-      }
-      .glass-card {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-      }
-      .diamond-glow {
-        box-shadow: 0 0 40px -10px rgba(79, 70, 229, 0.2);
-      }
-      .capsule-nav {
-        background: rgba(15, 23, 42, 0.85);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        overflow-x: hidden;
       }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       
-      @keyframes float {
-        0% { transform: translateY(0px); }
-        50% { transform: translateY(-10px); }
-        100% { transform: translateY(0px); }
+      @media (max-width: 1024px) {
+        main {
+          padding-bottom: 120px !important;
+        }
       }
-      .animate-float { animation: float 6s ease-in-out infinite; }
+      
+      .animate-diamond {
+        animation: fadeIn 0.4s ease-out;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(5px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      
+      input, select, textarea {
+        font-size: 16px !important; /* منع زووم المتصفح في الآيفون عند الكتابة */
+      }
     </style>
     <script type="importmap">
 {
