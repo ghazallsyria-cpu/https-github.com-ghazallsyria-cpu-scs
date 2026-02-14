@@ -31,19 +31,20 @@ const App: React.FC = () => {
   const fetchProfile = useCallback(async (user: any) => {
     if (!user) { setLoading(false); return; }
     try {
-      // جلب البيانات من الميتادات أولاً لسرعة التحميل
       const meta = user.user_metadata;
-      setProfile({
+      // تحديث فوري من الـ Metadata لضمان سرعة الاستجابة
+      const initialProfile = {
         id: user.id,
         full_name: meta?.full_name || 'مستخدم النظام',
         role: meta?.role || 'student',
         phone: meta?.phone || '',
         is_approved: true
-      });
-      
+      };
+      setProfile(initialProfile);
+
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (data) setProfile(data);
-    } catch (err) { console.error("Profile Error:", err); } 
+    } catch (err) { console.error("Profile Fetch Error:", err); } 
     finally { setLoading(false); }
   }, []);
 
@@ -122,15 +123,15 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        {/* Mobile Navigation (Persistent Bottom Bar) */}
+        {/* Mobile Navigation (Floating Bottom Bar) */}
         <nav className="lg:hidden fixed bottom-4 left-4 right-4 z-[9999] bg-slate-900/95 backdrop-blur-2xl border border-white/5 rounded-3xl shadow-2xl p-1.5 flex items-center justify-around overflow-hidden">
-           {menuItems.slice(0, 4).map((item: any) => (
+           {menuItems.map((item: any) => (
               <NavLink key={item.to} to={item.to} className={({isActive}: any) => `flex flex-col items-center gap-1 p-3 rounded-2xl transition-all flex-1 ${isActive ? 'text-white bg-indigo-600 shadow-lg' : 'text-slate-400'}`}>
                 {item.icon}
                 <span className="text-[7px] font-black">{item.label}</span>
               </NavLink>
            ))}
-           <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-3 text-rose-400 flex-1">
+           <button onClick={handleLogout} className="flex flex-col items-center gap-1 p-3 text-rose-400 flex-1 hover:bg-white/5 rounded-2xl transition-colors">
               <LogOut size={20} />
               <span className="text-[7px] font-black">خروج</span>
            </button>
