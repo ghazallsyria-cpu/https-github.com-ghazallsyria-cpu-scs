@@ -37,7 +37,6 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
       
       // توسيع كافة المجلدات تلقائياً عند وجود نتائج بحث
       if (searchTerm) {
-        // Fix: Explicitly type the grades array as string[] to avoid 'unknown[]' type error
         const grades: string[] = Array.from(new Set(filtered.map((s: any) => String(s.grade))));
         setExpandedGrades(grades);
       }
@@ -73,18 +72,24 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
     e.preventDefault();
     setLoading(true);
     try {
-      await supabase.from('lessons').insert([{
+      // التأكد من أن المعرف المرسل هو معرف المعلم الحالي (صاحب الجلسة) ليتوافق مع سياسات الأمان
+      const payload = {
         student_id: selectedStudent.id,
-        teacher_id: uid,
+        teacher_id: uid, // يجب أن يتطابق هذا مع auth.uid() في RLS
         lesson_date: form.lesson_date,
-        hours: parseFloat(form.hours),
+        hours: parseFloat(form.hours), // تحويل صريح لرقم
         notes: form.notes
-      }]);
+      };
+
+      const { error } = await supabase.from('lessons').insert([payload]);
+      
+      if (error) throw error;
+
       setIsLessonModalOpen(false); 
       fetchRecords(selectedStudent.id);
-      fetchStudents();
+      fetchStudents(); // تحديث العدادات
     } catch (err: any) {
-      alert(err.message);
+      alert("فشل حفظ الحصة: " + err.message + "\nتأكد من صلاحيات حسابك.");
     } finally {
       setLoading(false);
     }

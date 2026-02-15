@@ -93,13 +93,17 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
         payment_method: paymentForm.payment_method,
         notes: paymentForm.notes,
         student_id: selectedStudent.id,
-        teacher_id: selectedStudent.teacher_id
+        teacher_id: uid // إرسال معرف المعلم المسجل حالياً لضمان تخطي RLS
       }]);
+
       if (error) throw error;
+      
       setIsModalOpen(false);
       setPaymentForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], notes: '', payment_method: 'كاش' });
       fetchFinancialData();
-    } catch (err: any) { alert("خطأ: " + err.message); }
+    } catch (err: any) { 
+      alert("خطأ في تسجيل الدفعة: " + err.message + "\nتأكد من الصلاحيات."); 
+    }
     finally { setLoading(false); }
   };
 
