@@ -5,7 +5,7 @@ const { HashRouter, Routes, Route, Navigate, NavLink } = ReactRouterDOM as any;
 import { supabase } from './supabase';
 import { 
   Home, Users, Wallet, BookOpen, Calendar, ShieldCheck, 
-  SearchCheck, UserPlus, GraduationCap, Settings as SettingsIcon, Star, LogOut, Copyright, Clock
+  SearchCheck, UserPlus, GraduationCap, Settings as SettingsIcon, Star, LogOut, Copyright, Clock, CalendarDays
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -24,7 +24,8 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeYear] = useState('2025-2026');
+  // تم تفعيل دالة التعديل setActiveYear
+  const [activeYear, setActiveYear] = useState('2025-2026');
   const [activeSemester, setActiveSemester] = useState('1');
   const [monitoredTeacher, setMonitoredTeacher] = useState<any | null>(null);
 
@@ -139,17 +140,52 @@ const App: React.FC = () => {
 
         {/* Main Content Area */}
         <main className="flex-1 p-4 lg:p-10 w-full pb-28 lg:pb-10">
-          <header className="mb-8 flex justify-between items-center bg-white p-4 rounded-3xl border shadow-sm">
-             <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg">{profile.full_name[0]}</div>
-                <div className="hidden xs:block">
-                   <h2 className="text-xs font-black text-slate-900 leading-none">{profile.full_name}</h2>
-                   <p className="text-[8px] font-black text-indigo-600 uppercase mt-1 tracking-widest">{profile.role}</p>
+          <header className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-3xl border shadow-sm">
+             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg">{profile.full_name[0]}</div>
+                  <div className="hidden xs:block">
+                     <h2 className="text-xs font-black text-slate-900 leading-none">{profile.full_name}</h2>
+                     <p className="text-[8px] font-black text-indigo-600 uppercase mt-1 tracking-widest">{profile.role}</p>
+                  </div>
+                </div>
+                
+                {/* Mobile Year Selector (Small) */}
+                <div className="md:hidden bg-slate-50 rounded-xl border px-2 py-1 flex items-center">
+                   <select 
+                      value={activeYear}
+                      onChange={(e) => setActiveYear(e.target.value)}
+                      className="bg-transparent font-black text-[10px] text-indigo-600 outline-none appearance-none"
+                   >
+                      <option value="2023-2024">2023-2024</option>
+                      <option value="2024-2025">2024-2025</option>
+                      <option value="2025-2026">2025-2026</option>
+                      <option value="2026-2027">2026-2027</option>
+                   </select>
                 </div>
              </div>
-             <div className="flex bg-slate-50 p-1 rounded-xl border">
-                <button onClick={() => setActiveSemester('1')} className={`px-4 py-1.5 rounded-lg font-black text-[9px] ${activeSemester === '1' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>فصل 1</button>
-                <button onClick={() => setActiveSemester('2')} className={`px-4 py-1.5 rounded-lg font-black text-[9px] ${activeSemester === '2' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>فصل 2</button>
+
+             <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                {/* Desktop Year Selector */}
+                <div className="hidden md:flex bg-slate-50 rounded-xl border px-3 py-1.5 items-center gap-2">
+                   <CalendarDays size={14} className="text-slate-400" />
+                   <span className="text-[10px] font-black text-slate-400">السنة:</span>
+                   <select 
+                      value={activeYear}
+                      onChange={(e) => setActiveYear(e.target.value)}
+                      className="bg-transparent font-black text-[11px] text-indigo-600 outline-none cursor-pointer"
+                   >
+                      <option value="2023-2024">2023-2024</option>
+                      <option value="2024-2025">2024-2025</option>
+                      <option value="2025-2026">2025-2026</option>
+                      <option value="2026-2027">2026-2027</option>
+                   </select>
+                </div>
+
+                <div className="flex bg-slate-50 p-1 rounded-xl border">
+                   <button onClick={() => setActiveSemester('1')} className={`px-4 py-1.5 rounded-lg font-black text-[9px] transition-all ${activeSemester === '1' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>فصل 1</button>
+                   <button onClick={() => setActiveSemester('2')} className={`px-4 py-1.5 rounded-lg font-black text-[9px] transition-all ${activeSemester === '2' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>فصل 2</button>
+                </div>
              </div>
           </header>
 
