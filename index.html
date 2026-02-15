@@ -4,17 +4,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>نظام القمة V6.2 - النسخة الماسية</title>
+    <title>نظام القمة V6.5 Diamond</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
       :root {
-        --diamond-primary: #4f46e5;
-        --diamond-secondary: #0ea5e9;
+        --diamond-bg: #f8fafc;
       }
       body { 
         font-family: 'Cairo', sans-serif; 
-        background-color: #f8fafc;
+        background-color: var(--diamond-bg);
         margin: 0; 
         -webkit-tap-highlight-color: transparent;
         color: #1e293b;
@@ -29,16 +28,16 @@
         }
       }
       
-      .animate-diamond {
-        animation: fadeIn 0.4s ease-out;
-      }
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(5px); }
-        to { opacity: 1; transform: translateY(0); }
+      input, select, textarea {
+        font-size: 16px !important; 
       }
       
-      input, select, textarea {
-        font-size: 16px !important; /* منع زووم المتصفح في الآيفون عند الكتابة */
+      /* Diamond UI Effects */
+      .backdrop-blur-xl {
+        backdrop-filter: blur(24px);
+      }
+      .shadow-diamond {
+        box-shadow: 0 20px 40px -10px rgba(79, 70, 229, 0.1);
       }
     </style>
     <script type="importmap">

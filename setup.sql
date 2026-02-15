@@ -1,24 +1,23 @@
 
--- 1. إيقاف وحذف جميع السياسات القديمة لتجنب التعارض
-DROP FUNCTION IF EXISTS public.is_admin() CASCADE;
-DROP FUNCTION IF EXISTS public.get_my_role() CASCADE;
+-- 1. تنظيف شامل (حذف السياسات والدوال القديمة)
+DROP VIEW IF EXISTS public.student_summary_view;
+DROP POLICY IF EXISTS "profiles_read_public" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_update_secure" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_insert_secure" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_delete_secure" ON public.profiles;
+DROP POLICY IF EXISTS "students_policy_secure" ON public.students;
+DROP POLICY IF EXISTS "lessons_policy_secure" ON public.lessons;
+DROP POLICY IF EXISTS "payments_policy_secure" ON public.payments;
+DROP POLICY IF EXISTS "schedules_policy_secure" ON public.schedules;
+DROP POLICY IF EXISTS "requests_policy_secure" ON public.tutor_requests;
 
-DROP POLICY IF EXISTS "profiles_read_all" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_update_own_or_admin" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_insert_own_or_admin" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_delete_admin" ON public.profiles;
-DROP POLICY IF EXISTS "students_access_policy" ON public.students;
-DROP POLICY IF EXISTS "lessons_access_policy" ON public.lessons;
-DROP POLICY IF EXISTS "payments_access_policy" ON public.payments;
-DROP POLICY IF EXISTS "schedules_access_policy" ON public.schedules;
-DROP POLICY IF EXISTS "requests_select_all" ON public.tutor_requests;
+DROP FUNCTION IF EXISTS public.check_is_admin();
 
--- 2. الحل الجذري لمشكلة Infinite Recursion
--- إنشاء دالة تعمل بصلاحيات المنشئ (SECURITY DEFINER) مما يسمح لها بتجاوز RLS عند التحقق من الرتبة
+-- 2. دالة التحقق من المدير (الحل الجذري للتكرار)
 CREATE OR REPLACE FUNCTION public.check_is_admin()
 RETURNS BOOLEAN
 LANGUAGE plpgsql
-SECURITY DEFINER -- هذا السطر هو الحل السحري لتجاوز التكرار
+SECURITY DEFINER
 AS $$
 BEGIN
   RETURN EXISTS (
@@ -28,57 +27,20 @@ BEGIN
 END;
 $$;
 
--- 3. سياسات جدول Profiles
--- القراءة متاحة للجميع لتجنب المشاكل في القوائم
-CREATE POLICY "profiles_read_public" ON public.profiles
-FOR SELECT TO authenticated USING (true);
+-- 3. تحديث هيكلية الجداول (لضمان وجود الأعمدة المطلوبة)
+-- التأكد من أن students.phones هو JSONB
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='students' AND column_name='phones') THEN
+        ALTER TABLE public.students ADD COLUMN phones JSONB DEFAULT '[]'::jsonb;
+    ELSE
+        -- محاولة تحويل العمود إذا كان موجوداً بنوع آخر (اختياري، يفضل الحذر هنا)
+        -- ALTER TABLE public.students ALTER COLUMN phones TYPE JSONB USING phones::jsonb;
+        NULL;
+    END IF;
+END $$;
 
--- التعديل لصاحب الحساب أو المدير (باستخدام الدالة الآمنة)
-CREATE POLICY "profiles_update_secure" ON public.profiles
-FOR UPDATE TO authenticated
-USING ( id = auth.uid() OR public.check_is_admin() );
-
--- الإضافة (للتسجيل)
-CREATE POLICY "profiles_insert_secure" ON public.profiles
-FOR INSERT TO authenticated
-WITH CHECK ( id = auth.uid() OR public.check_is_admin() );
-
--- الحذف للمدير فقط
-CREATE POLICY "profiles_delete_secure" ON public.profiles
-FOR DELETE TO authenticated
-USING ( public.check_is_admin() );
-
--- 4. سياسات جدول Students (الطلاب)
-CREATE POLICY "students_policy_secure" ON public.students
-FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR public.check_is_admin() )
-WITH CHECK ( teacher_id = auth.uid() OR public.check_is_admin() );
-
--- 5. سياسات جدول Lessons (الحصص)
-CREATE POLICY "lessons_policy_secure" ON public.lessons
-FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR public.check_is_admin() )
-WITH CHECK ( teacher_id = auth.uid() OR public.check_is_admin() );
-
--- 6. سياسات جدول Payments (المالية)
-CREATE POLICY "payments_policy_secure" ON public.payments
-FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR public.check_is_admin() )
-WITH CHECK ( teacher_id = auth.uid() OR public.check_is_admin() );
-
--- 7. سياسات جدول Schedules (الجدول)
-CREATE POLICY "schedules_policy_secure" ON public.schedules
-FOR ALL TO authenticated
-USING ( teacher_id = auth.uid() OR public.check_is_admin() )
-WITH CHECK ( teacher_id = auth.uid() OR public.check_is_admin() );
-
--- 8. سياسات جدول Tutor Requests (الطلبات)
-CREATE POLICY "requests_policy_secure" ON public.tutor_requests
-FOR ALL TO authenticated
-USING (true)
-WITH CHECK (true);
-
--- 9. التأكد من تفعيل RLS
+-- 4. سياسات الأمان (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
@@ -86,8 +48,37 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tutor_requests ENABLE ROW LEVEL SECURITY;
 
--- 10. إعادة بناء الـ View
-DROP VIEW IF EXISTS public.student_summary_view;
+-- Profiles
+CREATE POLICY "profiles_select_all" ON public.profiles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "profiles_insert_self_or_admin" ON public.profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = id OR public.check_is_admin());
+CREATE POLICY "profiles_update_self_or_admin" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = id OR public.check_is_admin());
+CREATE POLICY "profiles_delete_admin" ON public.profiles FOR DELETE TO authenticated USING (public.check_is_admin());
+
+-- Students (المعلم يرى طلابه، المدير يرى الجميع)
+CREATE POLICY "students_access" ON public.students FOR ALL TO authenticated
+USING (teacher_id = auth.uid() OR public.check_is_admin())
+WITH CHECK (teacher_id = auth.uid() OR public.check_is_admin());
+
+-- Lessons
+CREATE POLICY "lessons_access" ON public.lessons FOR ALL TO authenticated
+USING (teacher_id = auth.uid() OR public.check_is_admin())
+WITH CHECK (teacher_id = auth.uid() OR public.check_is_admin());
+
+-- Payments
+CREATE POLICY "payments_access" ON public.payments FOR ALL TO authenticated
+USING (teacher_id = auth.uid() OR public.check_is_admin())
+WITH CHECK (teacher_id = auth.uid() OR public.check_is_admin());
+
+-- Schedules
+CREATE POLICY "schedules_access" ON public.schedules FOR ALL TO authenticated
+USING (teacher_id = auth.uid() OR public.check_is_admin())
+WITH CHECK (teacher_id = auth.uid() OR public.check_is_admin());
+
+-- Requests (مفتوح للجميع لإنشاء الطلبات، الإدارة للمدير)
+CREATE POLICY "requests_access" ON public.tutor_requests FOR ALL TO authenticated
+USING (true) WITH CHECK (true);
+
+-- 5. إعادة بناء الـ View المالي الشامل
 CREATE VIEW public.student_summary_view AS
 SELECT 
     s.id,
