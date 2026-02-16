@@ -18,7 +18,6 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // الحالة الافتراضية للنموذج
   const defaultPhones: StudentPhone[] = [{number: '', label: 'طالب'}, {number: '', label: 'ولي أمر'}];
   const [form, setForm] = useState({
     name: '', 
@@ -45,14 +44,12 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
       const { data, error } = await query.order('grade', { ascending: false }).order('name');
       if (error) throw error;
       
-      // تحويل البيانات لضمان أن phones مصفوفة
       const fetchedStudents: Student[] = (data || []).map((s: any) => ({
         ...s,
         phones: Array.isArray(s.phones) ? s.phones : [] 
       }));
 
       setStudents(fetchedStudents);
-      
       const grades = Array.from(new Set(fetchedStudents.map(s => String(s.grade))));
       setExpandedGrades(grades);
       setSelectedIds([]);
@@ -81,6 +78,9 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
     if (!form.name) return alert("يرجى إدخال اسم الطالب");
     setIsProcessing(true);
     try {
+      // التأكد من وجود teacher_id لتجاوز RLS
+      const teacherIdToUse = selectedStudent ? selectedStudent.teacher_id : profile.id;
+
       const payload = {
         name: form.name,
         grade: form.grade,
@@ -91,8 +91,8 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
         agreed_amount: parseFloat(form.agreed_amount) || 0,
         is_hourly: form.is_hourly,
         price_per_hour: parseFloat(form.price_per_hour) || 0,
-        phones: form.phones.filter(p => p.number.trim() !== ''), // إرسال JSONB صحيح
-        teacher_id: selectedStudent ? selectedStudent.teacher_id : profile.id 
+        phones: form.phones.filter(p => p.number.trim() !== ''),
+        teacher_id: teacherIdToUse
       };
 
       let error;

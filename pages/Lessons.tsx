@@ -35,7 +35,6 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
 
       setStudents(filtered);
       
-      // توسيع كافة المجلدات تلقائياً عند وجود نتائج بحث
       if (searchTerm) {
         const grades: string[] = Array.from(new Set(filtered.map((s: any) => String(s.grade))));
         setExpandedGrades(grades);
@@ -72,12 +71,11 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
     e.preventDefault();
     setLoading(true);
     try {
-      // التأكد من أن المعرف المرسل هو معرف المعلم الحالي (صاحب الجلسة) ليتوافق مع سياسات الأمان
       const payload = {
         student_id: selectedStudent.id,
-        teacher_id: uid, // يجب أن يتطابق هذا مع auth.uid() في RLS
+        teacher_id: uid, 
         lesson_date: form.lesson_date,
-        hours: parseFloat(form.hours), // تحويل صريح لرقم
+        hours: parseFloat(form.hours),
         notes: form.notes
       };
 
@@ -87,7 +85,7 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
 
       setIsLessonModalOpen(false); 
       fetchRecords(selectedStudent.id);
-      fetchStudents(); // تحديث العدادات
+      fetchStudents(); 
     } catch (err: any) {
       alert("فشل حفظ الحصة: " + err.message + "\nتأكد من صلاحيات حسابك.");
     } finally {
@@ -95,7 +93,6 @@ const Lessons = ({ role, uid, year, semester, isAdmin }: { role: any, uid: any, 
     }
   };
 
-  // تجميع الطلاب حسب الصف الدراسي
   const groupedByGrade = useMemo(() => {
     const filtered = students.filter(s => s.name.includes(searchTerm));
     return filtered.reduce((acc, s) => {

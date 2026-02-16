@@ -22,7 +22,7 @@ export interface Student {
   teacher_id: string;
   name: string;
   address?: string;
-  phones: StudentPhone[] | null; // يتم التعامل معه كمصفوفة دائماً في الواجهة
+  phones: StudentPhone[] | null; 
   grade: string;
   group_name?: string;
   agreed_amount: number;

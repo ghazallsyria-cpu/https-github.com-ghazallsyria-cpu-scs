@@ -47,7 +47,6 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
       );
       setAllPayments(filteredPays);
 
-      // توسيع المجلدات
       const grades: string[] = Array.from(new Set(filteredStds.map((s: any) => String(s.grade))));
       setExpandedGrades(grades);
 
