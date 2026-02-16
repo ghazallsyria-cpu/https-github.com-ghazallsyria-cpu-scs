@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { 
-  Wallet, Plus, X, DollarSign, Trash2, Search, RefreshCw, 
-  History, CheckCircle, AlertCircle, CreditCard, Calendar, Folder, ChevronDown
+  Wallet, X, DollarSign, Trash2, Search, RefreshCw, 
+  History, Folder, ChevronDown, CreditCard
 } from 'lucide-react';
 
 const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => {
@@ -13,7 +13,6 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'debt' | 'cleared'>('all');
   const [viewMode, setViewMode] = useState<'students' | 'history'>('students');
   const [expandedGrades, setExpandedGrades] = useState<string[]>([]);
 
@@ -48,7 +47,7 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
       );
       setAllPayments(filteredPays);
 
-      // توسيع كافة المجلدات افتراضياً
+      // توسيع المجلدات
       const grades: string[] = Array.from(new Set(filteredStds.map((s: any) => String(s.grade))));
       setExpandedGrades(grades);
 
@@ -58,7 +57,6 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
 
   useEffect(() => { fetchFinancialData(); }, [fetchFinancialData]);
 
-  // تجميع الطلاب حسب المجلدات (Grade Folders)
   const groupedStudents = useMemo(() => {
     const filtered = students.filter(s => s.name.includes(searchTerm));
     return filtered.reduce((acc, s) => {
@@ -87,13 +85,14 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
     if (!selectedStudent || !paymentForm.amount) return;
     setLoading(true);
     try {
+      // إرسال teacher_id بشكل صريح ليتوافق مع RLS
       const { error } = await supabase.from('payments').insert([{
         amount: parseFloat(paymentForm.amount),
         payment_date: paymentForm.payment_date,
         payment_method: paymentForm.payment_method,
         notes: paymentForm.notes,
         student_id: selectedStudent.id,
-        teacher_id: uid // إرسال معرف المعلم المسجل حالياً لضمان تخطي RLS
+        teacher_id: uid 
       }]);
 
       if (error) throw error;
@@ -109,7 +108,6 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
 
   return (
     <div className="space-y-12 animate-diamond">
-      {/* Wealth Meter */}
       <div className="bg-slate-900 p-10 md:p-16 rounded-[4.5rem] text-white shadow-2xl relative overflow-hidden flex flex-col lg:flex-row justify-between items-center gap-10">
          <div className="relative z-10 flex items-center gap-6 md:gap-10">
             <div className="bg-indigo-600 p-6 md:p-8 rounded-[2.5rem] shadow-2xl shadow-indigo-600/30 rotate-6"><Wallet size={40} /></div>
@@ -126,7 +124,6 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
             <button onClick={() => setViewMode('students')} className={`flex-1 lg:flex-none px-10 py-4 rounded-[2rem] font-black text-sm transition-all duration-500 ${viewMode === 'students' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>المجلدات المالية</button>
             <button onClick={() => setViewMode('history')} className={`flex-1 lg:flex-none px-10 py-4 rounded-[2rem] font-black text-sm transition-all duration-500 ${viewMode === 'history' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>سجل الدفعات</button>
          </div>
-         
          <div className="relative flex-1 lg:w-96">
             <Search className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
             <input placeholder="البحث في الأسماء والديون..." className="w-full pr-14 pl-6 py-4 bg-white border border-slate-100 rounded-[2.5rem] font-bold outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
@@ -188,7 +185,6 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
            ))}
         </div>
       ) : (
-        /* سجل الدفعات */
         <div className="bg-white rounded-[4rem] border shadow-sm overflow-hidden">
            <div className="p-12 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
               <h3 className="text-3xl font-black flex items-center gap-6 text-slate-900"><History className="text-indigo-600" /> كشف المعاملات</h3>
@@ -227,7 +223,6 @@ const Payments = ({ role, uid, isAdmin: propsIsAdmin, year, semester }: any) => 
         </div>
       )}
 
-      {/* Payment Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-8 bg-slate-900/70 backdrop-blur-3xl">
            <form onSubmit={handleSavePayment} className="bg-white p-10 md:p-14 rounded-[5rem] w-full max-w-xl shadow-2xl space-y-10 animate-in zoom-in text-right">

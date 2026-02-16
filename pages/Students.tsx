@@ -3,8 +3,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { 
   Users, Plus, Search, Folder, Trash2, Edit3, X, Save, RefreshCw, 
-  ChevronDown, Copy, MoveRight, CheckCircle2, Square,
-  Phone, MapPin, DollarSign, GraduationCap, School, UserPlus, Filter
+  ChevronDown, Copy, CheckCircle2, Square,
+  Phone, MapPin, DollarSign, UserPlus
 } from 'lucide-react';
 import { Student, StudentPhone } from '../types';
 
@@ -13,13 +13,12 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGrades, setExpandedGrades] = useState<string[]>([]);
-  const [activeModal, setActiveModal] = useState<'edit' | 'move' | 'copy' | null>(null);
+  const [activeModal, setActiveModal] = useState<'edit' | 'copy' | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [targetConfig, setTargetConfig] = useState({ year: year, semester: semester });
 
-  // Initial Form State
+  // الحالة الافتراضية للنموذج
   const defaultPhones: StudentPhone[] = [{number: '', label: 'طالب'}, {number: '', label: 'ولي أمر'}];
   const [form, setForm] = useState({
     name: '', 
@@ -39,7 +38,6 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
     try {
       let query = supabase.from('student_summary_view').select('*').eq('academic_year', year).eq('semester', semester);
       
-      // Admin sees all, Teacher sees theirs
       if (!isAdmin) {
         query = query.eq('teacher_id', profile.id);
       }
@@ -47,15 +45,14 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
       const { data, error } = await query.order('grade', { ascending: false }).order('name');
       if (error) throw error;
       
-      // Safe casting
+      // تحويل البيانات لضمان أن phones مصفوفة
       const fetchedStudents: Student[] = (data || []).map((s: any) => ({
         ...s,
-        phones: Array.isArray(s.phones) ? s.phones : [] // Ensure phones is always an array
+        phones: Array.isArray(s.phones) ? s.phones : [] 
       }));
 
       setStudents(fetchedStudents);
       
-      // Auto expand folders
       const grades = Array.from(new Set(fetchedStudents.map(s => String(s.grade))));
       setExpandedGrades(grades);
       setSelectedIds([]);
@@ -70,7 +67,7 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
   };
 
   const handleBulkDelete = async () => {
-    if (!confirm(`تحذير: هل أنت متأكد من حذف ${selectedIds.length} طالب نهائياً؟ ستفقد جميع السجلات المالية والأكاديمية المرتبطة بهم.`)) return;
+    if (!confirm(`تحذير: هل أنت متأكد من حذف ${selectedIds.length} طلاب؟`)) return;
     setIsProcessing(true);
     try {
       const { error } = await supabase.from('students').delete().in('id', selectedIds);
@@ -84,7 +81,6 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
     if (!form.name) return alert("يرجى إدخال اسم الطالب");
     setIsProcessing(true);
     try {
-      // Prepare payload
       const payload = {
         name: form.name,
         grade: form.grade,
@@ -95,8 +91,8 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
         agreed_amount: parseFloat(form.agreed_amount) || 0,
         is_hourly: form.is_hourly,
         price_per_hour: parseFloat(form.price_per_hour) || 0,
-        phones: form.phones.filter(p => p.number.trim() !== ''), // Filter empty phones
-        teacher_id: selectedStudent ? selectedStudent.teacher_id : profile.id // Preserve original teacher or set to current
+        phones: form.phones.filter(p => p.number.trim() !== ''), // إرسال JSONB صحيح
+        teacher_id: selectedStudent ? selectedStudent.teacher_id : profile.id 
       };
 
       let error;
@@ -163,11 +159,8 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      
-      {/* Header Bar */}
-      <div className="bg-white p-6 lg:p-10 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col gap-6 relative overflow-hidden">
+      <div className="bg-white p-6 lg:p-10 rounded-[2.5rem] border border-slate-100 shadow-diamond flex flex-col gap-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl -z-10 opacity-50"></div>
-        
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
            <div className="flex items-center gap-5">
               <div className="bg-slate-900 p-4 rounded-2xl text-white shadow-xl shadow-slate-200"><Users size={28} /></div>
@@ -176,47 +169,40 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
                 <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-full mt-1 inline-block border border-slate-100">{year} - فصل {semester}</span>
               </div>
            </div>
-           
            <button onClick={() => openEditModal(null)} className="group bg-indigo-600 text-white px-8 py-4 rounded-[1.5rem] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center gap-3 active:scale-95">
               <div className="bg-white/20 p-1 rounded-lg group-hover:rotate-90 transition-transform"><Plus size={18} /></div>
               <span className="font-black text-sm">تسجيل طالب</span>
            </button>
         </div>
-
         <div className="relative">
            <Search className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
            <input 
-            placeholder="ابحث باسم الطالب، المجموعة، أو رقم الهاتف..." 
+            placeholder="ابحث باسم الطالب..." 
             className="w-full pr-14 pl-6 py-5 bg-slate-50/50 border border-slate-100 rounded-[2rem] font-bold outline-none focus:bg-white focus:ring-4 ring-indigo-50 transition-all text-slate-600" 
             value={searchTerm} 
             onChange={e => setSearchTerm(e.target.value)} 
            />
         </div>
-
-        {/* Floating Bulk Actions */}
         {selectedIds.length > 0 && (
           <div className="fixed bottom-24 lg:bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-slate-900/90 backdrop-blur-xl text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-10 border border-white/10">
              <div className="flex items-center gap-2 border-l border-white/10 pl-6 ml-2">
                 <span className="bg-indigo-500 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black">{selectedIds.length}</span>
                 <span className="font-bold text-xs">طالب محدد</span>
              </div>
-             <div className="flex gap-2">
-                <button onClick={handleBulkDelete} className="p-2.5 bg-rose-500 rounded-full hover:bg-rose-600 transition-colors" title="حذف المحدد"><Trash2 size={18} /></button>
-                <button onClick={() => setSelectedIds([])} className="p-2.5 hover:bg-white/10 rounded-full transition-colors"><X size={18} /></button>
-             </div>
+             <button onClick={handleBulkDelete} className="p-2.5 bg-rose-500 rounded-full hover:bg-rose-600 transition-colors" title="حذف المحدد"><Trash2 size={18} /></button>
+             <button onClick={() => setSelectedIds([])} className="p-2.5 hover:bg-white/10 rounded-full transition-colors"><X size={18} /></button>
           </div>
         )}
       </div>
 
-      {/* Content */}
       <div className="space-y-6">
         {loading ? (
             <div className="p-32 text-center">
                 <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto mb-6"></div>
-                <p className="font-black text-slate-300 text-sm tracking-widest">جاري مزامنة قاعدة البيانات...</p>
+                <p className="font-black text-slate-300 text-sm tracking-widest">جاري مزامنة البيانات...</p>
             </div>
         ) : Object.keys(groupedStudents).sort((a,b) => isNaN(Number(a)) ? 1 : Number(b)-Number(a)).map(grade => {
-            const gradeStds = groupedStudents[grade].filter(s => s.name.includes(searchTerm) || (s.group_name && s.group_name.includes(searchTerm)));
+            const gradeStds = groupedStudents[grade].filter(s => s.name.includes(searchTerm));
             if (gradeStds.length === 0) return null;
             
             return (
@@ -241,16 +227,14 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
                         </button>
                         
                         <div className="flex items-center gap-5 mb-6">
-                           <div className="w-14 h-14 bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-[1.2rem] flex items-center justify-center font-black text-indigo-600 text-xl shadow-sm">
-                              {s.name[0]}
-                           </div>
+                           <div className="w-14 h-14 bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-[1.2rem] flex items-center justify-center font-black text-indigo-600 text-xl shadow-sm">{s.name[0]}</div>
                            <div className="flex-1 min-w-0 pr-1">
                                <h4 className="font-black text-slate-900 truncate text-lg">{s.name}</h4>
                                <div className="flex items-center gap-2 mt-1">
                                   <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md">{s.group_name || 'فردي'}</span>
-                                  {s.remaining_balance && s.remaining_balance > 0 ? (
+                                  {s.remaining_balance && s.remaining_balance > 0 && (
                                       <span className="text-[9px] font-bold bg-rose-50 text-rose-500 px-2 py-0.5 rounded-md">مدين</span>
-                                  ) : null}
+                                  )}
                                </div>
                            </div>
                         </div>
@@ -285,7 +269,6 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
         })}
       </div>
 
-      {/* Edit Modal */}
       {activeModal === 'edit' && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl overflow-y-auto">
            <div className="bg-white w-full max-w-2xl p-8 md:p-10 rounded-[3.5rem] shadow-2xl space-y-8 my-auto animate-in zoom-in duration-300 relative border border-white/20">
@@ -298,12 +281,10 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[60vh] overflow-y-auto no-scrollbar px-1">
-                 {/* Basic Info */}
                  <div className="md:col-span-2 space-y-2">
                     <label className="text-xs font-black text-slate-500 px-3">الاسم الكامل</label>
                     <input className="w-full p-5 bg-slate-50 rounded-[1.5rem] font-bold outline-none focus:ring-2 ring-indigo-100 transition-all" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="الاسم كما في الكشوفات" />
                  </div>
-
                  <div className="space-y-2">
                     <label className="text-xs font-black text-slate-500 px-3">الصف الدراسي</label>
                     <select className="w-full p-5 bg-slate-50 rounded-[1.5rem] font-bold outline-none cursor-pointer" value={form.grade} onChange={e => setForm({...form, grade: e.target.value})}>
@@ -311,13 +292,10 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
                        <option value="13">جامعي</option>
                     </select>
                  </div>
-
                  <div className="space-y-2">
                     <label className="text-xs font-black text-slate-500 px-3">المجموعة</label>
                     <input className="w-full p-5 bg-slate-50 rounded-[1.5rem] font-bold outline-none" value={form.group_name} onChange={e => setForm({...form, group_name: e.target.value})} placeholder="مثلاً: مجموعة الأحد" />
                  </div>
-
-                 {/* Financials */}
                  <div className="md:col-span-2 bg-gradient-to-br from-indigo-50/50 to-white p-6 rounded-[2.5rem] border border-indigo-100/50 space-y-4">
                     <h4 className="font-black text-indigo-900 text-sm flex items-center gap-2"><DollarSign size={16} /> الإعدادات المالية</h4>
                     <div className="grid grid-cols-2 gap-4">
@@ -334,8 +312,6 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
                        </div>
                     </div>
                  </div>
-
-                 {/* Phones */}
                  <div className="md:col-span-2 space-y-3">
                     <div className="flex justify-between items-center px-2">
                        <label className="text-xs font-black text-slate-500"><Phone size={14} className="inline ml-1" /> الهواتف</label>

@@ -22,7 +22,7 @@ export interface Student {
   teacher_id: string;
   name: string;
   address?: string;
-  phones: StudentPhone[] | null; // JSONB from DB comes as array or null
+  phones: StudentPhone[] | null; // يتم التعامل معه كمصفوفة دائماً في الواجهة
   grade: string;
   group_name?: string;
   agreed_amount: number;
@@ -55,6 +55,11 @@ export interface Payment {
   payment_date: string;
   payment_method: string;
   notes?: string;
+  students?: {
+    name: string;
+    academic_year: string;
+    semester: string;
+  };
 }
 
 export interface TutorRequest {
