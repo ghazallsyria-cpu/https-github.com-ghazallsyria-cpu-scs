@@ -22,7 +22,7 @@ export interface Student {
   teacher_id: string;
   name: string;
   address?: string;
-  phones: StudentPhone[] | null; 
+  phones: StudentPhone[] | any; // JSONB support
   grade: string;
   group_name?: string;
   agreed_amount: number;

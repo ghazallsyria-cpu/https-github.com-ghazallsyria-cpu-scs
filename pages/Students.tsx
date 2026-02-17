@@ -78,7 +78,8 @@ const Students = ({ isAdmin, profile, year, semester }: any) => {
     if (!form.name) return alert("يرجى إدخال اسم الطالب");
     setIsProcessing(true);
     try {
-      // التأكد من وجود teacher_id لتجاوز RLS
+      // تحديد teacher_id: إذا كان تعديل نستخدم الموجود، إذا جديد نستخدم البروفايل الحالي
+      // إذا كان المدير يضيف، سيتم ربط الطالب بحساب المدير (يمكن تعديل هذا لاحقاً ليكون اختيار معلم)
       const teacherIdToUse = selectedStudent ? selectedStudent.teacher_id : profile.id;
 
       const payload = {
